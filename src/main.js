@@ -16,16 +16,15 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Layout: resizable / collapsible sidebars
   initSplitLayout();
+
+  // Theme manager: hot-swappable piece/board defs + optional CSS
+  const themeDropdown = document.getElementById("themeDropdown");
+  const themeManager = createThemeManager(svg);
+  await themeManager.bindThemeDropdown(themeDropdown);
   if (!svg) throw new Error('Missing SVG element: #lascaBoard');
 
   // Layout: resizable / collapsible sidebars
   initSplitLayout();
-
-  // Theme manager: hot-swappable piece/board defs + optional CSS
-  const themeSelect = document.getElementById("themeSelect");
-  const themeManager = createThemeManager(svg);
-  await themeManager.bindThemeSelect(themeSelect);
-
   if (!piecesLayer) throw new Error('Missing SVG group: #pieces');
   if (!zoomTitle || !zoomHint || !zoomSvg) throw new Error('Missing inspector DOM nodes (zoomTitle/zoomHint/zoomSvg)');
 

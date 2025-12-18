@@ -2,6 +2,7 @@
 
 import { loadSvgDefsInto } from "../render/loadSvgDefs.js";
 import { DEFAULT_THEME_ID, THEMES, getThemeById } from "./themes.js";
+import { createThemeDropdown } from "../ui/components/themeDropdown.js";
 
 const LS_KEY = "lasca.theme";
 const LINK_ID = "lascaThemeCss";
@@ -130,16 +131,47 @@ export function createThemeManager(svgRoot){
     }
   }
 
+
+  async function bindThemeDropdown(dropdownRootEl){
+    if (!dropdownRootEl) return;
+
+    const items = THEMES.map(t => ({ id: t.id, label: t.label }));
+    const saved = readSavedThemeId();
+    const initial = (saved && getThemeById(saved)) ? saved : DEFAULT_THEME_ID;
+
+    // Apply initial theme first (ensures defs exist before any renders that depend on them)
+    await setTheme(initial);
+
+    const dropdown = createThemeDropdown({
+      rootEl: dropdownRootEl,
+      items,
+      initialId: initial,
+      onSelect: async (id) => {
+        await setTheme(id);
+      },
+    });
+
+    // Make sure the button label is synced with the theme we applied.
+    await dropdown.setSelected(initial);
+  }
+
+  // Back-compat: if someone still uses a native <select>, keep this around.
   async function bindThemeSelect(selectEl){
     if (!selectEl) return;
 
-    populateThemeSelect(selectEl);
+    selectEl.textContent = "";
+    for (const t of THEMES){
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      selectEl.appendChild(opt);
+    }
 
-    const initial = readSavedThemeId() ?? DEFAULT_THEME_ID;
-    selectEl.value = getThemeById(initial) ? initial : DEFAULT_THEME_ID;
+    const saved = readSavedThemeId();
+    const initial = (saved && getThemeById(saved)) ? saved : DEFAULT_THEME_ID;
+    selectEl.value = initial;
 
-    // Apply initial theme
-    await setTheme(selectEl.value);
+    await setTheme(initial);
 
     selectEl.addEventListener("change", async () => {
       await setTheme(selectEl.value);
@@ -148,6 +180,7 @@ export function createThemeManager(svgRoot){
 
   return {
     setTheme,
+    bindThemeDropdown,
     bindThemeSelect,
     getCurrentThemeId: () => currentId,
   };
