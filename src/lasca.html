@@ -4,194 +4,284 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Lasca – Board Prototype</title>
+
   <style>
     :root {
       --page-bg: #1b1b1b;
+
       --panel-bg: rgba(255,255,255,0.06);
       --panel-border: rgba(255,255,255,0.10);
       --panel-text: rgba(255,255,255,0.90);
       --panel-subtext: rgba(255,255,255,0.70);
+
+      --gutter-w: 8px;
+      --tab-w: 22px;
+      --panel-radius: 12px;
     }
 
-    body{
-      margin:0;
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
       background: var(--page-bg);
-      height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      overflow:hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-
-    #app{
-      display:flex;
-      align-items:center;
-      gap:24px;
-      padding:16px;
-    }
-
-    /* Board stays responsive */
-    svg#lascaBoard{
-      width:min(92vmin, 980px);
-      height:auto;
-      display:block;
-    }
-
-    /* Inspector panel to the right (temporary; will later become your resizable right sidebar) */
-    #zoomPanel{
-      width:240px;
-      height:min(92vmin, 980px);
-      box-sizing:border-box;
-      border:1px solid var(--panel-border);
-      background: var(--panel-bg);
-      border-radius:12px;
-      padding:12px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-
-    #zoomTitle{
       color: var(--panel-text);
-      font-size:14px;
-      font-weight:600;
-      line-height:1.2;
     }
 
-    #zoomHint{
-      color: var(--panel-subtext);
-      font-size:12px;
-      line-height:1.35;
+    /* ===== App Layout ===== */
+    #appRoot {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      align-items: stretch;
     }
 
-    #zoomBody{
-      flex:1;
-      overflow:auto;
-      border-radius:10px;
+    .sidebar {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 0;
+      overflow: hidden;
+      transition: width 120ms ease;
+      min-width: 0;
+    }
+
+    .sidebarHeader {
+      height: 44px;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .sidebarTitle {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebarButtons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .panelBtn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.18);
       background: rgba(0,0,0,0.18);
-      border:1px solid rgba(255,255,255,0.08);
-      padding:10px;
+      color: rgba(255,255,255,0.90);
+      border-radius: 10px;
+      padding: 6px 9px;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .panelBtn:hover { background: rgba(255,255,255,0.08); }
+
+    .sidebarBody {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    #zoomSvg{
-      width:100%;
-      display:block;
+    .panelSection {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.18);
+      border-radius: var(--panel-radius);
+      padding: 10px;
+    }
+
+    .panelSection h3 {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.86);
+      letter-spacing: 0.3px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 6px 10px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.78);
+    }
+    .kv .k { color: rgba(255,255,255,0.60); }
+
+    /* Collapsed state: keep a small tab-width column */
+    .sidebar.collapsed {
+      width: var(--tab-w) !important;
+      border-left: 1px solid rgba(255,255,255,0.12);
+      border-right: 1px solid rgba(255,255,255,0.12);
+    }
+    .sidebar.collapsed .sidebarHeader,
+    .sidebar.collapsed .sidebarBody {
+      display: none;
+    }
+
+    .sidebarTab {
+      height: 100%;
+      width: var(--tab-w);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: rgba(0,0,0,0.18);
+      border-left: 1px solid rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.75);
+      user-select: none;
+    }
+    .sidebar.collapsed .sidebarTab {
+      display: flex;
+    }
+    .sidebarTab:hover {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.92);
+    }
+
+    /* ===== Gutters (resizers) ===== */
+    .gutter {
+      width: var(--gutter-w);
+      background: rgba(255,255,255,0.04);
+      cursor: col-resize;
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .gutter:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .gutter::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.12);
+    }
+    .gutter.disabled {
+      cursor: default;
+      background: rgba(255,255,255,0.02);
+    }
+    .gutter.disabled::after {
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* ===== Center Area (board) ===== */
+    #centerArea {
+      flex: 1 1 auto;
+      min-width: 420px;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    #boardWrap {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    svg#lascaBoard {
+      width: min(100%, 980px);
+      height: auto;
+      max-height: calc(100vh - 20px);
+      display: block;
+    }
+
+    /* ===== Inspector (kept, but now inside right sidebar) ===== */
+    #zoomTitle {
+      color: var(--panel-text);
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+
+    #zoomHint {
+      color: var(--panel-subtext);
+      font-size: 12px;
+      line-height: 1.35;
+      margin-bottom: 10px;
+    }
+
+    #zoomBody {
+      overflow: auto;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 10px;
+    }
+
+    #zoomSvg {
+      width: 100%;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <div id="app">
 
-    <svg id="lascaBoard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" aria-label="Lasca board">
-      <defs>
-        <!-- ======== PIECE SYMBOLS (W_S, B_S, W_O, B_O) ======== -->
-        <radialGradient id="gradWhite" cx="35%" cy="30%" r="70%">
-          <stop offset="0%"  stop-color="#ffffff"/>
-          <stop offset="55%" stop-color="#f1f1f1"/>
-          <stop offset="100%" stop-color="#d6d6d6"/>
-        </radialGradient>
+  <div id="appRoot">
 
-        <radialGradient id="gradBlack" cx="35%" cy="30%" r="70%">
-          <stop offset="0%"  stop-color="#444444"/>
-          <stop offset="55%" stop-color="#1c1c1c"/>
-          <stop offset="100%" stop-color="#050505"/>
-        </radialGradient>
+    <!-- LEFT SIDEBAR -->
+    <aside id="leftSidebar" class="sidebar" style="width: 280px;" aria-label="Left panel">
+      <div class="sidebarHeader">
+        <div class="sidebarTitle">Game Status</div>
+        <div class="sidebarButtons">
+          <button class="panelBtn" type="button" data-action="collapse-left" title="Collapse left panel">⟨</button>
+        </div>
+      </div>
 
-        <radialGradient id="gradGreen" cx="35%" cy="30%" r="70%">
-          <stop offset="0%"  stop-color="#7be58a"/>
-          <stop offset="55%" stop-color="#1fb34a"/>
-          <stop offset="100%" stop-color="#0a6f2a"/>
-        </radialGradient>
+      <div class="sidebarBody">
+        <div class="panelSection">
+          <h3>Status</h3>
+          <div class="kv">
+            <div class="k">Turn</div><div id="statusTurn">Black</div>
+            <div class="k">Phase</div><div id="statusPhase">Setup</div>
+            <div class="k">Message</div><div id="statusMessage">—</div>
+          </div>
+        </div>
 
-        <radialGradient id="gradRed" cx="35%" cy="30%" r="70%">
-          <stop offset="0%"  stop-color="#ff8f8f"/>
-          <stop offset="55%" stop-color="#e12a2a"/>
-          <stop offset="100%" stop-color="#8f1111"/>
-        </radialGradient>
+        <div class="panelSection">
+          <h3>Moves</h3>
+          <div id="statusMoves" style="font-size:12px;color:rgba(255,255,255,0.70);">Coming soon…</div>
+        </div>
+      </div>
 
-        <path id="star5" d="
-          M 50 30
-          L 56.5 43.2
-          L 71.0 45.3
-          L 60.5 55.6
-          L 63.0 70.0
-          L 50.0 63.2
-          L 37.0 70.0
-          L 39.5 55.6
-          L 29.0 45.3
-          L 43.5 43.2
-          Z" />
+      <div class="sidebarTab" data-action="expand-left" title="Expand left panel">⟩</div>
+    </aside>
 
-        <!-- White Soldier -->
-        <symbol id="W_S" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="43" fill="url(#gradWhite)" stroke="#111" stroke-width="6"/>
-          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
-          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.28"/>
-        </symbol>
+    <div id="gutterLeft" class="gutter" role="separator" aria-orientation="vertical" aria-label="Resize left panel"></div>
 
-        <!-- Black Soldier -->
-        <symbol id="B_S" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="43" fill="url(#gradBlack)" stroke="#f5f5f5" stroke-width="6"/>
-          <circle cx="50" cy="50" r="33" fill="none" stroke="#fff" stroke-opacity="0.16" stroke-width="3"/>
-          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.10"/>
-        </symbol>
+    <!-- CENTER (BOARD) -->
+    <main id="centerArea" aria-label="Board area">
+      <div id="boardWrap">
+        <svg id="lascaBoard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" aria-label="Lasca board">
+      <defs id="lascaDefs">
+        <!-- Theme defs are replaced when switching themes -->
+        <g id="lascaThemeDefs"></g>
 
-        <!-- Green Officer (paired with White Soldier) -->
-        <symbol id="W_O" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="43" fill="url(#gradGreen)" stroke="#0b2a12" stroke-width="6"/>
-          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
-          <use href="#star5" fill="#ffffff" opacity="0.95"/>
-          <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
-          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.18"/>
-        </symbol>
-
-        <!-- Red Officer (paired with Black Soldier) -->
-        <symbol id="B_O" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="43" fill="url(#gradRed)" stroke="#3a0b0b" stroke-width="6"/>
-          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
-          <use href="#star5" fill="#ffffff" opacity="0.95"/>
-          <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
-          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.16"/>
-        </symbol>
-
-        <!-- ======== CONNECTOR MASK (prevents lines inside nodes) ======== -->
-        <mask id="mask-connectors" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
-          <rect x="0" y="0" width="1000" height="1000" fill="white"/>
-
-          <!-- row 0 -->
-          <circle cx="140" cy="140" r="42" fill="black"/>
-          <circle cx="380" cy="140" r="42" fill="black"/>
-          <circle cx="620" cy="140" r="42" fill="black"/>
-          <circle cx="860" cy="140" r="42" fill="black"/>
-          <!-- row 1 -->
-          <circle cx="260" cy="260" r="42" fill="black"/>
-          <circle cx="500" cy="260" r="42" fill="black"/>
-          <circle cx="740" cy="260" r="42" fill="black"/>
-          <!-- row 2 -->
-          <circle cx="140" cy="380" r="42" fill="black"/>
-          <circle cx="380" cy="380" r="42" fill="black"/>
-          <circle cx="620" cy="380" r="42" fill="black"/>
-          <circle cx="860" cy="380" r="42" fill="black"/>
-          <!-- row 3 -->
-          <circle cx="260" cy="500" r="42" fill="black"/>
-          <circle cx="500" cy="500" r="42" fill="black"/>
-          <circle cx="740" cy="500" r="42" fill="black"/>
-          <!-- row 4 -->
-          <circle cx="140" cy="620" r="42" fill="black"/>
-          <circle cx="380" cy="620" r="42" fill="black"/>
-          <circle cx="620" cy="620" r="42" fill="black"/>
-          <circle cx="860" cy="620" r="42" fill="black"/>
-          <!-- row 5 -->
-          <circle cx="260" cy="740" r="42" fill="black"/>
-          <circle cx="500" cy="740" r="42" fill="black"/>
-          <circle cx="740" cy="740" r="42" fill="black"/>
-          <!-- row 6 -->
-          <circle cx="140" cy="860" r="42" fill="black"/>
-          <circle cx="380" cy="860" r="42" fill="black"/>
-          <circle cx="620" cy="860" r="42" fill="black"/>
-          <circle cx="860" cy="860" r="42" fill="black"/>
-        </mask>
+        <!-- Runtime defs are owned by the app (clipPaths, temporary effects, etc.) -->
+        <g id="lascaRuntimeDefs"></g>
       </defs>
 
       <g id="bgFill">
@@ -286,16 +376,63 @@
         <circle id="r6c6" cx="860" cy="860" r="46"/>
       </g>
     </svg>
-
-    <div id="zoomPanel" aria-label="Stack inspector">
-      <div id="zoomTitle">Lasca Stack Inspector</div>
-      <div id="zoomHint">Hover a stacked piece to see the full column order (bottom → top). If a crack appears on the mini spine, brackets mark the omitted middle here.</div>
-      <div id="zoomBody">
-        <svg id="zoomSvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200" role="img" aria-label="Stack column">
-          <!-- filled by JS -->
-        </svg>
       </div>
-    </div>
+    </main>
+
+    <div id="gutterRight" class="gutter" role="separator" aria-orientation="vertical" aria-label="Resize right panel"></div>
+
+    <!-- RIGHT SIDEBAR -->
+    <aside id="rightSidebar" class="sidebar" style="width: 320px;" aria-label="Right panel">
+      <div class="sidebarHeader">
+        <div class="sidebarTitle">Info</div>
+        <div class="sidebarButtons">
+          <button class="panelBtn" type="button" data-action="collapse-right" title="Collapse right panel">⟩</button>
+        </div>
+      </div>
+
+      <div class="sidebarBody">
+
+        
+        <div class="panelSection" id="themePanel">
+          <h3>Theme</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <select id="themeSelect" style="
+              width:100%;
+              padding:8px 10px;
+              border-radius:10px;
+              border:1px solid rgba(255,255,255,0.18);
+              background: rgba(0,0,0,0.18);
+              color: rgba(255,255,255,0.90);
+              font-size:12px;
+              outline:none;
+            " aria-label="Theme selection"></select>
+          </div>
+          <div style="margin-top:8px; font-size:12px; color: rgba(255,255,255,0.60); line-height:1.3;">
+            Switches piece/board SVG defs at runtime (hot-swappable).
+          </div>
+        </div>
+
+        <div class="panelSection" id="messagesPanel">
+          <h3>Messages</h3>
+          <div id="messagesBody" style="font-size:12px;color:rgba(255,255,255,0.72);">
+            (Reserved for special messages, prompts, help, etc.)
+          </div>
+        </div>
+
+        <div class="panelSection" id="inspectorPanel" aria-label="Stack inspector">
+          <div id="zoomTitle">Lasca Stack Inspector</div>
+          <div id="zoomHint">Hover a stacked piece to see the full column order (bottom → top). If a crack appears on the mini spine, brackets mark the omitted middle here.</div>
+          <div id="zoomBody">
+            <svg id="zoomSvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200" role="img" aria-label="Stack column">
+              <!-- filled by JS -->
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="sidebarTab" data-action="expand-right" title="Expand right panel">⟨</div>
+    </aside>
 
   </div>
 

@@ -1,0 +1,15 @@
+/* src/assets/themes/highContrast/theme.css */
+:root{
+  --page-bg: #0b0b0b;
+  --panel-bg: rgba(255,255,255,0.08);
+  --panel-border: rgba(255,255,255,0.14);
+  --panel-text: rgba(255,255,255,0.94);
+  --panel-subtext: rgba(255,255,255,0.78);
+}
+
+/* Make board lines/rings more visible */
+#lascaBoard #connectors{ stroke: rgba(255,255,255,0.82); }
+#lascaBoard #nodes{ stroke: rgba(255,255,255,0.82); }
+
+/* Boost spine bubble contrast */
+#lascaBoard text{ paint-order: stroke; stroke: rgba(0,0,0,0.55); stroke-width: 2px; }

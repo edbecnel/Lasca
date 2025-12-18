@@ -1,0 +1,12 @@
+/* src/assets/themes/classic/theme.css */
+:root{
+  --page-bg: #1b1b1b;
+  --panel-bg: rgba(255,255,255,0.06);
+  --panel-border: rgba(255,255,255,0.10);
+  --panel-text: rgba(255,255,255,0.90);
+  --panel-subtext: rgba(255,255,255,0.70);
+}
+
+/* Slightly warm board connectors/nodes */
+#lascaBoard #connectors{ stroke: #111; }
+#lascaBoard #nodes{ stroke: #111; }
