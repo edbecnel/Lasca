@@ -1,0 +1,15 @@
+{
+  "name": "lasca",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "http-server src -c-1",
+    "start": "npm run dev",
+    "watch": "live-server src --port=8080 --open=lasca.html"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "live-server": "^1.2.2"
+  }
+}
