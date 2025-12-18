@@ -38,7 +38,7 @@
       }
 
       /* Board stays responsive */
-      svg#laskaBoard {
+      svg#lascaBoard {
         width: min(92vmin, 980px);
         height: auto;
         display: block;
@@ -89,7 +89,7 @@
   <body>
     <div id="app">
       <svg
-        id="laskaBoard"
+        id="lascaBoard"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 1000 1000"
         aria-label="Lasca board"
@@ -447,9 +447,7 @@
           <circle id="r6c6" cx="860" cy="860" r="46" />
         </g>
       </svg>
-      <script src="./main.js" defer></script>
-
-      <div id="zoomPanel" aria-label="Stack inspector">
+<div id="zoomPanel" aria-label="Stack inspector">
         <div id="zoomTitle">Lasca Stack Inspector</div>
         <div id="zoomHint">
           Hover a stacked piece to see the full column order (bottom → top). If
@@ -469,5 +467,6 @@
         </div>
       </div>
     </div>
+    <script src="./main.js" defer></script>
   </body>
 </html>

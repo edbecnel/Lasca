@@ -1,5 +1,5 @@
 window.addEventListener("DOMContentLoaded", () => {
-          const svg = document.getElementById("laskaBoard");
+          const svg = document.getElementById("lascaBoard");
           const piecesLayer = document.getElementById("pieces");
 
           const zoomTitle = document.getElementById("zoomTitle");
@@ -47,13 +47,6 @@ window.addEventListener("DOMContentLoaded", () => {
             if (p.owner === "W" && p.rank === "O") return "#W_O"; // green officer
             if (p.owner === "B" && p.rank === "S") return "#B_S";
             return "#B_O"; // black officer = red
-          }
-
-          function hrefToBandColor(href) {
-            if (href === "#W_S") return "#f8f8f8";
-            if (href === "#B_S") return "#111111";
-            if (href === "#W_O") return "#1fb34a";
-            return "#e12a2a";
           }
 
           function makeUse(href, x, y, size) {
