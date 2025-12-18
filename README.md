@@ -47,6 +47,18 @@ npm run watch
 
 This starts live-reload on http://localhost:8080 and opens `src/lasca.html` automatically.
 
+## How to tweak the dropdown popup colors (now fully controllable)
+
+In src/lasca.html, look in :root for these variables:
+
+--themeMenuBg: rgba(0,0,0,0.88);
+--themeMenuHoverBg: rgba(255,255,255,0.10);
+--themeMenuSelectedBg: rgba(255,255,255,0.16);
+--themeMenuText: rgba(255,255,255,0.92);
+--themeMenuBorder: rgba(255,255,255,0.18);
+
+For example: Change --themeMenuBg to try different backgrounds.
+
 ## Notes
 
 - The entry HTML is `src/lasca.html`, which loads `src/main.js`.
