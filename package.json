@@ -7,7 +7,8 @@
     "dev": "http-server src -c-1",
     "start": "npm run dev",
     "watch": "live-server src --port=8080 --open=lasca.html",
-    "build": "esbuild src/main.js --bundle --format=esm --minify --sourcemap --outdir=dist && cpx \"src/*.html\" dist"
+    "build": "esbuild src/main.js --bundle --format=esm --minify --sourcemap --outdir=dist && cpx \"src/*.html\" dist",
+    "preview": "http-server dist -c-1 -p 8080"
   },
   "devDependencies": {
     "http-server": "^14.1.1",

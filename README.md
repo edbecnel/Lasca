@@ -27,6 +27,16 @@ npm run build
 
 Outputs `dist/main.js`, sourcemap, and copies `src/lasca.html` to `dist/`.
 
+## Preview
+
+Serve the production build locally (tests the `dist/` output):
+
+```bash
+npm run preview
+```
+
+Open http://localhost:8080/lasca.html
+
 ## Live Reload
 
 For auto-reload while editing:
