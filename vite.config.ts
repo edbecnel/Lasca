@@ -13,7 +13,10 @@ export default defineConfig({
     outDir: "../dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, "src/lasca.html"),
+      input: {
+        index: path.resolve(__dirname, "src/index.html"),
+        lasca: path.resolve(__dirname, "src/lasca.html"),
+      },
     },
   },
 });
