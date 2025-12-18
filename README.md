@@ -13,9 +13,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:8080/lasca.html
-
-This serves the `src/` folder and disables caching.
+Then open http://localhost:8080/lasca.html (Vite serves from `src/`).
 
 ## Build
 
@@ -25,7 +23,7 @@ Produces a bundled `dist/` for static hosting:
 npm run build
 ```
 
-Outputs `dist/main.js`, sourcemap, and copies `src/lasca.html` to `dist/`.
+Outputs the built site to `dist/` (including `lasca.html` and bundled assets).
 
 ## Preview
 
@@ -39,13 +37,7 @@ Open http://localhost:8080/lasca.html
 
 ## Live Reload
 
-For auto-reload while editing:
-
-```bash
-npm run watch
-```
-
-This starts live-reload on http://localhost:8080 and opens `src/lasca.html` automatically.
+`npm run dev` already provides fast HMR via Vite. No separate `watch` script.
 
 ## How to tweak the dropdown popup colors (now fully controllable)
 
@@ -61,5 +53,5 @@ For example: Change --themeMenuBg to try different backgrounds.
 
 ## Notes
 
-- The entry HTML is `src/lasca.html`, which loads `src/main.js`.
+- The entry HTML is `src/lasca.html`, which loads `src/main.ts`.
 - If you prefer, you can also open `src/lasca.html` directly in a browser, but using a local server avoids potential file URL quirks.
