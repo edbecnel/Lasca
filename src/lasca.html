@@ -1,472 +1,304 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Lasca – Board Prototype</title>
-    <!-- Favicon (data URL to avoid extra request) -->
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e12a2a'/%3E%3Ccircle cx='8' cy='8' r='3' fill='%23ffffff'/%3E%3C/svg%3E"
-    />
-    <style>
-      :root {
-        --page-bg: #1b1b1b;
-        --panel-bg: rgba(255, 255, 255, 0.06);
-        --panel-border: rgba(255, 255, 255, 0.1);
-        --panel-text: rgba(255, 255, 255, 0.9);
-        --panel-subtext: rgba(255, 255, 255, 0.7);
-      }
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lasca – Board Prototype</title>
+  <style>
+    :root {
+      --page-bg: #1b1b1b;
+      --panel-bg: rgba(255,255,255,0.06);
+      --panel-border: rgba(255,255,255,0.10);
+      --panel-text: rgba(255,255,255,0.90);
+      --panel-subtext: rgba(255,255,255,0.70);
+    }
 
-      body {
-        margin: 0;
-        background: var(--page-bg);
-        height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
-          sans-serif;
-      }
+    body{
+      margin:0;
+      background: var(--page-bg);
+      height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
 
-      #app {
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        padding: 16px;
-      }
+    #app{
+      display:flex;
+      align-items:center;
+      gap:24px;
+      padding:16px;
+    }
 
-      /* Board stays responsive */
-      svg#lascaBoard {
-        width: min(92vmin, 980px);
-        height: auto;
-        display: block;
-      }
+    /* Board stays responsive */
+    svg#lascaBoard{
+      width:min(92vmin, 980px);
+      height:auto;
+      display:block;
+    }
 
-      /* Zoom panel to the right */
-      #zoomPanel {
-        width: 240px;
-        height: min(92vmin, 980px);
-        box-sizing: border-box;
-        border: 1px solid var(--panel-border);
-        background: var(--panel-bg);
-        border-radius: 12px;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
+    /* Inspector panel to the right (temporary; will later become your resizable right sidebar) */
+    #zoomPanel{
+      width:240px;
+      height:min(92vmin, 980px);
+      box-sizing:border-box;
+      border:1px solid var(--panel-border);
+      background: var(--panel-bg);
+      border-radius:12px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
 
-      #zoomTitle {
-        color: var(--panel-text);
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 1.2;
-      }
+    #zoomTitle{
+      color: var(--panel-text);
+      font-size:14px;
+      font-weight:600;
+      line-height:1.2;
+    }
 
-      #zoomHint {
-        color: var(--panel-subtext);
-        font-size: 12px;
-        line-height: 1.35;
-      }
+    #zoomHint{
+      color: var(--panel-subtext);
+      font-size:12px;
+      line-height:1.35;
+    }
 
-      #zoomBody {
-        flex: 1;
-        overflow: auto;
-        border-radius: 10px;
-        background: rgba(0, 0, 0, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        padding: 10px;
-      }
+    #zoomBody{
+      flex:1;
+      overflow:auto;
+      border-radius:10px;
+      background: rgba(0,0,0,0.18);
+      border:1px solid rgba(255,255,255,0.08);
+      padding:10px;
+    }
 
-      #zoomSvg {
-        width: 100%;
-        display: block;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <svg
-        id="lascaBoard"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 1000 1000"
-        aria-label="Lasca board"
-      >
-        <defs>
-          <!-- ======== PIECE SYMBOLS (W_S, B_S, W_O, B_O) ======== -->
-          <radialGradient id="gradWhite" cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stop-color="#ffffff" />
-            <stop offset="55%" stop-color="#f1f1f1" />
-            <stop offset="100%" stop-color="#d6d6d6" />
-          </radialGradient>
+    #zoomSvg{
+      width:100%;
+      display:block;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
 
-          <radialGradient id="gradBlack" cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stop-color="#444444" />
-            <stop offset="55%" stop-color="#1c1c1c" />
-            <stop offset="100%" stop-color="#050505" />
-          </radialGradient>
+    <svg id="lascaBoard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" aria-label="Lasca board">
+      <defs>
+        <!-- ======== PIECE SYMBOLS (W_S, B_S, W_O, B_O) ======== -->
+        <radialGradient id="gradWhite" cx="35%" cy="30%" r="70%">
+          <stop offset="0%"  stop-color="#ffffff"/>
+          <stop offset="55%" stop-color="#f1f1f1"/>
+          <stop offset="100%" stop-color="#d6d6d6"/>
+        </radialGradient>
 
-          <radialGradient id="gradGreen" cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stop-color="#7be58a" />
-            <stop offset="55%" stop-color="#1fb34a" />
-            <stop offset="100%" stop-color="#0a6f2a" />
-          </radialGradient>
+        <radialGradient id="gradBlack" cx="35%" cy="30%" r="70%">
+          <stop offset="0%"  stop-color="#444444"/>
+          <stop offset="55%" stop-color="#1c1c1c"/>
+          <stop offset="100%" stop-color="#050505"/>
+        </radialGradient>
 
-          <radialGradient id="gradRed" cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stop-color="#ff8f8f" />
-            <stop offset="55%" stop-color="#e12a2a" />
-            <stop offset="100%" stop-color="#8f1111" />
-          </radialGradient>
+        <radialGradient id="gradGreen" cx="35%" cy="30%" r="70%">
+          <stop offset="0%"  stop-color="#7be58a"/>
+          <stop offset="55%" stop-color="#1fb34a"/>
+          <stop offset="100%" stop-color="#0a6f2a"/>
+        </radialGradient>
 
-          <path
-            id="star5"
-            d="
-      M 50 30
-      L 56.5 43.2
-      L 71.0 45.3
-      L 60.5 55.6
-      L 63.0 70.0
-      L 50.0 63.2
-      L 37.0 70.0
-      L 39.5 55.6
-      L 29.0 45.3
-      L 43.5 43.2
-      Z"
-          />
+        <radialGradient id="gradRed" cx="35%" cy="30%" r="70%">
+          <stop offset="0%"  stop-color="#ff8f8f"/>
+          <stop offset="55%" stop-color="#e12a2a"/>
+          <stop offset="100%" stop-color="#8f1111"/>
+        </radialGradient>
 
-          <!-- White Soldier -->
-          <symbol id="W_S" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="43"
-              fill="url(#gradWhite)"
-              stroke="#111"
-              stroke-width="6"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="33"
-              fill="none"
-              stroke="#000"
-              stroke-opacity="0.18"
-              stroke-width="3"
-            />
-            <ellipse
-              cx="40"
-              cy="36"
-              rx="18"
-              ry="12"
-              fill="#fff"
-              opacity="0.28"
-            />
-          </symbol>
+        <path id="star5" d="
+          M 50 30
+          L 56.5 43.2
+          L 71.0 45.3
+          L 60.5 55.6
+          L 63.0 70.0
+          L 50.0 63.2
+          L 37.0 70.0
+          L 39.5 55.6
+          L 29.0 45.3
+          L 43.5 43.2
+          Z" />
 
-          <!-- Black Soldier -->
-          <symbol id="B_S" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="43"
-              fill="url(#gradBlack)"
-              stroke="#f5f5f5"
-              stroke-width="6"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="33"
-              fill="none"
-              stroke="#fff"
-              stroke-opacity="0.16"
-              stroke-width="3"
-            />
-            <ellipse
-              cx="40"
-              cy="36"
-              rx="18"
-              ry="12"
-              fill="#fff"
-              opacity="0.10"
-            />
-          </symbol>
+        <!-- White Soldier -->
+        <symbol id="W_S" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="43" fill="url(#gradWhite)" stroke="#111" stroke-width="6"/>
+          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
+          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.28"/>
+        </symbol>
 
-          <!-- Green Officer (paired with White Soldier) -->
-          <symbol id="W_O" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="43"
-              fill="url(#gradGreen)"
-              stroke="#0b2a12"
-              stroke-width="6"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="33"
-              fill="none"
-              stroke="#000"
-              stroke-opacity="0.18"
-              stroke-width="3"
-            />
-            <use href="#star5" fill="#ffffff" opacity="0.95" />
-            <circle
-              cx="50"
-              cy="50"
-              r="18"
-              fill="none"
-              stroke="#fff"
-              stroke-opacity="0.55"
-              stroke-width="3"
-            />
-            <ellipse
-              cx="40"
-              cy="36"
-              rx="18"
-              ry="12"
-              fill="#fff"
-              opacity="0.18"
-            />
-          </symbol>
+        <!-- Black Soldier -->
+        <symbol id="B_S" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="43" fill="url(#gradBlack)" stroke="#f5f5f5" stroke-width="6"/>
+          <circle cx="50" cy="50" r="33" fill="none" stroke="#fff" stroke-opacity="0.16" stroke-width="3"/>
+          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.10"/>
+        </symbol>
 
-          <!-- Red Officer (paired with Black Soldier) -->
-          <symbol id="B_O" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="43"
-              fill="url(#gradRed)"
-              stroke="#3a0b0b"
-              stroke-width="6"
-            />
-            <circle
-              cx="50"
-              cy="50"
-              r="33"
-              fill="none"
-              stroke="#000"
-              stroke-opacity="0.18"
-              stroke-width="3"
-            />
-            <use href="#star5" fill="#ffffff" opacity="0.95" />
-            <circle
-              cx="50"
-              cy="50"
-              r="18"
-              fill="none"
-              stroke="#fff"
-              stroke-opacity="0.55"
-              stroke-width="3"
-            />
-            <ellipse
-              cx="40"
-              cy="36"
-              rx="18"
-              ry="12"
-              fill="#fff"
-              opacity="0.16"
-            />
-          </symbol>
+        <!-- Green Officer (paired with White Soldier) -->
+        <symbol id="W_O" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="43" fill="url(#gradGreen)" stroke="#0b2a12" stroke-width="6"/>
+          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
+          <use href="#star5" fill="#ffffff" opacity="0.95"/>
+          <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
+          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.18"/>
+        </symbol>
 
-          <!-- ======== CONNECTOR MASK (prevents lines inside nodes) ======== -->
-          <mask
-            id="mask-connectors"
-            maskUnits="userSpaceOnUse"
-            maskContentUnits="userSpaceOnUse"
-          >
-            <rect x="0" y="0" width="1000" height="1000" fill="white" />
+        <!-- Red Officer (paired with Black Soldier) -->
+        <symbol id="B_O" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="43" fill="url(#gradRed)" stroke="#3a0b0b" stroke-width="6"/>
+          <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
+          <use href="#star5" fill="#ffffff" opacity="0.95"/>
+          <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
+          <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.16"/>
+        </symbol>
 
-            <!-- hole radius chosen so lines can tuck slightly under the ring -->
-            <!-- node r = 46, hole r = 42 -->
-            <!-- row 0 -->
-            <circle cx="140" cy="140" r="42" fill="black" />
-            <circle cx="380" cy="140" r="42" fill="black" />
-            <circle cx="620" cy="140" r="42" fill="black" />
-            <circle cx="860" cy="140" r="42" fill="black" />
-            <!-- row 1 -->
-            <circle cx="260" cy="260" r="42" fill="black" />
-            <circle cx="500" cy="260" r="42" fill="black" />
-            <circle cx="740" cy="260" r="42" fill="black" />
-            <!-- row 2 -->
-            <circle cx="140" cy="380" r="42" fill="black" />
-            <circle cx="380" cy="380" r="42" fill="black" />
-            <circle cx="620" cy="380" r="42" fill="black" />
-            <circle cx="860" cy="380" r="42" fill="black" />
-            <!-- row 3 -->
-            <circle cx="260" cy="500" r="42" fill="black" />
-            <circle cx="500" cy="500" r="42" fill="black" />
-            <circle cx="740" cy="500" r="42" fill="black" />
-            <!-- row 4 -->
-            <circle cx="140" cy="620" r="42" fill="black" />
-            <circle cx="380" cy="620" r="42" fill="black" />
-            <circle cx="620" cy="620" r="42" fill="black" />
-            <circle cx="860" cy="620" r="42" fill="black" />
-            <!-- row 5 -->
-            <circle cx="260" cy="740" r="42" fill="black" />
-            <circle cx="500" cy="740" r="42" fill="black" />
-            <circle cx="740" cy="740" r="42" fill="black" />
-            <!-- row 6 -->
-            <circle cx="140" cy="860" r="42" fill="black" />
-            <circle cx="380" cy="860" r="42" fill="black" />
-            <circle cx="620" cy="860" r="42" fill="black" />
-            <circle cx="860" cy="860" r="42" fill="black" />
-          </mask>
-        </defs>
+        <!-- ======== CONNECTOR MASK (prevents lines inside nodes) ======== -->
+        <mask id="mask-connectors" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="1000" height="1000" fill="white"/>
 
-        <!-- Background fills -->
-        <g id="bgFill">
-          <rect x="0" y="0" width="1000" height="1000" fill="#e8ddcc" />
-          <rect
-            x="60"
-            y="60"
-            width="880"
-            height="880"
-            fill="#e8ddcc"
-            opacity="0.70"
-          />
-        </g>
+          <!-- row 0 -->
+          <circle cx="140" cy="140" r="42" fill="black"/>
+          <circle cx="380" cy="140" r="42" fill="black"/>
+          <circle cx="620" cy="140" r="42" fill="black"/>
+          <circle cx="860" cy="140" r="42" fill="black"/>
+          <!-- row 1 -->
+          <circle cx="260" cy="260" r="42" fill="black"/>
+          <circle cx="500" cy="260" r="42" fill="black"/>
+          <circle cx="740" cy="260" r="42" fill="black"/>
+          <!-- row 2 -->
+          <circle cx="140" cy="380" r="42" fill="black"/>
+          <circle cx="380" cy="380" r="42" fill="black"/>
+          <circle cx="620" cy="380" r="42" fill="black"/>
+          <circle cx="860" cy="380" r="42" fill="black"/>
+          <!-- row 3 -->
+          <circle cx="260" cy="500" r="42" fill="black"/>
+          <circle cx="500" cy="500" r="42" fill="black"/>
+          <circle cx="740" cy="500" r="42" fill="black"/>
+          <!-- row 4 -->
+          <circle cx="140" cy="620" r="42" fill="black"/>
+          <circle cx="380" cy="620" r="42" fill="black"/>
+          <circle cx="620" cy="620" r="42" fill="black"/>
+          <circle cx="860" cy="620" r="42" fill="black"/>
+          <!-- row 5 -->
+          <circle cx="260" cy="740" r="42" fill="black"/>
+          <circle cx="500" cy="740" r="42" fill="black"/>
+          <circle cx="740" cy="740" r="42" fill="black"/>
+          <!-- row 6 -->
+          <circle cx="140" cy="860" r="42" fill="black"/>
+          <circle cx="380" cy="860" r="42" fill="black"/>
+          <circle cx="620" cy="860" r="42" fill="black"/>
+          <circle cx="860" cy="860" r="42" fill="black"/>
+        </mask>
+      </defs>
 
-        <!-- Frame -->
-        <g id="frame">
-          <rect
-            x="6"
-            y="6"
-            width="988"
-            height="988"
-            fill="none"
-            stroke="#000"
-            stroke-opacity="0.15"
-            stroke-width="12"
-          />
-        </g>
+      <g id="bgFill">
+        <rect x="0" y="0" width="1000" height="1000" fill="#e8ddcc"/>
+        <rect x="60" y="60" width="880" height="880" fill="#e8ddcc" opacity="0.70"/>
+      </g>
 
-        <!-- Connectors -->
-        <g
-          id="connectors"
-          mask="url(#mask-connectors)"
-          stroke="#111"
-          stroke-width="16"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <!-- row0 -> row1 -->
-          <line x1="140" y1="140" x2="260" y2="260" />
-          <line x1="380" y1="140" x2="260" y2="260" />
-          <line x1="380" y1="140" x2="500" y2="260" />
-          <line x1="620" y1="140" x2="500" y2="260" />
-          <line x1="620" y1="140" x2="740" y2="260" />
-          <line x1="860" y1="140" x2="740" y2="260" />
+      <g id="frame">
+        <rect x="6" y="6" width="988" height="988"
+              fill="none" stroke="#000" stroke-opacity="0.15" stroke-width="12"/>
+      </g>
 
-          <!-- row1 -> row2 -->
-          <line x1="260" y1="260" x2="140" y2="380" />
-          <line x1="260" y1="260" x2="380" y2="380" />
-          <line x1="500" y1="260" x2="380" y2="380" />
-          <line x1="500" y1="260" x2="620" y2="380" />
-          <line x1="740" y1="260" x2="620" y2="380" />
-          <line x1="740" y1="260" x2="860" y2="380" />
+      <g id="connectors"
+         mask="url(#mask-connectors)"
+         stroke="#111" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="140" y1="140" x2="260" y2="260"/>
+        <line x1="380" y1="140" x2="260" y2="260"/>
+        <line x1="380" y1="140" x2="500" y2="260"/>
+        <line x1="620" y1="140" x2="500" y2="260"/>
+        <line x1="620" y1="140" x2="740" y2="260"/>
+        <line x1="860" y1="140" x2="740" y2="260"/>
 
-          <!-- row2 -> row3 -->
-          <line x1="140" y1="380" x2="260" y2="500" />
-          <line x1="380" y1="380" x2="260" y2="500" />
-          <line x1="380" y1="380" x2="500" y2="500" />
-          <line x1="620" y1="380" x2="500" y2="500" />
-          <line x1="620" y1="380" x2="740" y2="500" />
-          <line x1="860" y1="380" x2="740" y2="500" />
+        <line x1="260" y1="260" x2="140" y2="380"/>
+        <line x1="260" y1="260" x2="380" y2="380"/>
+        <line x1="500" y1="260" x2="380" y2="380"/>
+        <line x1="500" y1="260" x2="620" y2="380"/>
+        <line x1="740" y1="260" x2="620" y2="380"/>
+        <line x1="740" y1="260" x2="860" y2="380"/>
 
-          <!-- row3 -> row4 -->
-          <line x1="260" y1="500" x2="140" y2="620" />
-          <line x1="260" y1="500" x2="380" y2="620" />
-          <line x1="500" y1="500" x2="380" y2="620" />
-          <line x1="500" y1="500" x2="620" y2="620" />
-          <line x1="740" y1="500" x2="620" y2="620" />
-          <line x1="740" y1="500" x2="860" y2="620" />
+        <line x1="140" y1="380" x2="260" y2="500"/>
+        <line x1="380" y1="380" x2="260" y2="500"/>
+        <line x1="380" y1="380" x2="500" y2="500"/>
+        <line x1="620" y1="380" x2="500" y2="500"/>
+        <line x1="620" y1="380" x2="740" y2="500"/>
+        <line x1="860" y1="380" x2="740" y2="500"/>
 
-          <!-- row4 -> row5 -->
-          <line x1="140" y1="620" x2="260" y2="740" />
-          <line x1="380" y1="620" x2="260" y2="740" />
-          <line x1="380" y1="620" x2="500" y2="740" />
-          <line x1="620" y1="620" x2="500" y2="740" />
-          <line x1="620" y1="620" x2="740" y2="740" />
-          <line x1="860" y1="620" x2="740" y2="740" />
+        <line x1="260" y1="500" x2="140" y2="620"/>
+        <line x1="260" y1="500" x2="380" y2="620"/>
+        <line x1="500" y1="500" x2="380" y2="620"/>
+        <line x1="500" y1="500" x2="620" y2="620"/>
+        <line x1="740" y1="500" x2="620" y2="620"/>
+        <line x1="740" y1="500" x2="860" y2="620"/>
 
-          <!-- row5 -> row6 -->
-          <line x1="260" y1="740" x2="140" y2="860" />
-          <line x1="260" y1="740" x2="380" y2="860" />
-          <line x1="500" y1="740" x2="380" y2="860" />
-          <line x1="500" y1="740" x2="620" y2="860" />
-          <line x1="740" y1="740" x2="620" y2="860" />
-          <line x1="740" y1="740" x2="860" y2="860" />
-        </g>
+        <line x1="140" y1="620" x2="260" y2="740"/>
+        <line x1="380" y1="620" x2="260" y2="740"/>
+        <line x1="380" y1="620" x2="500" y2="740"/>
+        <line x1="620" y1="620" x2="500" y2="740"/>
+        <line x1="620" y1="620" x2="740" y2="740"/>
+        <line x1="860" y1="620" x2="740" y2="740"/>
 
-        <!-- Pieces (populated by JS) -->
-        <g id="pieces"></g>
+        <line x1="260" y1="740" x2="140" y2="860"/>
+        <line x1="260" y1="740" x2="380" y2="860"/>
+        <line x1="500" y1="740" x2="380" y2="860"/>
+        <line x1="500" y1="740" x2="620" y2="860"/>
+        <line x1="740" y1="740" x2="620" y2="860"/>
+        <line x1="740" y1="740" x2="860" y2="860"/>
+      </g>
 
-        <!-- Node rings -->
-        <g id="nodes" fill="none" stroke="#111" stroke-width="8">
-          <!-- row 0 (4) -->
-          <circle id="r0c0" cx="140" cy="140" r="46" />
-          <circle id="r0c2" cx="380" cy="140" r="46" />
-          <circle id="r0c4" cx="620" cy="140" r="46" />
-          <circle id="r0c6" cx="860" cy="140" r="46" />
+      <g id="pieces"></g>
 
-          <!-- row 1 (3) -->
-          <circle id="r1c1" cx="260" cy="260" r="46" />
-          <circle id="r1c3" cx="500" cy="260" r="46" />
-          <circle id="r1c5" cx="740" cy="260" r="46" />
+      <g id="nodes" fill="none" stroke="#111" stroke-width="8">
+        <circle id="r0c0" cx="140" cy="140" r="46"/>
+        <circle id="r0c2" cx="380" cy="140" r="46"/>
+        <circle id="r0c4" cx="620" cy="140" r="46"/>
+        <circle id="r0c6" cx="860" cy="140" r="46"/>
 
-          <!-- row 2 (4) -->
-          <circle id="r2c0" cx="140" cy="380" r="46" />
-          <circle id="r2c2" cx="380" cy="380" r="46" />
-          <circle id="r2c4" cx="620" cy="380" r="46" />
-          <circle id="r2c6" cx="860" cy="380" r="46" />
+        <circle id="r1c1" cx="260" cy="260" r="46"/>
+        <circle id="r1c3" cx="500" cy="260" r="46"/>
+        <circle id="r1c5" cx="740" cy="260" r="46"/>
 
-          <!-- row 3 (3) -->
-          <circle id="r3c1" cx="260" cy="500" r="46" />
-          <circle id="r3c3" cx="500" cy="500" r="46" />
-          <circle id="r3c5" cx="740" cy="500" r="46" />
+        <circle id="r2c0" cx="140" cy="380" r="46"/>
+        <circle id="r2c2" cx="380" cy="380" r="46"/>
+        <circle id="r2c4" cx="620" cy="380" r="46"/>
+        <circle id="r2c6" cx="860" cy="380" r="46"/>
 
-          <!-- row 4 (4) -->
-          <circle id="r4c0" cx="140" cy="620" r="46" />
-          <circle id="r4c2" cx="380" cy="620" r="46" />
-          <circle id="r4c4" cx="620" cy="620" r="46" />
-          <circle id="r4c6" cx="860" cy="620" r="46" />
+        <circle id="r3c1" cx="260" cy="500" r="46"/>
+        <circle id="r3c3" cx="500" cy="500" r="46"/>
+        <circle id="r3c5" cx="740" cy="500" r="46"/>
 
-          <!-- row 5 (3) -->
-          <circle id="r5c1" cx="260" cy="740" r="46" />
-          <circle id="r5c3" cx="500" cy="740" r="46" />
-          <circle id="r5c5" cx="740" cy="740" r="46" />
+        <circle id="r4c0" cx="140" cy="620" r="46"/>
+        <circle id="r4c2" cx="380" cy="620" r="46"/>
+        <circle id="r4c4" cx="620" cy="620" r="46"/>
+        <circle id="r4c6" cx="860" cy="620" r="46"/>
 
-          <!-- row 6 (4) -->
-          <circle id="r6c0" cx="140" cy="860" r="46" />
-          <circle id="r6c2" cx="380" cy="860" r="46" />
-          <circle id="r6c4" cx="620" cy="860" r="46" />
-          <circle id="r6c6" cx="860" cy="860" r="46" />
-        </g>
-      </svg>
-<div id="zoomPanel" aria-label="Stack inspector">
-        <div id="zoomTitle">Lasca Stack Inspector</div>
-        <div id="zoomHint">
-          Hover a stacked piece to see the full column order (bottom → top). If
-          a crack appears on the mini spine, brackets mark the omitted middle
-          here.
-        </div>
-        <div id="zoomBody">
-          <svg
-            id="zoomSvg"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 120 200"
-            role="img"
-            aria-label="Stack spine"
-          >
-            <!-- filled by JS -->
-          </svg>
-        </div>
+        <circle id="r5c1" cx="260" cy="740" r="46"/>
+        <circle id="r5c3" cx="500" cy="740" r="46"/>
+        <circle id="r5c5" cx="740" cy="740" r="46"/>
+
+        <circle id="r6c0" cx="140" cy="860" r="46"/>
+        <circle id="r6c2" cx="380" cy="860" r="46"/>
+        <circle id="r6c4" cx="620" cy="860" r="46"/>
+        <circle id="r6c6" cx="860" cy="860" r="46"/>
+      </g>
+    </svg>
+
+    <div id="zoomPanel" aria-label="Stack inspector">
+      <div id="zoomTitle">Lasca Stack Inspector</div>
+      <div id="zoomHint">Hover a stacked piece to see the full column order (bottom → top). If a crack appears on the mini spine, brackets mark the omitted middle here.</div>
+      <div id="zoomBody">
+        <svg id="zoomSvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200" role="img" aria-label="Stack column">
+          <!-- filled by JS -->
+        </svg>
       </div>
     </div>
-    <script src="./main.js" defer></script>
-  </body>
+
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
 </html>

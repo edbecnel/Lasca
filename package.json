@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "http-server src -c-1",
     "start": "npm run dev",
-    "watch": "live-server src --port=8080 --open=lasca.html"
+    "watch": "live-server src --port=8080 --open=lasca.html",
+    "build": "esbuild src/main.js --bundle --format=esm --minify --sourcemap --outdir=dist && cpx \"src/*.html\" dist"
   },
   "devDependencies": {
     "http-server": "^14.1.1",
-    "live-server": "^1.2.2"
+    "live-server": "^1.2.2",
+    "esbuild": "^0.23.0",
+    "cpx": "^1.5.0"
   }
 }

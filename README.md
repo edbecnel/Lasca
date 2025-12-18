@@ -17,6 +17,16 @@ Then open http://localhost:8080/lasca.html
 
 This serves the `src/` folder and disables caching.
 
+## Build
+
+Produces a bundled `dist/` for static hosting:
+
+```bash
+npm run build
+```
+
+Outputs `dist/main.js`, sourcemap, and copies `src/lasca.html` to `dist/`.
+
 ## Live Reload
 
 For auto-reload while editing:
