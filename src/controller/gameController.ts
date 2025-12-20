@@ -2,6 +2,8 @@ import type { GameState } from "../game/state.ts";
 import type { createStackInspector } from "../ui/stackInspector";
 import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets } from "../render/overlays.ts";
 import { generateLegalMoves } from "../game/movegen.ts";
+import { applyMove } from "../game/applyMove.ts";
+import { renderGameState } from "../render/renderGameState.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -24,18 +26,35 @@ export class GameController {
     this.svg.addEventListener("click", (ev) => this.onClick(ev));
   }
 
+  setState(next: GameState): void {
+    this.state = next;
+    this.updatePanel();
+  }
+
   private updatePanel(): void {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
     const elMsg = document.getElementById("statusMessage");
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = (this.selected ? "Select" : "Idle");
-    if (elMsg) elMsg.textContent = this.selected ? "Choose a destination" : "—";
+    if (elMsg) {
+      if (this.selected) {
+        elMsg.textContent = this.currentTargets.length > 0 ? "Choose a destination" : "No quiet moves";
+      } else {
+        elMsg.textContent = "—";
+      }
+    }
   }
 
   private resolveClickedNode(target: EventTarget | null): string | null {
     // If clicking a rendered stack, read data-node from closest g.stack
     if (target && target instanceof Element) {
+      // First, if the target (or ancestor) has data-node, prefer that
+      const withData = target.closest("[data-node]") as Element | null;
+      if (withData) {
+        const id = withData.getAttribute("data-node");
+        if (id) return id;
+      }
       const stack = target.closest("g.stack") as SVGGElement | null;
       if (stack) {
         const id = stack.getAttribute("data-node");
@@ -46,6 +65,39 @@ export class GameController {
         const id = target.getAttribute("id");
         if (id) return id;
       }
+    }
+    return null;
+  }
+
+  private svgPointFromClient(ev: MouseEvent): { x: number; y: number } {
+    const pt = (this.svg as any).createSVGPoint ? (this.svg as any).createSVGPoint() : null;
+    if (pt && this.svg.getScreenCTM) {
+      pt.x = ev.clientX;
+      pt.y = ev.clientY;
+      const m = this.svg.getScreenCTM();
+      if (m && (m as any).inverse) {
+        const p = pt.matrixTransform((m as any).inverse());
+        return { x: p.x, y: p.y };
+      }
+    }
+    // Fallback: approximate using bounding rect
+    const rect = this.svg.getBoundingClientRect();
+    return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+  }
+
+  private hitTestTargets(ev: MouseEvent): string | null {
+    if (!this.selected || this.currentTargets.length === 0) return null;
+    const { x, y } = this.svgPointFromClient(ev);
+    for (const id of this.currentTargets) {
+      const circle = document.getElementById(id) as SVGCircleElement | null;
+      if (!circle) continue;
+      const cx = parseFloat(circle.getAttribute("cx") || "0");
+      const cy = parseFloat(circle.getAttribute("cy") || "0");
+      const r = parseFloat(circle.getAttribute("r") || "0");
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= r + 12) return id; // within target ring radius
     }
     return null;
   }
@@ -64,6 +116,10 @@ export class GameController {
     this.currentTargets = moves.map(m => m.to);
     drawTargets(this.overlayLayer, this.currentTargets);
     this.updatePanel();
+    if (import.meta.env && import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log("[controller] select", nodeId, { targets: this.currentTargets });
+    }
   }
 
   private clearSelection(): void {
@@ -74,7 +130,15 @@ export class GameController {
   }
 
   private onClick(ev: MouseEvent): void {
-    const nodeId = this.resolveClickedNode(ev.target);
+    let nodeId = this.resolveClickedNode(ev.target);
+    if (import.meta.env && import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log("[controller] click", { target: ev.target, resolved: nodeId, selected: this.selected, targets: this.currentTargets });
+    }
+    if (!nodeId) {
+      // Try geometric hit-test against current target circles
+      nodeId = this.hitTestTargets(ev);
+    }
     if (!nodeId) {
       this.clearSelection();
       return;
@@ -82,8 +146,15 @@ export class GameController {
 
     // Clicking target: in PR 4 we only highlight; move application will come later
     if (this.selected && this.currentTargets.includes(nodeId)) {
-      // No-op for now; next PR will apply move
-      this.updatePanel();
+      const move = { kind: "move" as const, from: this.selected, to: nodeId };
+      const next = applyMove(this.state, move);
+      if (import.meta.env && import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log("[controller] apply", move);
+      }
+      this.state = next;
+      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      this.clearSelection();
       return;
     }
 

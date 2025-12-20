@@ -7,6 +7,7 @@ import { createThemeManager } from "./theme/themeManager";
 import type { Player } from "./types";
 import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
+import { ALL_NODES } from "./game/board.ts";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -58,7 +59,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     import.meta.hot.accept(() => window.location.reload());
   }
 
-  // Dev-only: install debug helpers to inspect neighbors/jumps on click
+  // PR 4+5: interaction — controller binds selection and applies quiet moves
+  ensureOverlayLayer(svg);
+  const controller = new GameController(svg, piecesLayer, inspector, state);
+  controller.bind();
+
+  // Dev-only: install debug helpers and expose rerender/random that also sync controller state
   if (import.meta.env && import.meta.env.DEV) {
     const mod = await import("./dev/boardDebug.ts");
     let currentState = state;
@@ -77,17 +83,51 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (elPhase) elPhase.textContent = next.phase.charAt(0).toUpperCase() + next.phase.slice(1);
       if (elMsg) elMsg.textContent = "—";
       currentState = next;
+      controller.setState(currentState);
       w.__state = currentState;
     };
     w.__random = (totalPerSide: number = 11, toMove: Player = "B") => {
       const s = randomMod.createRandomGameState({ totalPerSide, toMove });
+
+      // Add one random white and one random black multi-piece stack at empty nodes
+      const empty = ALL_NODES.filter((n) => !s.board.has(n));
+      const pickIndex = (max: number) => Math.floor(Math.random() * max);
+      const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1));
+      const shuffle = <T,>(arr: T[]): T[] => {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+      const makeStack = (owner: Player) => {
+        const total = randInt(2, 5); // 2..5 pieces in the stack
+        const soldiers = randInt(1, Math.max(1, total - 1)); // at least 1 soldier
+        const officers = Math.max(0, total - soldiers);
+        const pieces = [
+          ...Array(soldiers).fill(0).map(() => ({ owner, rank: "S" as const })),
+          ...Array(officers).fill(0).map(() => ({ owner, rank: "O" as const })),
+        ];
+        return shuffle(pieces);
+      };
+
+      // Place stacks if there is space
+      if (empty.length > 0) {
+        const wIdx = pickIndex(empty.length);
+        const wNode = empty[wIdx];
+        s.board.set(wNode, makeStack("W"));
+        empty.splice(wIdx, 1);
+      }
+      if (empty.length > 0) {
+        const bIdx = pickIndex(empty.length);
+        const bNode = empty[bIdx];
+        s.board.set(bNode, makeStack("B"));
+        empty.splice(bIdx, 1);
+      }
+
       w.__rerender(s);
       return s;
     };
   }
-
-  // PR 4: minimal interaction — click to select your stack and highlight quiet move destinations
-  ensureOverlayLayer(svg);
-  const controller = new GameController(svg, piecesLayer, inspector, state);
-  controller.bind();
 });

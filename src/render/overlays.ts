@@ -5,10 +5,16 @@ export function ensureOverlayLayer(svg: SVGSVGElement): SVGGElement {
   if (existing) return existing;
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.id = "overlays";
+  // Make overlays purely visual; clicks pass through to underlying nodes
   g.setAttribute("pointer-events", "none");
   const pieces = svg.querySelector("#pieces") as SVGGElement | null;
   if (pieces && pieces.parentNode) {
-    pieces.parentNode.insertBefore(g, pieces);
+    // Place overlays ABOVE the pieces layer for visibility and clicks
+    if (pieces.nextSibling) {
+      pieces.parentNode.insertBefore(g, pieces.nextSibling);
+    } else {
+      pieces.parentNode.appendChild(g);
+    }
   } else {
     svg.appendChild(g);
   }
@@ -37,6 +43,7 @@ export function drawSelection(layer: SVGGElement, nodeId: string): void {
   sel.setAttribute("fill", "none");
   sel.setAttribute("stroke", "#66ccff");
   sel.setAttribute("stroke-width", "3");
+  sel.setAttribute("pointer-events", "none");
   layer.appendChild(sel);
 }
 
@@ -53,9 +60,10 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
     ring.setAttribute("cy", String(cy));
     ring.setAttribute("r", String(r + 10));
     ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke", "#4caf50");
+    ring.setAttribute("stroke", "#00e676");
     ring.setAttribute("stroke-width", "3");
     ring.setAttribute("stroke-dasharray", "4 3");
+    // Visual only; clicks handled on underlying board node circles
     layer.appendChild(ring);
   }
 }
