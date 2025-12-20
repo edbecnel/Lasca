@@ -14,6 +14,10 @@ export const DEMO_STACK_NODE_ID = "r3c3";
 
 import type { Stack } from "../types";
 export const DEMO_STACK: Stack = [
+  { owner: "B", rank: "O" },
+  { owner: "W", rank: "S" },
+  { owner: "B", rank: "S" },
+  { owner: "W", rank: "O" },
   { owner: "B", rank: "S" },
   { owner: "W", rank: "S" },
   { owner: "B", rank: "O" },

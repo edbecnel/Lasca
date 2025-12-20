@@ -1,9 +1,12 @@
-import { BLACK_START_NODE_IDS, WHITE_START_NODE_IDS, DEMO_STACK_NODE_ID, DEMO_STACK } from "./game/initialPosition";
+import { createInitialGameState } from "./game/state.ts";
+import { renderGameState } from "./render/renderGameState.ts";
 import { createStackInspector } from "./ui/stackInspector";
 import { initSplitLayout } from "./ui/layout/splitLayout";
-import { renderStackAtNode } from "./render/renderStackAtNode";
 import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager } from "./theme/themeManager";
+import type { Player } from "./types";
+import { GameController } from "./controller/gameController.ts";
+import { ensureOverlayLayer } from "./render/overlays.ts";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -37,10 +40,54 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const inspector = createStackInspector(zoomTitle, zoomHint, zoomSvg);
 
-  piecesLayer.textContent = "";
+  // Create initial game state and render once
+  const state = createInitialGameState();
 
-  for (const id of BLACK_START_NODE_IDS) renderStackAtNode(svg, piecesLayer, inspector, id, [{ owner: "B", rank: "S" }]);
-  for (const id of WHITE_START_NODE_IDS) renderStackAtNode(svg, piecesLayer, inspector, id, [{ owner: "W", rank: "S" }]);
+  // Update left panel status
+  const elTurn = document.getElementById("statusTurn");
+  const elPhase = document.getElementById("statusPhase");
+  const elMsg = document.getElementById("statusMessage");
+  if (elTurn) elTurn.textContent = state.toMove === "B" ? "Black" : "White";
+  if (elPhase) elPhase.textContent = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
+  if (elMsg) elMsg.textContent = "—";
 
-  renderStackAtNode(svg, piecesLayer, inspector, DEMO_STACK_NODE_ID, DEMO_STACK);
+  renderGameState(svg, piecesLayer, inspector, state);
+
+  // In dev, force a full reload when modules (like state) change
+  if (import.meta.hot) {
+    import.meta.hot.accept(() => window.location.reload());
+  }
+
+  // Dev-only: install debug helpers to inspect neighbors/jumps on click
+  if (import.meta.env && import.meta.env.DEV) {
+    const mod = await import("./dev/boardDebug.ts");
+    let currentState = state;
+    mod.installBoardDebug(svg, () => currentState);
+
+    const randomMod = await import("./game/randomState.ts");
+
+    const w = window as any;
+    w.__state = currentState;
+    w.__rerender = (next: typeof state) => {
+      renderGameState(svg, piecesLayer, inspector, next);
+      const elTurn = document.getElementById("statusTurn");
+      const elPhase = document.getElementById("statusPhase");
+      const elMsg = document.getElementById("statusMessage");
+      if (elTurn) elTurn.textContent = next.toMove === "B" ? "Black" : "White";
+      if (elPhase) elPhase.textContent = next.phase.charAt(0).toUpperCase() + next.phase.slice(1);
+      if (elMsg) elMsg.textContent = "—";
+      currentState = next;
+      w.__state = currentState;
+    };
+    w.__random = (totalPerSide: number = 11, toMove: Player = "B") => {
+      const s = randomMod.createRandomGameState({ totalPerSide, toMove });
+      w.__rerender(s);
+      return s;
+    };
+  }
+
+  // PR 4: minimal interaction — click to select your stack and highlight quiet move destinations
+  ensureOverlayLayer(svg);
+  const controller = new GameController(svg, piecesLayer, inspector, state);
+  controller.bind();
 });
