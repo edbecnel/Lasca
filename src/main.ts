@@ -75,10 +75,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     const w = window as any;
     w.__state = currentState;
     w.__rerender = (next: typeof state) => {
-      // Clear any dev debug highlights before re-rendering a new state
+      // Clear any dev debug highlights and overlay rings before re-rendering
       if ((w.__board as any)?.clear) {
         try { (w.__board as any).clear(); } catch {}
       }
+      try {
+        const overlays = ensureOverlayLayer(svg);
+        // overlays exists even if empty; clear any lingering rings
+        const g = overlays as SVGGElement;
+        while (g.firstChild) g.removeChild(g.firstChild);
+      } catch {}
       renderGameState(svg, piecesLayer, inspector, next);
       const elTurn = document.getElementById("statusTurn");
       const elPhase = document.getElementById("statusPhase");
@@ -105,15 +111,18 @@ window.addEventListener("DOMContentLoaded", async () => {
         }
         return a;
       };
-      const makeStack = (owner: Player) => {
+      const makeStack = (topOwner: Player) => {
         const total = randInt(2, 5); // 2..5 pieces in the stack
-        const soldiers = randInt(1, Math.max(1, total - 1)); // at least 1 soldier
-        const officers = Math.max(0, total - soldiers);
-        const pieces = [
-          ...Array(soldiers).fill(0).map(() => ({ owner, rank: "S" as const })),
-          ...Array(officers).fill(0).map(() => ({ owner, rank: "O" as const })),
-        ];
-        return shuffle(pieces);
+        const other = topOwner === "W" ? "B" : "W";
+        const otherOf = (p: Player): Player => (p === "W" ? "B" : "W");
+        const bottomOwner: Player = (total % 2 === 1) ? topOwner : other;
+        const pieces: Array<{ owner: Player; rank: "S" | "O" }> = [];
+        for (let k = 0; k < total; k++) {
+          const owner = (k % 2 === 0) ? bottomOwner : otherOf(bottomOwner);
+          const rank = (k === total - 1) ? "O" : "S"; // officer at top
+          pieces.push({ owner, rank });
+        }
+        return pieces;
       };
 
       // Place stacks if there is space

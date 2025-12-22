@@ -22,7 +22,7 @@ describe("applyMove (quiet)", () => {
     expect(next.phase).toBe("idle");
   });
 
-  it("capture toggles turn (no board changes yet)", () => {
+  it("applies a single capture: move stack, take top enemy, captured goes to bottom, toggle turn", () => {
     const state: GameState = {
       board: new Map([
         ["r1c1", [{ owner: "W", rank: "S" }]],
@@ -31,11 +31,50 @@ describe("applyMove (quiet)", () => {
       toMove: "W",
       phase: "idle",
     };
-    const next = applyMove(state, { kind: "capture", from: "r1c1", to: "r3c3" });
-    // Turn toggles from White to Black
+    const next = applyMove(state, { kind: "capture", from: "r1c1", over: "r2c2", to: "r3c3" } as any);
     expect(next.toMove).toBe("B");
-    // Board remains unchanged in PR6
-    expect(next.board.get("r1c1")?.length).toBe(1);
-    expect(next.board.get("r2c2")?.length).toBe(1);
+    // Source cleared, over cleared (was single piece)
+    expect(next.board.has("r1c1")).toBe(false);
+    expect(next.board.has("r2c2")).toBe(false);
+    // Landing has two pieces: [captured(B,S), mover(W,S)] bottom→top
+    const stack = next.board.get("r3c3")!;
+    expect(stack.length).toBe(2);
+    expect(stack[0]).toEqual({ owner: "B", rank: "S" });
+    expect(stack[1]).toEqual({ owner: "W", rank: "S" });
+  });
+
+  it("leaves remainder at over after capture", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r3c3", [{ owner: "W", rank: "O" }]],
+        ["r4c4", [{ owner: "B", rank: "S" }, { owner: "B", rank: "O" }]], // bottom S, top O
+      ]),
+      toMove: "W",
+      phase: "idle",
+    };
+    const next = applyMove(state, { kind: "capture", from: "r3c3", over: "r4c4", to: "r5c5" } as any);
+    expect(next.toMove).toBe("B");
+    // Over keeps remainder [B,S]
+    const rem = next.board.get("r4c4")!;
+    expect(rem.length).toBe(1);
+    expect(rem[0]).toEqual({ owner: "B", rank: "S" });
+    // Landing has [captured(B,O), mover(W,O)]
+    const land = next.board.get("r5c5")!;
+    expect(land.length).toBe(2);
+    expect(land[0]).toEqual({ owner: "B", rank: "O" });
+    expect(land[1]).toEqual({ owner: "W", rank: "O" });
+  });
+
+  it("throws if capture landing is occupied", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r1c1", [{ owner: "W", rank: "S" }]],
+        ["r2c2", [{ owner: "B", rank: "S" }]],
+        ["r3c3", [{ owner: "W", rank: "O" }]], // occupied landing
+      ]),
+      toMove: "W",
+      phase: "idle",
+    };
+    expect(() => applyMove(state, { kind: "capture", from: "r1c1", over: "r2c2", to: "r3c3" } as any)).toThrow();
   });
 });

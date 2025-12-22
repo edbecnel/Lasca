@@ -67,3 +67,22 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
     layer.appendChild(ring);
   }
 }
+
+export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#ff9f40", width = 4): void {
+  const node = circleForNode(nodeId);
+  if (!node) return;
+  const cx = parseFloat(node.getAttribute("cx") || "0");
+  const cy = parseFloat(node.getAttribute("cy") || "0");
+  const r = parseFloat(node.getAttribute("r") || "0");
+
+  const ring = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  ring.setAttribute("cx", String(cx));
+  ring.setAttribute("cy", String(cy));
+  ring.setAttribute("r", String(r + 12));
+  ring.setAttribute("fill", "none");
+  ring.setAttribute("stroke", color);
+  ring.setAttribute("stroke-width", String(width));
+  ring.setAttribute("stroke-dasharray", "6 4");
+  ring.setAttribute("pointer-events", "none");
+  layer.appendChild(ring);
+}

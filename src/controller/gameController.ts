@@ -1,7 +1,7 @@
 import type { GameState } from "../game/state.ts";
 import type { Move } from "../game/moveTypes.ts";
 import type { createStackInspector } from "../ui/stackInspector";
-import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets } from "../render/overlays.ts";
+import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets, drawHighlightRing } from "../render/overlays.ts";
 import { generateLegalMoves } from "../game/movegen.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
@@ -17,6 +17,7 @@ export class GameController {
   private currentMoves: Move[] = [];
   private mandatoryCapture: boolean = false;
   private bannerTimer: number | null = null;
+  private remainderTimer: number | null = null;
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState) {
     this.svg = svg;
@@ -153,6 +154,17 @@ export class GameController {
     }, durationMs);
   }
 
+  private showRemainderHint(nodeId: string, durationMs: number = 1200): void {
+    // Draw a transient ring where remainder stays after capture
+    drawHighlightRing(this.overlayLayer, nodeId, "#ff9f40", 4);
+    if (this.remainderTimer) window.clearTimeout(this.remainderTimer);
+    this.remainderTimer = window.setTimeout(() => {
+      this.remainderTimer = null;
+      clearOverlays(this.overlayLayer);
+      this.updatePanel();
+    }, durationMs);
+  }
+
   private onClick(ev: MouseEvent): void {
     let nodeId = this.resolveClickedNode(ev.target);
     if (import.meta.env && import.meta.env.DEV) {
@@ -184,6 +196,8 @@ export class GameController {
       this.clearSelection();
       if (move.kind === "capture") {
         this.showBanner("Turn changed");
+        // Indicate remainder at the jumped square (if any remained, ring still useful as feedback)
+        this.showRemainderHint((move as any).over);
       }
       return;
     }
