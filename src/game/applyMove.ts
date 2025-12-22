@@ -2,9 +2,10 @@ import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 
 export function applyMove(state: GameState, move: Move): GameState {
-  if (move.kind !== "move") {
-    // Only quiet moves are supported in PR 5
-    return state;
+  if (move.kind === "capture") {
+    // PR6: We don't apply board changes yet, but capture should toggle turn.
+    const nextToMove = state.toMove === "B" ? "W" : "B";
+    return { board: new Map(state.board), toMove: nextToMove, phase: "idle" };
   }
 
   const nextBoard = new Map(state.board);

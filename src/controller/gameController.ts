@@ -1,4 +1,5 @@
 import type { GameState } from "../game/state.ts";
+import type { Move } from "../game/moveTypes.ts";
 import type { createStackInspector } from "../ui/stackInspector";
 import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets } from "../render/overlays.ts";
 import { generateLegalMoves } from "../game/movegen.ts";
@@ -13,6 +14,9 @@ export class GameController {
   private state: GameState;
   private selected: string | null = null;
   private currentTargets: string[] = [];
+  private currentMoves: Move[] = [];
+  private mandatoryCapture: boolean = false;
+  private bannerTimer: number | null = null;
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState) {
     this.svg = svg;
@@ -39,7 +43,13 @@ export class GameController {
     if (elPhase) elPhase.textContent = (this.selected ? "Select" : "Idle");
     if (elMsg) {
       if (this.selected) {
-        elMsg.textContent = this.currentTargets.length > 0 ? "Choose a destination" : "No quiet moves";
+        if (this.currentTargets.length > 0) {
+          elMsg.textContent = "Choose a destination";
+        } else if (this.mandatoryCapture) {
+          elMsg.textContent = "Capture required — select a capturing stack";
+        } else {
+          elMsg.textContent = "No moves";
+        }
       } else {
         elMsg.textContent = "—";
       }
@@ -112,8 +122,10 @@ export class GameController {
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
     drawSelection(this.overlayLayer, nodeId);
-    const moves = generateLegalMoves(this.state).filter(m => m.from === nodeId);
-    this.currentTargets = moves.map(m => m.to);
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.currentMoves = allLegal.filter(m => m.from === nodeId);
+    this.currentTargets = this.currentMoves.map(m => m.to);
     drawTargets(this.overlayLayer, this.currentTargets);
     this.updatePanel();
     if (import.meta.env && import.meta.env.DEV) {
@@ -125,8 +137,20 @@ export class GameController {
   private clearSelection(): void {
     this.selected = null;
     this.currentTargets = [];
+    this.currentMoves = [];
+    this.mandatoryCapture = false;
     clearOverlays(this.overlayLayer);
     this.updatePanel();
+  }
+
+  private showBanner(text: string, durationMs: number = 1500): void {
+    const elMsg = document.getElementById("statusMessage");
+    if (elMsg) elMsg.textContent = text;
+    if (this.bannerTimer) window.clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => {
+      this.bannerTimer = null;
+      this.updatePanel();
+    }, durationMs);
   }
 
   private onClick(ev: MouseEvent): void {
@@ -144,9 +168,12 @@ export class GameController {
       return;
     }
 
-    // Clicking target: in PR 4 we only highlight; move application will come later
     if (this.selected && this.currentTargets.includes(nodeId)) {
-      const move = { kind: "move" as const, from: this.selected, to: nodeId };
+      const move = this.currentMoves.find(m => m.to === nodeId && m.from === this.selected);
+      if (!move) {
+        this.clearSelection();
+        return;
+      }
       const next = applyMove(this.state, move);
       if (import.meta.env && import.meta.env.DEV) {
         // eslint-disable-next-line no-console
@@ -155,6 +182,9 @@ export class GameController {
       this.state = next;
       renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       this.clearSelection();
+      if (move.kind === "capture") {
+        this.showBanner("Turn changed");
+      }
       return;
     }
 

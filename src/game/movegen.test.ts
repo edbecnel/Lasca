@@ -39,21 +39,22 @@ describe("movegen quiet moves", () => {
     );
   });
 
-  it("soldier blocked by occupancy", () => {
+  it("soldier captures over enemy (mandatory capture)", () => {
     const s = mkState([
       ["r3c3", [{ owner: "B", rank: "S" }]],
       ["r4c2", [{ owner: "W", rank: "S" }]],
+      // r5c1 empty by omission; r4c4 also empty but quiet moves should be filtered
     ], "B");
     const moves = generateLegalMoves(s);
-    // r4c2 occupied, only r4c4 remains
+    // Must return only the capture, not quiet moves
     expect(moves).toEqual(
       expect.arrayContaining([
-        { from: "r3c3", to: "r4c4", kind: "move" },
+        { from: "r3c3", over: "r4c2", to: "r5c1", kind: "capture" },
       ])
     );
     expect(moves).not.toEqual(
       expect.arrayContaining([
-        { from: "r3c3", to: "r4c2", kind: "move" },
+        { from: "r3c3", to: "r4c4", kind: "move" },
       ])
     );
   });

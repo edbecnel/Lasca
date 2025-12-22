@@ -1,8 +1,71 @@
 import type { GameState } from "./state.ts";
-import type { Move } from "./moveTypes.ts";
+import type { Move, CaptureMove } from "./moveTypes.ts";
 import { parseNodeId, makeNodeId, isPlayable, inBounds } from "./coords.ts";
 
+export function generateCaptureMoves(state: GameState): CaptureMove[] {
+  const captures: CaptureMove[] = [];
+
+  const isEmpty = (id: string) => !state.board.has(id) || (state.board.get(id) ?? []).length === 0;
+  const isEnemyTopAt = (id: string) => {
+    const stack = state.board.get(id);
+    if (!stack || stack.length === 0) return false;
+    const top = stack[stack.length - 1];
+    return top.owner !== state.toMove;
+  };
+
+  for (const [fromId, stack] of state.board.entries()) {
+    if (!stack || stack.length === 0) continue;
+
+    const top = stack[stack.length - 1];
+    if (top.owner !== state.toMove) continue;
+
+    const { r, c } = parseNodeId(fromId);
+
+    type Delta = { dr: number; dc: number };
+    let deltas: Delta[] = [];
+
+    if (top.rank === "S") {
+      const dr2 = top.owner === "B" ? +2 : -2; // Soldiers capture forward only
+      deltas = [
+        { dr: dr2, dc: -2 },
+        { dr: dr2, dc: +2 },
+      ];
+    } else {
+      // Officer: capture two steps diagonally in any direction
+      deltas = [
+        { dr: -2, dc: -2 },
+        { dr: -2, dc: +2 },
+        { dr: +2, dc: -2 },
+        { dr: +2, dc: +2 },
+      ];
+    }
+
+    for (const { dr, dc } of deltas) {
+      const overR = r + dr / 2;
+      const overC = c + dc / 2;
+      const toR = r + dr;
+      const toC = c + dc;
+
+      if (!inBounds(overR, overC) || !inBounds(toR, toC)) continue;
+      if (!isPlayable(toR, toC)) continue; // landing must be on playable square
+
+      const overId = makeNodeId(overR, overC);
+      const toId = makeNodeId(toR, toC);
+
+      if (!isEnemyTopAt(overId)) continue; // must jump over enemy
+      if (!isEmpty(toId)) continue; // landing must be empty
+
+      captures.push({ kind: "capture", from: fromId, over: overId, to: toId });
+    }
+  }
+
+  return captures;
+}
+
 export function generateLegalMoves(state: GameState): Move[] {
+  const captures = generateCaptureMoves(state);
+  if (captures.length > 0) return captures; // mandatory capture
+
   const moves: Move[] = [];
 
   const isEmpty = (id: string) => !state.board.has(id) || (state.board.get(id) ?? []).length === 0;

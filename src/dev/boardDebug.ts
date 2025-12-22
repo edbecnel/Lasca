@@ -1,4 +1,6 @@
 import { diagNeighbors, jumpTargets } from "../game/board.ts";
+import { generateLegalMoves } from "../game/movegen.ts";
+import type { Move } from "../game/moveTypes.ts";
 import type { GameState } from "../game/state.ts";
 
 function isNodeId(id: string | null): id is string {
@@ -124,11 +126,23 @@ export function installBoardDebug(svgRoot: SVGSVGElement, getState: () => GameSt
     const js = jumpTargets(id);
     const state = getState();
 
+    // Respect mandatory capture: compute legal moves for current state
+    const legal: Move[] = generateLegalMoves(state);
+    const mandatoryCapture = legal.some((m) => m.kind === "capture");
+    const legalFrom = legal.filter((m) => m.from === id);
+
     const isEmpty = (nid: string) => !state.board.has(nid) || (state.board.get(nid) ?? []).length === 0;
     const isOccupied = (nid: string) => !isEmpty(nid);
 
-    const emptyNeighbors = ns.filter(isEmpty);
-    for (const nid of emptyNeighbors) highlightNode(nid, "#ffd54a", 3);
+    // When captures are mandatory, do NOT show quiet neighbor highlights
+    if (!mandatoryCapture) {
+      const emptyNeighbors = ns.filter(isEmpty);
+      // Highlight only neighbors that are legal quiet move destinations
+      const legalQuietTargets = new Set(legalFrom.filter((m) => m.kind === "move").map((m) => m.to));
+      for (const nid of emptyNeighbors) {
+        if (legalQuietTargets.has(nid)) highlightNode(nid, "#ffd54a", 3);
+      }
+    }
 
     // Only show jump-over if the over square's top piece is opponent-owned
     const clickedStack = state.board.get(id) ?? [];
@@ -146,14 +160,19 @@ export function installBoardDebug(svgRoot: SVGSVGElement, getState: () => GameSt
       const overOwner = overTopOwner(j.over);
       return overOwner !== null && overOwner !== moverTop.owner;
     });
+    // Highlight only capture destinations that are legal for the selected stack
+    const legalCaptureTargets = new Set(legalFrom.filter((m) => m.kind === "capture").map((m) => m.to));
     for (const j of validJumps) {
-      highlightNode(j.over, "#ff6b6b", 3);
-      highlightNode(j.land, "#ff9f40", 4);
+      if (legalCaptureTargets.has(j.land)) {
+        highlightNode(j.over, "#ff6b6b", 3);
+        highlightNode(j.land, "#ff9f40", 4);
+      }
     }
 
     // Also log to console for quick inspection
     // eslint-disable-next-line no-console
-    console.log("[boardDebug] click", id, { neighbors: ns, emptyNeighbors, jumps: js, validJumps });
+    const emptyNeighbors = ns.filter(isEmpty);
+    console.log("[boardDebug] click", id, { neighbors: ns, emptyNeighbors, jumps: js, validJumps, mandatoryCapture, legalFrom });
   }
 
   svgRoot.addEventListener("click", (ev) => handleClick(ev.target));

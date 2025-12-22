@@ -75,6 +75,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     const w = window as any;
     w.__state = currentState;
     w.__rerender = (next: typeof state) => {
+      // Clear any dev debug highlights before re-rendering a new state
+      if ((w.__board as any)?.clear) {
+        try { (w.__board as any).clear(); } catch {}
+      }
       renderGameState(svg, piecesLayer, inspector, next);
       const elTurn = document.getElementById("statusTurn");
       const elPhase = document.getElementById("statusPhase");

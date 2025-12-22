@@ -22,10 +22,20 @@ describe("applyMove (quiet)", () => {
     expect(next.phase).toBe("idle");
   });
 
-  it("ignores non-move kinds", () => {
-    const state: GameState = { board: new Map(), toMove: "B", phase: "idle" };
-    // @ts-expect-error testing wrong kind
+  it("capture toggles turn (no board changes yet)", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r1c1", [{ owner: "W", rank: "S" }]],
+        ["r2c2", [{ owner: "B", rank: "S" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+    };
     const next = applyMove(state, { kind: "capture", from: "r1c1", to: "r3c3" });
-    expect(next).toBe(state);
+    // Turn toggles from White to Black
+    expect(next.toMove).toBe("B");
+    // Board remains unchanged in PR6
+    expect(next.board.get("r1c1")?.length).toBe(1);
+    expect(next.board.get("r2c2")?.length).toBe(1);
   });
 });
