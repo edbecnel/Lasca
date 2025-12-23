@@ -1,6 +1,7 @@
 import type { GameState } from "./state.ts";
 import type { Player, Stack } from "../types";
 import { ALL_NODES } from "./board.ts";
+import { parseNodeId } from "./coords.ts";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -21,23 +22,64 @@ export function createRandomGameState(opts: RandomStateOptions = {}): GameState 
   const totalPerSide = Math.min(Math.max(opts.totalPerSide ?? 11, 1), Math.floor(ALL_NODES.length / 2));
   const toMove = opts.toMove ?? "B";
 
-  const nodes = shuffle(ALL_NODES);
-  const blackNodes = nodes.slice(0, totalPerSide);
-  const whiteNodes = nodes.slice(totalPerSide, totalPerSide * 2);
-
-  const board = new Map<string, Stack>();
-
   const bRanks = opts.ranks?.B ?? Array(totalPerSide).fill("S");
   const wRanks = opts.ranks?.W ?? Array(totalPerSide).fill("S");
 
-  for (let i = 0; i < totalPerSide; i++) {
-    const bn = blackNodes[i];
-    const wr = bRanks[i] ?? "S";
-    board.set(bn, [{ owner: "B", rank: wr }]);
+  // Filter nodes for placement:
+  // Black soldiers can't be on row 6 (their promotion row)
+  // White soldiers can't be on row 0 (their promotion row)
+  const blackSoldierNodes = ALL_NODES.filter(n => {
+    const { r } = parseNodeId(n);
+    return r !== 6; // Black can't have soldiers on row 6
+  });
+  const whiteSoldierNodes = ALL_NODES.filter(n => {
+    const { r } = parseNodeId(n);
+    return r !== 0; // White can't have soldiers on row 0
+  });
 
-    const wn = whiteNodes[i];
-    const rr = wRanks[i] ?? "S";
-    board.set(wn, [{ owner: "W", rank: rr }]);
+  const shuffledBlackSoldiers = shuffle(blackSoldierNodes);
+  const shuffledWhiteSoldiers = shuffle(whiteSoldierNodes);
+  const allNodesShuffled = shuffle(ALL_NODES);
+
+  const board = new Map<string, Stack>();
+
+  let blackNodeIdx = 0;
+  let whiteNodeIdx = 0;
+  let allNodeIdx = 0;
+
+  for (let i = 0; i < totalPerSide; i++) {
+    const bRank = bRanks[i] ?? "S";
+    const wRank = wRanks[i] ?? "S";
+
+    // For Black pieces
+    if (bRank === "S") {
+      // Use filtered nodes for soldiers
+      const bn = shuffledBlackSoldiers[blackNodeIdx++];
+      board.set(bn, [{ owner: "B", rank: bRank }]);
+    } else {
+      // Officers can be placed anywhere
+      while (allNodeIdx < allNodesShuffled.length && board.has(allNodesShuffled[allNodeIdx])) {
+        allNodeIdx++;
+      }
+      if (allNodeIdx < allNodesShuffled.length) {
+        board.set(allNodesShuffled[allNodeIdx++], [{ owner: "B", rank: bRank }]);
+      }
+    }
+
+    // For White pieces
+    if (wRank === "S") {
+      // Use filtered nodes for soldiers
+      const wn = shuffledWhiteSoldiers[whiteNodeIdx++];
+      board.set(wn, [{ owner: "W", rank: wRank }]);
+    } else {
+      // Officers can be placed anywhere
+      while (allNodeIdx < allNodesShuffled.length && board.has(allNodesShuffled[allNodeIdx])) {
+        allNodeIdx++;
+      }
+      if (allNodeIdx < allNodesShuffled.length) {
+        board.set(allNodesShuffled[allNodeIdx++], [{ owner: "W", rank: wRank }]);
+      }
+    }
   }
 
   return { board, toMove, phase: "idle" };

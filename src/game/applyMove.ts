@@ -1,7 +1,8 @@
 import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
+import { promoteIfNeeded } from "./promote.ts";
 
-export function applyMove(state: GameState, move: Move): GameState {
+export function applyMove(state: GameState, move: Move): GameState & { didPromote?: boolean } {
   if (move.kind === "capture") {
     const nextBoard = new Map(state.board);
 
@@ -31,8 +32,12 @@ export function applyMove(state: GameState, move: Move): GameState {
     // Clear origin square
     nextBoard.delete(move.from);
 
-    const nextToMove = state.toMove === "B" ? "W" : "B";
-    return { board: nextBoard, toMove: nextToMove, phase: "idle" };
+    // Check for promotion after the capture (use nextBoard, not old state)
+    const tempState = { ...state, board: nextBoard };
+    const didPromote = promoteIfNeeded(tempState, move.to);
+
+    // For captures, don't switch turn yet - let controller handle it based on capture chaining
+    return { board: nextBoard, toMove: state.toMove, phase: "idle", didPromote };
   }
 
   const nextBoard = new Map(state.board);
@@ -44,6 +49,10 @@ export function applyMove(state: GameState, move: Move): GameState {
   nextBoard.set(move.to, fromStack);
   nextBoard.delete(move.from);
 
+  // Check for promotion after the move (use nextBoard, not old state)
+  const tempState = { ...state, board: nextBoard };
+  const didPromote = promoteIfNeeded(tempState, move.to);
+
   const nextToMove = state.toMove === "B" ? "W" : "B";
-  return { board: nextBoard, toMove: nextToMove, phase: "idle" };
+  return { board: nextBoard, toMove: nextToMove, phase: "idle", didPromote };
 }

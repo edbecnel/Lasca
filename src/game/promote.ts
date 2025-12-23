@@ -1,0 +1,38 @@
+import type { GameState } from "./state.ts";
+import { parseNodeId } from "./coords.ts";
+
+/**
+ * Check if a piece at the given node should be promoted to Officer,
+ * and if so, promote it in place.
+ * @param state - The current game state
+ * @param nodeId - The node ID to check for promotion
+ * @returns true if promotion occurred, false otherwise
+ */
+export function promoteIfNeeded(state: GameState, nodeId: string): boolean {
+  const stack = state.board.get(nodeId);
+  if (!stack || stack.length === 0) return false;
+
+  const top = stack[stack.length - 1];
+  
+  // Only Soldiers can be promoted
+  if (top.rank !== "S") return false;
+
+  const { r } = parseNodeId(nodeId);
+
+  // Black promotes at row 6 (bottom row)
+  // White promotes at row 0 (top row)
+  let shouldPromote = false;
+  if (top.owner === "B" && r === 6) {
+    shouldPromote = true;
+  } else if (top.owner === "W" && r === 0) {
+    shouldPromote = true;
+  }
+
+  if (shouldPromote) {
+    // Promote the top piece to Officer
+    top.rank = "O";
+    return true;
+  }
+
+  return false;
+}

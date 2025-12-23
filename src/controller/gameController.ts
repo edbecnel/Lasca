@@ -5,6 +5,7 @@ import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets, drawHigh
 import { generateLegalMoves } from "../game/movegen.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
+import { RULES } from "../game/ruleset.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -16,6 +17,7 @@ export class GameController {
   private currentTargets: string[] = [];
   private currentMoves: Move[] = [];
   private mandatoryCapture: boolean = false;
+  private lockedCaptureFrom: string | null = null;
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
 
@@ -45,7 +47,11 @@ export class GameController {
     if (elMsg) {
       if (this.selected) {
         if (this.currentTargets.length > 0) {
-          elMsg.textContent = "Choose a destination";
+          if (this.lockedCaptureFrom) {
+            elMsg.textContent = "Continue capturing";
+          } else {
+            elMsg.textContent = "Choose a destination";
+          }
         } else if (this.mandatoryCapture) {
           elMsg.textContent = "Capture required — select a capturing stack";
         } else {
@@ -125,7 +131,14 @@ export class GameController {
     drawSelection(this.overlayLayer, nodeId);
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
-    this.currentMoves = allLegal.filter(m => m.from === nodeId);
+    
+    // If in a capture chain, only allow moves from the locked position
+    let movesForNode = allLegal.filter(m => m.from === nodeId);
+    if (this.lockedCaptureFrom && this.lockedCaptureFrom !== nodeId) {
+      movesForNode = [];
+    }
+    
+    this.currentMoves = movesForNode;
     this.currentTargets = this.currentMoves.map(m => m.to);
     drawTargets(this.overlayLayer, this.currentTargets);
     this.updatePanel();
@@ -140,6 +153,7 @@ export class GameController {
     this.currentTargets = [];
     this.currentMoves = [];
     this.mandatoryCapture = false;
+    this.lockedCaptureFrom = null;
     clearOverlays(this.overlayLayer);
     this.updatePanel();
   }
@@ -193,11 +207,60 @@ export class GameController {
       }
       this.state = next;
       renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
-      this.clearSelection();
+      
+      // Clear overlays immediately after move is rendered
+      // Also cancel any pending remainder hint timers
+      if (this.remainderTimer) {
+        window.clearTimeout(this.remainderTimer);
+        this.remainderTimer = null;
+      }
+      clearOverlays(this.overlayLayer);
+      
+      // Clear dev debug highlights if they exist
+      if (import.meta.env && import.meta.env.DEV) {
+        const w = window as any;
+        if (w.__board?.clear) {
+          try { w.__board.clear(); } catch {}
+        }
+      }
+      
       if (move.kind === "capture") {
+        // Check if promotion happened
+        const didPromote = next.didPromote || false;
+        
+        // Check if there are more captures available from the destination
+        const allCaptures = generateLegalMoves(this.state).filter(m => m.kind === "capture");
+        const moreCapturesFromDest = allCaptures.filter(m => m.from === move.to);
+        
+        // If promoted and rule says stop on promotion, end the chain
+        if (didPromote && RULES.stopCaptureOnPromotion) {
+          // Switch turn now
+          this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+          this.lockedCaptureFrom = null;
+          this.clearSelection();
+          this.showBanner("Promoted — capture turn ends");
+          // Don't show remainder hint - it will interfere with next turn's overlays
+          return;
+        }
+        
+        // If more captures available from destination, chain the capture
+        if (moreCapturesFromDest.length > 0) {
+          this.lockedCaptureFrom = move.to;
+          this.selected = move.to;
+          this.showSelection(move.to);
+          this.showBanner("Continue capture");
+          // Don't show remainder hint during chain - it will be cleared when selection is shown
+          return;
+        }
+        
+        // No more captures, switch turn and end
+        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+        this.lockedCaptureFrom = null;
+        this.clearSelection();
         this.showBanner("Turn changed");
-        // Indicate remainder at the jumped square (if any remained, ring still useful as feedback)
-        this.showRemainderHint((move as any).over);
+        // Don't show remainder hint - it will interfere with next turn's overlays
+      } else {
+        this.clearSelection();
       }
       return;
     }

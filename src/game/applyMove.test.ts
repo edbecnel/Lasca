@@ -22,7 +22,7 @@ describe("applyMove (quiet)", () => {
     expect(next.phase).toBe("idle");
   });
 
-  it("applies a single capture: move stack, take top enemy, captured goes to bottom, toggle turn", () => {
+  it("applies a single capture: move stack, take top enemy, captured goes to bottom (no turn switch)", () => {
     const state: GameState = {
       board: new Map([
         ["r1c1", [{ owner: "W", rank: "S" }]],
@@ -32,7 +32,7 @@ describe("applyMove (quiet)", () => {
       phase: "idle",
     };
     const next = applyMove(state, { kind: "capture", from: "r1c1", over: "r2c2", to: "r3c3" } as any);
-    expect(next.toMove).toBe("B");
+    expect(next.toMove).toBe("W"); // Capture doesn't switch turn - controller handles it
     // Source cleared, over cleared (was single piece)
     expect(next.board.has("r1c1")).toBe(false);
     expect(next.board.has("r2c2")).toBe(false);
@@ -53,7 +53,7 @@ describe("applyMove (quiet)", () => {
       phase: "idle",
     };
     const next = applyMove(state, { kind: "capture", from: "r3c3", over: "r4c4", to: "r5c5" } as any);
-    expect(next.toMove).toBe("B");
+    expect(next.toMove).toBe("W"); // Capture doesn't switch turn - controller handles it
     // Over keeps remainder [B,S]
     const rem = next.board.get("r4c4")!;
     expect(rem.length).toBe(1);
