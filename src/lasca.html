@@ -389,6 +389,31 @@
               Red = piece to capture<br />
               Orange = landing position
             </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px">
+              <button
+                id="saveGameBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+              >
+                Save Game
+              </button>
+              <button
+                id="loadGameBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+              >
+                Load Game
+              </button>
+            </div>
+            <input
+              type="file"
+              id="loadGameInput"
+              accept=".json"
+              style="display: none"
+            />
           </div>
 
           <div class="panelSection">

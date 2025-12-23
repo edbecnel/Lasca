@@ -56,6 +56,10 @@ export class GameController {
     this.updatePanel();
   }
 
+  getState(): GameState {
+    return this.state;
+  }
+
   private updatePanel(): void {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
@@ -256,14 +260,6 @@ export class GameController {
         this.remainderTimer = null;
       }
       clearOverlays(this.overlayLayer);
-      
-      // Clear dev debug highlights if they exist
-      if (import.meta.env && import.meta.env.DEV) {
-        const w = window as any;
-        if (w.__board?.clear) {
-          try { w.__board.clear(); } catch {}
-        }
-      }
       
       if (move.kind === "capture") {
         // Check if promotion happened

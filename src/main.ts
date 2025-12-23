@@ -8,6 +8,7 @@ import type { Player } from "./types";
 import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
 import { ALL_NODES } from "./game/board.ts";
+import { saveGameToFile, loadGameFromFile } from "./game/saveLoad.ts";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -72,11 +73,58 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Dev-only: install debug helpers and expose rerender/random that also sync controller state
+  // Wire up save/load game buttons
+  const saveGameBtn = document.getElementById("saveGameBtn") as HTMLButtonElement | null;
+  const loadGameBtn = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
+  const loadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
+
+  if (saveGameBtn) {
+    saveGameBtn.addEventListener("click", () => {
+      const currentState = controller.getState();
+      const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+      saveGameToFile(currentState, `lasca-game-${timestamp}.json`);
+    });
+  }
+
+  if (loadGameBtn && loadGameInput) {
+    loadGameBtn.addEventListener("click", () => {
+      loadGameInput.click();
+    });
+
+    loadGameInput.addEventListener("change", async () => {
+      const file = loadGameInput.files?.[0];
+      if (!file) return;
+
+      try {
+        const loadedState = await loadGameFromFile(file);
+        controller.setState(loadedState);
+        renderGameState(svg, piecesLayer, inspector, loadedState);
+        
+        // Show success message
+        const elMsg = document.getElementById("statusMessage");
+        if (elMsg) {
+          const prevText = elMsg.textContent;
+          elMsg.textContent = "Game loaded successfully";
+          setTimeout(() => {
+            controller.setState(loadedState); // This will call updatePanel
+          }, 1500);
+        }
+      } catch (error) {
+        console.error("Failed to load game:", error);
+        alert(`Failed to load game: ${error}`);
+      }
+
+      // Reset file input so the same file can be loaded again
+      loadGameInput.value = "";
+    });
+  }
+
+  // Dev-only: expose rerender/random that also sync controller state
+  // Note: boardDebug is disabled since we now have the move hints feature
   if (import.meta.env && import.meta.env.DEV) {
-    const mod = await import("./dev/boardDebug.ts");
+    // const mod = await import("./dev/boardDebug.ts");
     let currentState = state;
-    mod.installBoardDebug(svg, () => currentState);
+    // mod.installBoardDebug(svg, () => currentState);
 
     const randomMod = await import("./game/randomState.ts");
 
