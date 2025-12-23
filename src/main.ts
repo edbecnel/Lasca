@@ -9,6 +9,7 @@ import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
 import { ALL_NODES } from "./game/board.ts";
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad.ts";
+import { HistoryManager } from "./game/historyManager.ts";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -44,6 +45,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Create initial game state and render once
   const state = createInitialGameState();
+  
+  // Create history manager and record initial state
+  const history = new HistoryManager();
+  history.push(state);
 
   // Update left panel status
   const elTurn = document.getElementById("statusTurn");
@@ -62,7 +67,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // PR 4+5: interaction — controller binds selection and applies quiet moves
   ensureOverlayLayer(svg);
-  const controller = new GameController(svg, piecesLayer, inspector, state);
+  const controller = new GameController(svg, piecesLayer, inspector, state, history);
   controller.bind();
 
   // Wire up move hints toggle
@@ -118,6 +123,50 @@ window.addEventListener("DOMContentLoaded", async () => {
       loadGameInput.value = "";
     });
   }
+
+  // Wire up undo/redo buttons
+  const undoBtn = document.getElementById("undoBtn") as HTMLButtonElement | null;
+  const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
+  const moveHistoryEl = document.getElementById("moveHistory") as HTMLElement | null;
+
+  const updateHistoryUI = () => {
+    if (undoBtn) undoBtn.disabled = !controller.canUndo();
+    if (redoBtn) redoBtn.disabled = !controller.canRedo();
+    
+    if (moveHistoryEl) {
+      const historyData = controller.getHistory();
+      if (historyData.length === 0) {
+        moveHistoryEl.textContent = "No moves yet";
+      } else {
+        moveHistoryEl.innerHTML = historyData
+          .map((entry, idx) => {
+            const moveNum = Math.floor(idx / 2) + 1;
+            const player = entry.toMove === "B" ? "Black" : "White";
+            const prefix = idx === 0 ? "Start" : `${moveNum}. ${player === "Black" ? "⚫" : "⚪"}`;
+            const style = entry.isCurrent 
+              ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
+              : "";
+            return `<div style="${style}">${prefix}</div>`;
+          })
+          .join("");
+      }
+    }
+  };
+
+  if (undoBtn) {
+    undoBtn.addEventListener("click", () => {
+      controller.undo();
+    });
+  }
+
+  if (redoBtn) {
+    redoBtn.addEventListener("click", () => {
+      controller.redo();
+    });
+  }
+
+  controller.setHistoryChangeCallback(updateHistoryUI);
+  updateHistoryUI(); // Initial update
 
   // Dev-only: expose rerender/random that also sync controller state
   // Note: boardDebug is disabled since we now have the move hints feature

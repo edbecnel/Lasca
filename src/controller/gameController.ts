@@ -7,6 +7,7 @@ import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
 import { getWinner } from "../game/gameOver.ts";
+import { HistoryManager } from "../game/historyManager.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -23,13 +24,16 @@ export class GameController {
   private moveHintsEnabled: boolean = false;
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
+  private history: HistoryManager;
+  private onHistoryChange: (() => void) | null = null;
 
-  constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState) {
+  constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
     this.svg = svg;
     this.piecesLayer = piecesLayer;
     this.inspector = inspector;
     this.overlayLayer = ensureOverlayLayer(svg);
     this.state = state;
+    this.history = history;
   }
 
   bind(): void {
@@ -46,6 +50,52 @@ export class GameController {
     if (this.selected) {
       this.showSelection(this.selected);
     }
+  }
+
+  setHistoryChangeCallback(callback: () => void): void {
+    this.onHistoryChange = callback;
+  }
+
+  undo(): void {
+    if (this.isGameOver) return;
+    const prevState = this.history.undo();
+    if (prevState) {
+      this.state = prevState;
+      this.lockedCaptureFrom = null;
+      this.clearSelection();
+      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      const allLegal = generateLegalMoves(this.state);
+      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.updatePanel();
+      if (this.onHistoryChange) this.onHistoryChange();
+    }
+  }
+
+  redo(): void {
+    if (this.isGameOver) return;
+    const nextState = this.history.redo();
+    if (nextState) {
+      this.state = nextState;
+      this.lockedCaptureFrom = null;
+      this.clearSelection();
+      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      const allLegal = generateLegalMoves(this.state);
+      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.updatePanel();
+      if (this.onHistoryChange) this.onHistoryChange();
+    }
+  }
+
+  canUndo(): boolean {
+    return this.history.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.history.canRedo();
+  }
+
+  getHistory(): ReturnType<HistoryManager["getHistory"]> {
+    return this.history.getHistory();
   }
 
   setState(next: GameState): void {
@@ -276,6 +326,10 @@ export class GameController {
           this.lockedCaptureFrom = null;
           this.clearSelection();
           
+          // Record state in history at turn boundary
+          this.history.push(this.state);
+          if (this.onHistoryChange) this.onHistoryChange();
+          
           // Update mandatory capture for new turn
           const allLegal = generateLegalMoves(this.state);
           this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
@@ -308,6 +362,10 @@ export class GameController {
         this.lockedCaptureFrom = null;
         this.clearSelection();
         
+        // Record state in history at turn boundary
+        this.history.push(this.state);
+        if (this.onHistoryChange) this.onHistoryChange();
+        
         // Update mandatory capture for new turn
         const allLegal = generateLegalMoves(this.state);
         this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
@@ -325,6 +383,10 @@ export class GameController {
       } else {
         // Quiet move - turn already switched in applyMove
         this.clearSelection();
+        
+        // Record state in history at turn boundary
+        this.history.push(this.state);
+        if (this.onHistoryChange) this.onHistoryChange();
         
         // Update mandatory capture for new turn
         const allLegal = generateLegalMoves(this.state);
