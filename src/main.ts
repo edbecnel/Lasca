@@ -64,6 +64,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   const controller = new GameController(svg, piecesLayer, inspector, state);
   controller.bind();
 
+  // Wire up move hints toggle
+  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
+  if (moveHintsToggle) {
+    moveHintsToggle.addEventListener("change", () => {
+      controller.setMoveHints(moveHintsToggle.checked);
+    });
+  }
+
   // Dev-only: install debug helpers and expose rerender/random that also sync controller state
   if (import.meta.env && import.meta.env.DEV) {
     const mod = await import("./dev/boardDebug.ts");

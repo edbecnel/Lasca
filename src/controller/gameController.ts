@@ -6,6 +6,7 @@ import { generateLegalMoves } from "../game/movegen.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
+import { getWinner } from "../game/gameOver.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -18,6 +19,8 @@ export class GameController {
   private currentMoves: Move[] = [];
   private mandatoryCapture: boolean = false;
   private lockedCaptureFrom: string | null = null;
+  private isGameOver: boolean = false;
+  private moveHintsEnabled: boolean = false;
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
 
@@ -31,10 +34,25 @@ export class GameController {
 
   bind(): void {
     this.svg.addEventListener("click", (ev) => this.onClick(ev));
+    // Check for mandatory captures at game start
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.updatePanel();
+  }
+
+  setMoveHints(enabled: boolean): void {
+    this.moveHintsEnabled = enabled;
+    // If we have a selection, refresh it to show/hide hints
+    if (this.selected) {
+      this.showSelection(this.selected);
+    }
   }
 
   setState(next: GameState): void {
     this.state = next;
+    // Check if captures are available for the current player
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.updatePanel();
   }
 
@@ -58,7 +76,12 @@ export class GameController {
           elMsg.textContent = "No moves";
         }
       } else {
-        elMsg.textContent = "—";
+        // No selection - check if captures are mandatory
+        if (this.mandatoryCapture) {
+          elMsg.textContent = "Capture available — you must capture";
+        } else {
+          elMsg.textContent = "—";
+        }
       }
     }
   }
@@ -141,6 +164,19 @@ export class GameController {
     this.currentMoves = movesForNode;
     this.currentTargets = this.currentMoves.map(m => m.to);
     drawTargets(this.overlayLayer, this.currentTargets);
+    
+    // Draw move hints if enabled
+    if (this.moveHintsEnabled) {
+      for (const move of this.currentMoves) {
+        if (move.kind === "capture") {
+          // Red circle for the piece being jumped over
+          drawHighlightRing(this.overlayLayer, move.over, "#ff6b6b", 3);
+          // Orange circle for the landing square (target)
+          drawHighlightRing(this.overlayLayer, move.to, "#ff9f40", 4);
+        }
+      }
+    }
+    
     this.updatePanel();
     if (import.meta.env && import.meta.env.DEV) {
       // eslint-disable-next-line no-console
@@ -180,6 +216,11 @@ export class GameController {
   }
 
   private onClick(ev: MouseEvent): void {
+    // Ignore clicks if game is over
+    if (this.isGameOver) {
+      return;
+    }
+
     let nodeId = this.resolveClickedNode(ev.target);
     if (import.meta.env && import.meta.env.DEV) {
       // eslint-disable-next-line no-console
@@ -238,6 +279,19 @@ export class GameController {
           this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
           this.lockedCaptureFrom = null;
           this.clearSelection();
+          
+          // Update mandatory capture for new turn
+          const allLegal = generateLegalMoves(this.state);
+          this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+          
+          // Check for game over
+          const gameResult = getWinner(this.state);
+          if (gameResult.winner) {
+            this.isGameOver = true;
+            this.showBanner(gameResult.reason || "Game Over", 0);
+            return;
+          }
+          
           this.showBanner("Promoted — capture turn ends");
           // Don't show remainder hint - it will interfere with next turn's overlays
           return;
@@ -257,11 +311,52 @@ export class GameController {
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
         this.lockedCaptureFrom = null;
         this.clearSelection();
+        
+        // Update mandatory capture for new turn
+        const allLegal = generateLegalMoves(this.state);
+        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        
+        // Check for game over
+        const gameResult = getWinner(this.state);
+        if (gameResult.winner) {
+          this.isGameOver = true;
+          this.showBanner(gameResult.reason || "Game Over", 0);
+          return;
+        }
+        
         this.showBanner("Turn changed");
         // Don't show remainder hint - it will interfere with next turn's overlays
       } else {
+        // Quiet move - turn already switched in applyMove
         this.clearSelection();
+        
+        // Update mandatory capture for new turn
+        const allLegal = generateLegalMoves(this.state);
+        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        
+        // Check for game over after quiet move
+        const gameResult = getWinner(this.state);
+        if (gameResult.winner) {
+          this.isGameOver = true;
+          this.showBanner(gameResult.reason || "Game Over", 0);
+          return;
+        }
+        
+        // Update panel to show capture message if needed
+        this.updatePanel();
       }
+      return;
+    }
+
+    // If we're in a capture chain, only allow clicking the locked piece or its targets
+    if (this.lockedCaptureFrom) {
+      if (nodeId === this.lockedCaptureFrom) {
+        // Clicked the piece that must continue capturing - reselect it
+        this.selected = nodeId;
+        this.showSelection(nodeId);
+        return;
+      }
+      // Otherwise, clicking anything else during a locked chain does nothing
       return;
     }
 

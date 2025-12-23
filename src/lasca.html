@@ -357,6 +357,41 @@
           </div>
 
           <div class="panelSection">
+            <h3>Options</h3>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+              "
+            >
+              <input
+                type="checkbox"
+                id="moveHintsToggle"
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <label
+                for="moveHintsToggle"
+                style="font-size: 13px; cursor: pointer; user-select: none"
+              >
+                Show move hints
+              </label>
+            </div>
+            <div
+              style="
+                font-size: 11px;
+                color: rgba(255, 255, 255, 0.6);
+                margin-top: 6px;
+                margin-left: 24px;
+              "
+            >
+              Red = piece to capture<br />
+              Orange = landing position
+            </div>
+          </div>
+
+          <div class="panelSection">
             <h3>Moves</h3>
             <div
               id="statusMoves"
