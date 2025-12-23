@@ -319,7 +319,7 @@
         background: var(--themeMenuSelectedBg);
       }
     </style>
-    <script type="module" crossorigin src="./assets/lasca-C28Ufc9l.js"></script>
+    <script type="module" crossorigin src="./assets/lasca-Dap2KmqG.js"></script>
   </head>
   <body>
     <div id="appRoot">
@@ -355,6 +355,66 @@
               <div class="k">Message</div>
               <div id="statusMessage">—</div>
             </div>
+          </div>
+
+          <div class="panelSection">
+            <h3>Options</h3>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+              "
+            >
+              <input
+                type="checkbox"
+                id="moveHintsToggle"
+                style="width: 16px; height: 16px; cursor: pointer"
+              />
+              <label
+                for="moveHintsToggle"
+                style="font-size: 13px; cursor: pointer; user-select: none"
+              >
+                Show move hints
+              </label>
+            </div>
+            <div
+              style="
+                font-size: 11px;
+                color: rgba(255, 255, 255, 0.6);
+                margin-top: 6px;
+                margin-left: 24px;
+              "
+            >
+              Red = piece to capture<br />
+              Orange = landing position
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px">
+              <button
+                id="saveGameBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+              >
+                Save Game
+              </button>
+              <button
+                id="loadGameBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+              >
+                Load Game
+              </button>
+            </div>
+            <input
+              type="file"
+              id="loadGameInput"
+              accept=".json"
+              style="display: none"
+            />
           </div>
 
           <div class="panelSection">
