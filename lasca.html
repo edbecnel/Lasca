@@ -107,6 +107,13 @@
       .panelBtn:hover {
         background: rgba(255, 255, 255, 0.08);
       }
+      .panelBtn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .panelBtn:disabled:hover {
+        background: rgba(0, 0, 0, 0.18);
+      }
 
       .sidebarBody {
         flex: 1 1 auto;
@@ -319,7 +326,7 @@
         background: var(--themeMenuSelectedBg);
       }
     </style>
-    <script type="module" crossorigin src="./assets/lasca-Dap2KmqG.js"></script>
+    <script type="module" crossorigin src="./assets/lasca-D2w4NogZ.js"></script>
   </head>
   <body>
     <div id="appRoot">
@@ -415,15 +422,42 @@
               accept=".json"
               style="display: none"
             />
+
+            <div style="display: flex; gap: 8px; margin-top: 16px">
+              <button
+                id="undoBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+                disabled
+              >
+                ← Undo
+              </button>
+              <button
+                id="redoBtn"
+                class="panelBtn"
+                type="button"
+                style="flex: 1; padding: 6px 12px; font-size: 12px"
+                disabled
+              >
+                Redo →
+              </button>
+            </div>
           </div>
 
           <div class="panelSection">
-            <h3>Moves</h3>
+            <h3>Move History</h3>
             <div
-              id="statusMoves"
-              style="font-size: 12px; color: rgba(255, 255, 255, 0.7)"
+              id="moveHistory"
+              style="
+                max-height: 200px;
+                overflow-y: auto;
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.7);
+                line-height: 1.5;
+              "
             >
-              Coming soon…
+              No moves yet
             </div>
           </div>
         </div>
