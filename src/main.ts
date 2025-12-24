@@ -232,6 +232,36 @@ window.addEventListener("DOMContentLoaded", async () => {
   controller.setHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
 
+  // Wire up collapsible sections
+  const collapsibleSections = document.querySelectorAll('[data-toggle]');
+  collapsibleSections.forEach((header) => {
+    header.addEventListener('click', (e) => {
+      const sectionId = header.getAttribute('data-toggle');
+      if (!sectionId) return;
+      
+      const section = document.querySelector(`[data-section="${sectionId}"]`);
+      if (!section) return;
+      
+      section.classList.toggle('collapsed');
+      
+      // Save collapsed state to localStorage
+      const isCollapsed = section.classList.contains('collapsed');
+      localStorage.setItem(`section-${sectionId}-collapsed`, isCollapsed.toString());
+    });
+  });
+
+  // Restore collapsed states from localStorage
+  const sectionsWithState = document.querySelectorAll('[data-section]');
+  sectionsWithState.forEach((section) => {
+    const sectionId = section.getAttribute('data-section');
+    if (!sectionId) return;
+    
+    const savedState = localStorage.getItem(`section-${sectionId}-collapsed`);
+    if (savedState === 'true') {
+      section.classList.add('collapsed');
+    }
+  });
+
   // Dev-only: expose rerender/random that also sync controller state
   // Note: boardDebug is disabled since we now have the move hints feature
   if (import.meta.env && import.meta.env.DEV) {
