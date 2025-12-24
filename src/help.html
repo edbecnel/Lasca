@@ -391,6 +391,14 @@
         <li><strong>Load Game:</strong> Import a previously saved game</li>
         <li>
           <strong>Move History:</strong> See all moves made in the current game
+          with algebraic notation. Quiet moves use → (e.g., "r0c0 → r1c1"),
+          captures use × (e.g., "r2c2 × r3c3"). Multi-capture chains show the
+          full path (e.g., "r0c0 × r1c1 × r2c2")
+        </li>
+        <li>
+          <strong>Export Move History:</strong> Download a JSON file containing
+          all moves from the current game with timestamps. Useful for recording
+          games for publication or analysis
         </li>
       </ul>
 
@@ -400,6 +408,12 @@
           <strong>Show move hints:</strong> Display visual indicators for
           capture targets (red) and landing positions (orange) when a piece is
           selected
+        </li>
+        <li>
+          <strong>Animations:</strong> Enable smooth piece movement animations.
+          When enabled, pieces glide smoothly from their starting position to
+          their destination. Works for all move types including captures and
+          multi-capture chains. Disable for instant movement
         </li>
         <li>
           <strong>Threefold repetition draw:</strong> When enabled, the game

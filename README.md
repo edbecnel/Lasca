@@ -19,6 +19,9 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 - 🏳️ Resign option with confirmation dialog
 - 🆕 New Game button to start fresh
 - ♾️ Threefold repetition draw detection (toggleable)
+- 🎬 Smooth piece animations with toggle control
+- 📝 Move notation display (r0c0 → r1c1 format)
+- 💾 Export move history to JSON format
 
 ## How to Play
 
@@ -45,6 +48,48 @@ You win when your opponent has:
 - No legal moves available
 
 For detailed rules and strategy tips, see [Help](src/help.html).
+
+### Move Notation and Export
+
+#### Move History Display
+
+The Move History panel shows each move in algebraic notation:
+
+- **Quiet moves**: `1. ⚪ r4c2 → r3c3` (start → destination)
+- **Captures**: `1. ⚫ r2c4 × r3c3` (using × symbol)
+- **Multi-captures**: `2. ⚪ r5c5 × r4c4 × r3c3` (showing full path without repeated nodes)
+
+Move numbers follow chess convention: each full turn (White + Black) is one move number.
+
+#### Export Move History
+
+Click "Export Move History" to download a JSON file containing all moves:
+
+```json
+{
+  "game": "Lasca",
+  "date": "2025-12-24T10:30:00.000Z",
+  "moves": [
+    {
+      "moveNumber": 1,
+      "player": "White",
+      "notation": "r4c2 → r3c3"
+    },
+    {
+      "moveNumber": 1,
+      "player": "Black",
+      "notation": "r2c4 × r3c3"
+    }
+  ]
+}
+```
+
+This format is useful for:
+
+- Recording games for publication
+- Analyzing game patterns
+- Sharing games with other players
+- Potential import into other Lasca game engines
 
 ## Development
 
@@ -155,8 +200,18 @@ MIT
   - Same board position occurring 3 times results in a draw
   - Toggleable via Options panel
   - Prevents infinite game loops
+- Added **smooth piece animations** using Web Animations API
+  - Animates all moves including captures and multi-capture chains
+  - Toggleable via Options panel (default: on)
+- Implemented **move notation display** in Move History
+  - Shows algebraic notation with → for moves, × for captures
+  - Clean display for multi-capture chains (no repeated nodes)
+- Added **Export Move History** feature
+  - Downloads JSON file with game metadata and all moves
+  - Includes move number, player, and notation for each move
 - Improved save/load behavior to reset game state properly
 - Enhanced deployment configuration for GitHub Pages
+- Fixed Help link to open in new tab (preserves game state)
 
 For example: Change --themeMenuBg to try different backgrounds.
 
