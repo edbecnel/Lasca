@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         index: path.resolve(__dirname, "src/index.html"),
         lasca: path.resolve(__dirname, "src/lasca.html"),
+        help: path.resolve(__dirname, "src/help.html"),
       },
     },
   },
