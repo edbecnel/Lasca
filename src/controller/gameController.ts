@@ -124,6 +124,19 @@ export class GameController {
     return this.state;
   }
 
+  resign(): void {
+    if (this.isGameOver) return;
+    
+    // Current player resigns, so the other player wins
+    const winner = this.state.toMove === "B" ? "W" : "B";
+    const winnerName = winner === "B" ? "Black" : "White";
+    const loserName = this.state.toMove === "B" ? "Black" : "White";
+    
+    this.isGameOver = true;
+    this.clearSelection();
+    this.showBanner(`${loserName} resigned — ${winnerName} wins!`, 0);
+  }
+
   private updatePanel(): void {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");

@@ -165,6 +165,18 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Wire up resign button
+  const resignBtn = document.getElementById("resignBtn") as HTMLButtonElement | null;
+  if (resignBtn) {
+    resignBtn.addEventListener("click", () => {
+      const currentPlayer = controller.getState().toMove === "B" ? "Black" : "White";
+      const confirmed = confirm(`Are you sure you want to resign as ${currentPlayer}?`);
+      if (confirmed) {
+        controller.resign();
+      }
+    });
+  }
+
   controller.setHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
 
