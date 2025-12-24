@@ -6,7 +6,7 @@ import { generateLegalMoves } from "../game/movegen.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
-import { getWinner } from "../game/gameOver.ts";
+import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 
 export class GameController {
@@ -20,6 +20,7 @@ export class GameController {
   private currentMoves: Move[] = [];
   private mandatoryCapture: boolean = false;
   private lockedCaptureFrom: string | null = null;
+  private jumpedSquares: Set<string> = new Set();
   private isGameOver: boolean = false;
   private moveHintsEnabled: boolean = false;
   private bannerTimer: number | null = null;
@@ -100,6 +101,19 @@ export class GameController {
 
   setState(next: GameState): void {
     this.state = next;
+    
+    // When loading a game, check if the current player has already lost
+    const currentPlayerResult = checkCurrentPlayerLost(this.state);
+    if (currentPlayerResult.winner) {
+      this.isGameOver = true;
+      this.showBanner(currentPlayerResult.reason || "Game Over", 0);
+      this.updatePanel();
+      return;
+    }
+    
+    // Game is not over, reset the flag
+    this.isGameOver = false;
+    
     // Check if captures are available for the current player
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
@@ -115,8 +129,8 @@ export class GameController {
     const elPhase = document.getElementById("statusPhase");
     const elMsg = document.getElementById("statusMessage");
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
-    if (elPhase) elPhase.textContent = (this.selected ? "Select" : "Idle");
-    if (elMsg) {
+    if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
+    if (elMsg && !this.isGameOver) {
       if (this.selected) {
         if (this.currentTargets.length > 0) {
           if (this.lockedCaptureFrom) {
@@ -206,7 +220,7 @@ export class GameController {
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
     drawSelection(this.overlayLayer, nodeId);
-    const allLegal = generateLegalMoves(this.state);
+    const allLegal = generateLegalMoves(this.state, this.lockedCaptureFrom ? this.jumpedSquares : undefined);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     
     // If in a capture chain, only allow moves from the locked position
@@ -244,6 +258,7 @@ export class GameController {
     this.currentMoves = [];
     this.mandatoryCapture = false;
     this.lockedCaptureFrom = null;
+    this.jumpedSquares.clear();
     clearOverlays(this.overlayLayer);
     this.updatePanel();
   }
@@ -252,10 +267,14 @@ export class GameController {
     const elMsg = document.getElementById("statusMessage");
     if (elMsg) elMsg.textContent = text;
     if (this.bannerTimer) window.clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => {
-      this.bannerTimer = null;
-      this.updatePanel();
-    }, durationMs);
+    
+    // If durationMs is 0 or less, keep the banner permanently (for game over)
+    if (durationMs > 0) {
+      this.bannerTimer = window.setTimeout(() => {
+        this.bannerTimer = null;
+        this.updatePanel();
+      }, durationMs);
+    }
   }
 
   private showRemainderHint(nodeId: string, durationMs: number = 1200): void {
@@ -312,11 +331,14 @@ export class GameController {
       clearOverlays(this.overlayLayer);
       
       if (move.kind === "capture") {
+        // Track the jumped-over square to prevent re-jumping it
+        this.jumpedSquares.add(move.over);
+        
         // Check if promotion happened
         const didPromote = next.didPromote || false;
         
         // Check if there are more captures available from the destination
-        const allCaptures = generateLegalMoves(this.state).filter(m => m.kind === "capture");
+        const allCaptures = generateLegalMoves(this.state, this.jumpedSquares).filter(m => m.kind === "capture");
         const moreCapturesFromDest = allCaptures.filter(m => m.from === move.to);
         
         // If promoted and rule says stop on promotion, end the chain
@@ -324,6 +346,7 @@ export class GameController {
           // Switch turn now
           this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
           this.lockedCaptureFrom = null;
+          this.jumpedSquares.clear();
           this.clearSelection();
           
           // Record state in history at turn boundary
@@ -334,8 +357,8 @@ export class GameController {
           const allLegal = generateLegalMoves(this.state);
           this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
           
-          // Check for game over
-          const gameResult = getWinner(this.state);
+          // Check for game over - check if the player who now has the turn can play
+          const gameResult = checkCurrentPlayerLost(this.state);
           if (gameResult.winner) {
             this.isGameOver = true;
             this.showBanner(gameResult.reason || "Game Over", 0);
@@ -360,6 +383,7 @@ export class GameController {
         // No more captures, switch turn and end
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
         this.lockedCaptureFrom = null;
+        this.jumpedSquares.clear();
         this.clearSelection();
         
         // Record state in history at turn boundary
@@ -370,8 +394,8 @@ export class GameController {
         const allLegal = generateLegalMoves(this.state);
         this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
         
-        // Check for game over
-        const gameResult = getWinner(this.state);
+        // Check for game over - check if the player who now has the turn can play
+        const gameResult = checkCurrentPlayerLost(this.state);
         if (gameResult.winner) {
           this.isGameOver = true;
           this.showBanner(gameResult.reason || "Game Over", 0);
@@ -392,8 +416,8 @@ export class GameController {
         const allLegal = generateLegalMoves(this.state);
         this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
         
-        // Check for game over after quiet move
-        const gameResult = getWinner(this.state);
+        // Check for game over after quiet move - check if current player can play
+        const gameResult = checkCurrentPlayerLost(this.state);
         if (gameResult.winner) {
           this.isGameOver = true;
           this.showBanner(gameResult.reason || "Game Over", 0);

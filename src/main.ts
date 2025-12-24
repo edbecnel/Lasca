@@ -201,7 +201,36 @@ window.addEventListener("DOMContentLoaded", async () => {
       controller.setState(currentState);
       w.__state = currentState;
     };
-    w.__random = (totalPerSide: number = 11, toMove: Player = "B") => {
+    w.__random = (totalPerSide: number = 11, toMove: Player = "B", testMode?: string) => {
+      // Special test mode for repeat-capture rule
+      if (testMode === "R") {
+        // Create a scenario where a White officer can potentially loop
+        // Multiple Black stacks with Black pieces underneath (same color)
+        const s: GameState = {
+          board: new Map([
+            // White officer starting position
+            ["r1c1", [{ owner: "W", rank: "O" }]],
+            
+            // Black stacks with Black pieces underneath (same color stacks)
+            // Arranged to create potential capture loops
+            ["r2c2", [{ owner: "B", rank: "S" }, { owner: "B", rank: "S" }, { owner: "B", rank: "O" }]], // Black-Black-Black officer
+            ["r2c4", [{ owner: "B", rank: "S" }, { owner: "B", rank: "O" }]], // Black-Black officer
+            ["r4c2", [{ owner: "B", rank: "S" }, { owner: "B", rank: "S" }, { owner: "B", rank: "S" }]], // Black-Black-Black soldier
+            ["r4c4", [{ owner: "B", rank: "S" }, { owner: "B", rank: "O" }]], // Black-Black officer
+            ["r3c5", [{ owner: "B", rank: "S" }, { owner: "B", rank: "S" }]], // Black-Black soldier
+            
+            // Additional pieces to prevent immediate game over
+            ["r5c0", [{ owner: "B", rank: "S" }]],
+            ["r6c6", [{ owner: "B", rank: "O" }]], // Officer on promotion row is OK
+            ["r5c1", [{ owner: "B", rank: "S" }]],
+          ]),
+          toMove: "W",
+          phase: "idle",
+        };
+        w.__rerender(s);
+        return s;
+      }
+      
       const s = randomMod.createRandomGameState({ totalPerSide, toMove });
 
       // Add one random white and one random black multi-piece stack at empty nodes

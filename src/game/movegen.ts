@@ -1,8 +1,9 @@
 import type { GameState } from "./state.ts";
 import type { Move, CaptureMove } from "./moveTypes.ts";
 import { parseNodeId, makeNodeId, isPlayable, inBounds } from "./coords.ts";
+import type { NodeId } from "./state.ts";
 
-export function generateCaptureMoves(state: GameState): CaptureMove[] {
+export function generateCaptureMoves(state: GameState, excludedJumpSquares?: Set<NodeId>): CaptureMove[] {
   const captures: CaptureMove[] = [];
 
   const isEmpty = (id: string) => !state.board.has(id) || (state.board.get(id) ?? []).length === 0;
@@ -54,6 +55,9 @@ export function generateCaptureMoves(state: GameState): CaptureMove[] {
 
       if (!isEnemyTopAt(overId)) continue; // must jump over enemy
       if (!isEmpty(toId)) continue; // landing must be empty
+      
+      // Anti-loop rule: cannot jump over the same square twice in one turn
+      if (excludedJumpSquares && excludedJumpSquares.has(overId)) continue;
 
       captures.push({ kind: "capture", from: fromId, over: overId, to: toId });
     }
@@ -62,8 +66,8 @@ export function generateCaptureMoves(state: GameState): CaptureMove[] {
   return captures;
 }
 
-export function generateLegalMoves(state: GameState): Move[] {
-  const captures = generateCaptureMoves(state);
+export function generateLegalMoves(state: GameState, excludedJumpSquares?: Set<NodeId>): Move[] {
+  const captures = generateCaptureMoves(state, excludedJumpSquares);
   if (captures.length > 0) return captures; // mandatory capture
 
   const moves: Move[] = [];

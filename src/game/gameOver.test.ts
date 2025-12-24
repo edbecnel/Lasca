@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getWinner } from "./gameOver";
+import { getWinner, checkCurrentPlayerLost } from "./gameOver";
 import type { GameState } from "./state";
 
 describe("getWinner", () => {
@@ -66,23 +66,21 @@ describe("getWinner", () => {
   });
 
   it("should detect win when opponent is blocked and has no legal moves", () => {
-    // White officer at r0c0, Black soldiers at r1c1 and r2c0 blocking each other
+    // Black soldiers at the far edge (row 6) can't move forward off the board
+    // and are blocked from moving diagonally by white pieces
     // It's White's turn, so we check if Black (opponent) has moves
-    // Black at r1c1 can't move forward (row 0 for Black is backwards)
-    // and is blocked by piece at r2c0
     const state: GameState = {
       board: new Map([
-        ["r0c0", [{ owner: "W", rank: "O" }]], // White officer
-        ["r1c1", [{ owner: "B", rank: "S" }]], // Black soldier (can't move backward to row 0)
-        ["r2c0", [{ owner: "B", rank: "S" }]], // Another black soldier blocking
-        ["r2c2", [{ owner: "B", rank: "S" }]], // Another black soldier blocking
+        ["r6c0", [{ owner: "B", rank: "S" }]], // Black soldier at edge, can't move forward
+        ["r5c1", [{ owner: "W", rank: "O" }]], // White officer blocking diagonal move
+        ["r3c3", [{ owner: "W", rank: "O" }]], // Another white piece
       ]),
       toMove: "W",
       phase: "idle",
     };
 
     const result = getWinner(state);
-    // Black should have no legal moves (soldiers can't move backward and are blocked)
+    // Black should have no legal moves (soldier at edge with no forward moves)
     expect(result.winner).toBe("W");
     expect(result.reason).toContain("White wins");
     expect(result.reason).toContain("Black has no moves");
@@ -113,6 +111,72 @@ describe("getWinner", () => {
     // With no pieces, White (current player) wins because opponent has no pieces
     const result = getWinner(state);
     expect(result.winner).toBe("W");
+    expect(result.reason).toContain("Black has no pieces");
+  });
+});
+
+describe("checkCurrentPlayerLost", () => {
+  it("should detect that current player has lost when they have no pieces", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r3c3", [{ owner: "W", rank: "S" }]],
+      ]),
+      toMove: "B", // Black's turn, but Black has no pieces
+      phase: "idle",
+    };
+
+    const result = checkCurrentPlayerLost(state);
+    expect(result.winner).toBe("W");
+    expect(result.reason).toContain("White wins");
+    expect(result.reason).toContain("Black has no pieces");
+  });
+
+  it("should detect that current player has lost when they have no legal moves", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r6c0", [{ owner: "B", rank: "S" }]], // Black soldier at edge, can't move forward
+        ["r5c1", [{ owner: "W", rank: "O" }]], // White officer blocking
+        ["r3c3", [{ owner: "W", rank: "O" }]], // Another white piece
+      ]),
+      toMove: "B", // Black's turn, but Black has no moves
+      phase: "idle",
+    };
+
+    const result = checkCurrentPlayerLost(state);
+    expect(result.winner).toBe("W");
+    expect(result.reason).toContain("White wins");
+    expect(result.reason).toContain("Black has no moves");
+  });
+
+  it("should return null when current player can still play", () => {
+    const state: GameState = {
+      board: new Map([
+        ["r3c3", [{ owner: "W", rank: "S" }]],
+        ["r5c5", [{ owner: "B", rank: "S" }]], // Black can move forward
+      ]),
+      toMove: "B",
+      phase: "idle",
+    };
+
+    const result = checkCurrentPlayerLost(state);
+    expect(result.winner).toBe(null);
+    expect(result.reason).toBe(null);
+  });
+
+  it("should handle pieces buried in stacks correctly", () => {
+    const state: GameState = {
+      board: new Map([
+        // Black pieces exist but are all on bottom of stacks
+        ["r3c3", [{ owner: "B", rank: "S" }, { owner: "W", rank: "O" }]],
+        ["r4c4", [{ owner: "B", rank: "S" }, { owner: "W", rank: "S" }]],
+      ]),
+      toMove: "B", // Black's turn but has no controlled stacks
+      phase: "idle",
+    };
+
+    const result = checkCurrentPlayerLost(state);
+    expect(result.winner).toBe("W");
+    expect(result.reason).toContain("White wins");
     expect(result.reason).toContain("Black has no pieces");
   });
 });
