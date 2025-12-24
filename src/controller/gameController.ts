@@ -8,6 +8,7 @@ import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
 import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
+import { hashGameState } from "../game/hashState.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -276,6 +277,41 @@ export class GameController {
     return top.owner === this.state.toMove;
   }
 
+  private checkThreefoldRepetition(): boolean {
+    if (!RULES.drawByThreefold) return false;
+    
+    const currentHash = hashGameState(this.state);
+    const historyData = this.history.getHistory();
+    let count = 0;
+    
+    // Count how many times this exact position has occurred
+    const currentIndex = this.history.getCurrentIndex();
+    for (let i = 0; i < historyData.length; i++) {
+      // Move to position i
+      while (this.history.getCurrentIndex() > i) {
+        this.history.undo();
+      }
+      while (this.history.getCurrentIndex() < i) {
+        this.history.redo();
+      }
+      
+      const state = this.history.getCurrent();
+      if (state && hashGameState(state) === currentHash) {
+        count++;
+      }
+    }
+    
+    // Restore current position
+    while (this.history.getCurrentIndex() > currentIndex) {
+      this.history.undo();
+    }
+    while (this.history.getCurrentIndex() < currentIndex) {
+      this.history.redo();
+    }
+    
+    return count >= 3;
+  }
+
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
     drawSelection(this.overlayLayer, nodeId);
@@ -412,6 +448,14 @@ export class GameController {
           this.history.push(this.state);
           if (this.onHistoryChange) this.onHistoryChange();
           
+          // Check for threefold repetition draw
+          if (this.checkThreefoldRepetition()) {
+            this.isGameOver = true;
+            this.clearSelection();
+            this.showBanner("Draw by threefold repetition", 0);
+            return;
+          }
+          
           // Update mandatory capture for new turn
           const allLegal = generateLegalMoves(this.state);
           this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
@@ -449,6 +493,14 @@ export class GameController {
         this.history.push(this.state);
         if (this.onHistoryChange) this.onHistoryChange();
         
+        // Check for threefold repetition draw
+        if (this.checkThreefoldRepetition()) {
+          this.isGameOver = true;
+          this.clearSelection();
+          this.showBanner("Draw by threefold repetition", 0);
+          return;
+        }
+        
         // Update mandatory capture for new turn
         const allLegal = generateLegalMoves(this.state);
         this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
@@ -470,6 +522,14 @@ export class GameController {
         // Record state in history at turn boundary
         this.history.push(this.state);
         if (this.onHistoryChange) this.onHistoryChange();
+        
+        // Check for threefold repetition draw
+        if (this.checkThreefoldRepetition()) {
+          this.isGameOver = true;
+          this.clearSelection();
+          this.showBanner("Draw by threefold repetition", 0);
+          return;
+        }
         
         // Update mandatory capture for new turn
         const allLegal = generateLegalMoves(this.state);
