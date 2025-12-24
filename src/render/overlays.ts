@@ -1,5 +1,16 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+const SELECTION_STROKE_W = 5;
+const TARGET_STROKE_W = 5;
+const MIN_HIGHLIGHT_STROKE_W = 6;
+
+function applyStrokeDefaults(el: SVGElement): void {
+  // Keep overlay strokes readable even when the board SVG is scaled.
+  el.setAttribute("vector-effect", "non-scaling-stroke");
+  el.setAttribute("stroke-linecap", "round");
+  el.setAttribute("stroke-linejoin", "round");
+}
+
 export function ensureOverlayLayer(svg: SVGSVGElement): SVGGElement {
   const existing = svg.querySelector("#overlays") as SVGGElement | null;
   if (existing) return existing;
@@ -42,8 +53,9 @@ export function drawSelection(layer: SVGGElement, nodeId: string): void {
   sel.setAttribute("r", String(r + 6));
   sel.setAttribute("fill", "none");
   sel.setAttribute("stroke", "#66ccff");
-  sel.setAttribute("stroke-width", "3");
+  sel.setAttribute("stroke-width", String(SELECTION_STROKE_W));
   sel.setAttribute("pointer-events", "none");
+  applyStrokeDefaults(sel);
   layer.appendChild(sel);
 }
 
@@ -61,9 +73,10 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
     ring.setAttribute("r", String(r + 10));
     ring.setAttribute("fill", "none");
     ring.setAttribute("stroke", "#00e676");
-    ring.setAttribute("stroke-width", "3");
+    ring.setAttribute("stroke-width", String(TARGET_STROKE_W));
     ring.setAttribute("stroke-dasharray", "4 3");
     // Visual only; clicks handled on underlying board node circles
+    applyStrokeDefaults(ring);
     layer.appendChild(ring);
   }
 }
@@ -81,8 +94,9 @@ export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#
   ring.setAttribute("r", String(r + 12));
   ring.setAttribute("fill", "none");
   ring.setAttribute("stroke", color);
-  ring.setAttribute("stroke-width", String(width));
+  ring.setAttribute("stroke-width", String(Math.max(width, MIN_HIGHLIGHT_STROKE_W)));
   ring.setAttribute("stroke-dasharray", "6 4");
   ring.setAttribute("pointer-events", "none");
+  applyStrokeDefaults(ring);
   layer.appendChild(ring);
 }
