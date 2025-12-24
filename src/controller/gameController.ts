@@ -382,7 +382,9 @@ export class GameController {
     this.selected = null;
     this.currentTargets = [];
     this.currentMoves = [];
-    this.mandatoryCapture = false;
+    // Recalculate mandatory capture based on current state, don't just set to false
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.lockedCaptureFrom = null;
     this.jumpedSquares.clear();
     clearOverlays(this.overlayLayer);

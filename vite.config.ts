@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
 import path from "node:path";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // GitHub Pages deployment at https://edbecnel.github.io/Lasca/
-  base: "/Lasca/",
+  // Only use /Lasca/ base in production, use / for local development
+  base: mode === "production" ? "/Lasca/" : "/",
   root: "src",
   server: {
     port: 8080,
@@ -20,4 +21,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
