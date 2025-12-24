@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import path from "node:path";
 
 export default defineConfig({
-  // Use relative paths so the site works under any subpath (e.g. GitHub Pages project sites)
-  base: "./",
+  // GitHub Pages deployment at https://edbecnel.github.io/Lasca/
+  base: "/Lasca/",
   root: "src",
   server: {
     port: 8080,
