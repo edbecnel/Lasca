@@ -22,10 +22,11 @@ export function serializeGameState(state: GameState): SerializedGameState {
  * Deserialize game state from a JSON-compatible object
  */
 export function deserializeGameState(data: SerializedGameState): GameState {
+  const phase = data.phase === "idle" || data.phase === "select" || data.phase === "anim" ? data.phase : "idle";
   return {
     board: new Map(data.board),
     toMove: data.toMove,
-    phase: "idle", // Always load into idle phase
+    phase,
   };
 }
 
