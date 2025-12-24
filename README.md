@@ -16,6 +16,9 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 - 📊 Stack inspector showing piece composition
 - 🎮 Game over detection with win conditions
 - 🔄 Multi-capture sequences with anti-loop protection
+- 🏳️ Resign option with confirmation dialog
+- 🆕 New Game button to start fresh
+- ♾️ Threefold repetition draw detection (toggleable)
 
 ## How to Play
 
@@ -137,12 +140,23 @@ MIT
 - Interactive board with click-to-move
 - Move hints with capture visualization
 - Undo/redo with move history
-- Save/load game functionality
+- Save/load game functionality with clean session behavior
 - Multiple themes
 - Stack inspector
 - Game over detection
 - Anti-loop capture rule
 - Full test coverage
+
+#### Recent Updates
+
+- Added **Resign** button with confirmation dialog
+- Added **New Game** button to restart with fresh state
+- Implemented **threefold repetition draw** detection
+  - Same board position occurring 3 times results in a draw
+  - Toggleable via Options panel
+  - Prevents infinite game loops
+- Improved save/load behavior to reset game state properly
+- Enhanced deployment configuration for GitHub Pages
 
 For example: Change --themeMenuBg to try different backgrounds.
 

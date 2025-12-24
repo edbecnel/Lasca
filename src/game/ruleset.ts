@@ -1,3 +1,4 @@
 export const RULES = {
   stopCaptureOnPromotion: true,
-} as const;
+  drawByThreefold: true,
+};

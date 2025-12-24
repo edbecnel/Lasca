@@ -340,7 +340,7 @@
       </ol>
 
       <h3>Move Hints</h3>
-      <p>Enable "Show move hints" to see:</p>
+      <p>Enable "Show move hints" in the Options panel to see:</p>
       <ul>
         <li><strong>Red circles:</strong> Enemy pieces you'll jump over</li>
         <li>
@@ -380,11 +380,32 @@
 
       <h3>Game Controls</h3>
       <ul>
+        <li>
+          <strong>New Game:</strong> Start a fresh game (with confirmation)
+        </li>
+        <li>
+          <strong>Resign:</strong> Forfeit the current game (with confirmation)
+        </li>
         <li><strong>Undo/Redo:</strong> Navigate through your move history</li>
         <li><strong>Save Game:</strong> Export your game to a JSON file</li>
         <li><strong>Load Game:</strong> Import a previously saved game</li>
         <li>
           <strong>Move History:</strong> See all moves made in the current game
+        </li>
+      </ul>
+
+      <h3>Options</h3>
+      <ul>
+        <li>
+          <strong>Show move hints:</strong> Display visual indicators for
+          capture targets (red) and landing positions (orange) when a piece is
+          selected
+        </li>
+        <li>
+          <strong>Threefold repetition draw:</strong> When enabled, the game
+          ends in a draw if the exact same board position occurs three times.
+          This prevents infinite loops where players repeat the same moves
+          endlessly. Disable this option if you want to allow repeated positions
         </li>
       </ul>
 

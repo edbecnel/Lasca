@@ -1,4 +1,5 @@
 import { createInitialGameState } from "./game/state.ts";
+import type { GameState } from "./game/state.ts";
 import { renderGameState } from "./render/renderGameState.ts";
 import { createStackInspector } from "./ui/stackInspector";
 import { initSplitLayout } from "./ui/layout/splitLayout";
@@ -10,6 +11,7 @@ import { ensureOverlayLayer } from "./render/overlays.ts";
 import { ALL_NODES } from "./game/board.ts";
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad.ts";
 import { HistoryManager } from "./game/historyManager.ts";
+import { RULES } from "./game/ruleset.ts";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -75,6 +77,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (moveHintsToggle) {
     moveHintsToggle.addEventListener("change", () => {
       controller.setMoveHints(moveHintsToggle.checked);
+    });
+  }
+
+  // Wire up threefold repetition toggle
+  const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
+  if (threefoldToggle) {
+    threefoldToggle.addEventListener("change", () => {
+      RULES.drawByThreefold = threefoldToggle.checked;
     });
   }
 
