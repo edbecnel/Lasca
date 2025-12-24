@@ -78,6 +78,18 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Wire up new game button
+  const newGameBtn = document.getElementById("newGameBtn") as HTMLButtonElement | null;
+  if (newGameBtn) {
+    newGameBtn.addEventListener("click", () => {
+      const confirmed = confirm("Start a new game? This will clear the current game and undo history.");
+      if (confirmed) {
+        const freshState = createInitialGameState();
+        controller.newGame(freshState);
+      }
+    });
+  }
+
   // Wire up save/load game buttons
   const saveGameBtn = document.getElementById("saveGameBtn") as HTMLButtonElement | null;
   const loadGameBtn = document.getElementById("loadGameBtn") as HTMLButtonElement | null;

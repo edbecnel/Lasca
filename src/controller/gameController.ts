@@ -137,6 +137,28 @@ export class GameController {
     this.showBanner(`${loserName} resigned — ${winnerName} wins!`, 0);
   }
 
+  newGame(initialState: GameState): void {
+    // Clear history and start fresh
+    this.history.clear();
+    this.history.push(initialState);
+    
+    // Reset game state
+    this.state = initialState;
+    this.isGameOver = false;
+    this.clearSelection();
+    
+    // Re-render the board
+    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    
+    // Check for mandatory captures at game start
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.updatePanel();
+    
+    // Notify history change
+    if (this.onHistoryChange) this.onHistoryChange();
+  }
+
   private updatePanel(): void {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
