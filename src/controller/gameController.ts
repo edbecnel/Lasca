@@ -159,6 +159,30 @@ export class GameController {
     if (this.onHistoryChange) this.onHistoryChange();
   }
 
+  loadGame(loadedState: GameState): void {
+    // Reset history and start fresh with loaded state
+    this.history.clear();
+    this.history.push(loadedState);
+    
+    // Reset game state to idle phase
+    this.isGameOver = false;
+    this.state = { ...loadedState, phase: "idle" };
+    
+    // Clear any selection, overlays, and capture state
+    this.clearSelection();
+    
+    // Re-render the board
+    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    
+    // Recompute mandatory captures
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.updatePanel();
+    
+    // Notify history change
+    if (this.onHistoryChange) this.onHistoryChange();
+  }
+
   private updatePanel(): void {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");

@@ -114,16 +114,15 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       try {
         const loadedState = await loadGameFromFile(file);
-        controller.setState(loadedState);
-        renderGameState(svg, piecesLayer, inspector, loadedState);
+        controller.loadGame(loadedState);
         
-        // Show success message
+        // Show brief success message
         const elMsg = document.getElementById("statusMessage");
         if (elMsg) {
           const prevText = elMsg.textContent;
           elMsg.textContent = "Game loaded successfully";
           setTimeout(() => {
-            controller.setState(loadedState); // This will call updatePanel
+            controller.loadGame(loadedState); // Refresh to restore panel state
           }, 1500);
         }
       } catch (error) {
