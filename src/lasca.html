@@ -400,7 +400,12 @@
         }
 
         .sidebarTab {
-          display: none !important; /* Hide vertical tabs on mobile */
+          display: none; /* Hide by default on mobile; show only when collapsed */
+        }
+
+        .sidebar.collapsed .sidebarTab {
+          display: flex;
+          width: 100%;
         }
 
         /* Make collapse buttons in header more prominent for touch */
