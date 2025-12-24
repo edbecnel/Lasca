@@ -80,6 +80,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Wire up animations toggle
+  const animationsToggle = document.getElementById("animationsToggle") as HTMLInputElement | null;
+  if (animationsToggle) {
+    animationsToggle.addEventListener("change", () => {
+      controller.setAnimations(animationsToggle.checked);
+    });
+  }
+
   // Wire up threefold repetition toggle
   const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
   if (threefoldToggle) {
@@ -104,12 +112,27 @@ window.addEventListener("DOMContentLoaded", async () => {
   const saveGameBtn = document.getElementById("saveGameBtn") as HTMLButtonElement | null;
   const loadGameBtn = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
   const loadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
+  const exportHistoryBtn = document.getElementById("exportHistoryBtn") as HTMLButtonElement | null;
 
   if (saveGameBtn) {
     saveGameBtn.addEventListener("click", () => {
       const currentState = controller.getState();
       const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
       saveGameToFile(currentState, `lasca-game-${timestamp}.json`);
+    });
+  }
+
+  if (exportHistoryBtn) {
+    exportHistoryBtn.addEventListener("click", () => {
+      const historyJson = controller.exportMoveHistory();
+      const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+      const blob = new Blob([historyJson], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lasca-history-${timestamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
     });
   }
 
@@ -151,13 +174,31 @@ window.addEventListener("DOMContentLoaded", async () => {
       } else {
         moveHistoryEl.innerHTML = historyData
           .map((entry, idx) => {
-            const moveNum = Math.floor(idx / 2) + 1;
-            const player = entry.toMove === "B" ? "Black" : "White";
-            const prefix = idx === 0 ? "Start" : `${moveNum}. ${player === "Black" ? "⚫" : "⚪"}`;
+            if (idx === 0) {
+              const style = entry.isCurrent 
+                ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
+                : "";
+              return `<div style="${style}">Start</div>`;
+            }
+            
+            // For moves: toMove indicates who's about to move, so invert to get who just moved
+            // If toMove is "B", White just moved. If toMove is "W", Black just moved.
+            const playerWhoMoved = entry.toMove === "B" ? "White" : "Black";
+            const playerIcon = playerWhoMoved === "Black" ? "⚫" : "⚪";
+            
+            // Calculate move number: each player's move increments the counter
+            const moveNum = playerWhoMoved === "Black" 
+              ? Math.ceil(idx / 2)  // Black: moves 1, 3, 5... → move# 1, 2, 3...
+              : Math.floor((idx + 1) / 2); // White: moves 2, 4, 6... → move# 1, 2, 3...
+            
+            let label = `${moveNum}. ${playerIcon}`;
+            if (entry.notation) {
+              label += ` ${entry.notation}`;
+            }
             const style = entry.isCurrent 
               ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
               : "";
-            return `<div style="${style}">${prefix}</div>`;
+            return `<div style="${style}">${label}</div>`;
           })
           .join("");
       }

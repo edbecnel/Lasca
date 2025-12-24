@@ -6,18 +6,21 @@ import type { GameState } from "./state.ts";
  */
 export class HistoryManager {
   private history: GameState[] = [];
+  private moveNotation: string[] = []; // Parallel array storing move notation
   private currentIndex: number = -1;
 
   /**
    * Record a new state (called after a complete turn).
    * This clears any future history if we're not at the end.
    */
-  push(state: GameState): void {
+  push(state: GameState, notation?: string): void {
     // Remove any states after current index (user made a new move after undoing)
     this.history = this.history.slice(0, this.currentIndex + 1);
+    this.moveNotation = this.moveNotation.slice(0, this.currentIndex + 1);
     
-    // Add the new state
+    // Add the new state and notation
     this.history.push(this.cloneState(state));
+    this.moveNotation.push(notation || "");
     this.currentIndex = this.history.length - 1;
   }
 
@@ -73,13 +76,14 @@ export class HistoryManager {
 
   /**
    * Get all history states for display (e.g., move list).
-   * Returns array of [index, toMove] for each state.
+   * Returns array with move information including notation.
    */
-  getHistory(): Array<{ index: number; toMove: "B" | "W"; isCurrent: boolean }> {
+  getHistory(): Array<{ index: number; toMove: "B" | "W"; isCurrent: boolean; notation: string }> {
     return this.history.map((state, idx) => ({
       index: idx,
       toMove: state.toMove,
       isCurrent: idx === this.currentIndex,
+      notation: this.moveNotation[idx] || "",
     }));
   }
 
@@ -102,6 +106,7 @@ export class HistoryManager {
    */
   clear(): void {
     this.history = [];
+    this.moveNotation = [];
     this.currentIndex = -1;
   }
 

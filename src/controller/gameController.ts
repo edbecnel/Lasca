@@ -9,6 +9,7 @@ import { RULES } from "../game/ruleset.ts";
 import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
+import { animateStack } from "../render/animateMove.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -24,10 +25,13 @@ export class GameController {
   private jumpedSquares: Set<string> = new Set();
   private isGameOver: boolean = false;
   private moveHintsEnabled: boolean = false;
+  private animationsEnabled: boolean = true;
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
   private history: HistoryManager;
   private onHistoryChange: (() => void) | null = null;
+  private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
+  private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
     this.svg = svg;
@@ -52,6 +56,10 @@ export class GameController {
     if (this.selected) {
       this.showSelection(this.selected);
     }
+  }
+
+  setAnimations(enabled: boolean): void {
+    this.animationsEnabled = enabled;
   }
 
   setHistoryChangeCallback(callback: () => void): void {
@@ -98,6 +106,29 @@ export class GameController {
 
   getHistory(): ReturnType<HistoryManager["getHistory"]> {
     return this.history.getHistory();
+  }
+
+  exportMoveHistory(): string {
+    const historyData = this.history.getHistory();
+    const moves = historyData
+      .filter((entry, idx) => idx > 0 && entry.notation) // Skip "Start" and entries without notation
+      .map((entry, idx) => {
+        const playerWhoMoved = entry.toMove === "B" ? "White" : "Black";
+        const moveNum = playerWhoMoved === "Black" 
+          ? Math.ceil((idx + 1) / 2) 
+          : Math.floor((idx + 2) / 2);
+        return {
+          moveNumber: moveNum,
+          player: playerWhoMoved,
+          notation: entry.notation,
+        };
+      });
+
+    return JSON.stringify({
+      game: "Lasca",
+      date: new Date().toISOString(),
+      moves: moves,
+    }, null, 2);
   }
 
   setState(next: GameState): void {
@@ -383,7 +414,7 @@ export class GameController {
     }, durationMs);
   }
 
-  private onClick(ev: MouseEvent): void {
+  private async onClick(ev: MouseEvent): Promise<void> {
     // Ignore clicks if game is over
     if (this.isGameOver) {
       return;
@@ -409,12 +440,33 @@ export class GameController {
         this.clearSelection();
         return;
       }
+      
+      
+      // Track node path for notation
+      if (this.currentTurnNodes.length === 0) {
+        this.currentTurnNodes.push(move.from);
+      }
+      this.currentTurnNodes.push(move.to);
+      if (move.kind === "capture") {
+        this.currentTurnHasCapture = true;
+      }
+      
       const next = applyMove(this.state, move);
       if (import.meta.env && import.meta.env.DEV) {
         // eslint-disable-next-line no-console
         console.log("[controller] apply", move);
       }
       this.state = next;
+      
+      // Animate the move before rendering (both quiet moves and captures)
+      if (this.animationsEnabled) {
+        const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${move.from}"]`) as SVGGElement | null;
+        if (movingGroup) {
+          await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300);
+        }
+      }
+      
+      // Now render the new state after animation
       renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       
       // Clear overlays immediately after move is rendered
@@ -445,7 +497,11 @@ export class GameController {
           this.clearSelection();
           
           // Record state in history at turn boundary
-          this.history.push(this.state);
+          const separator = this.currentTurnHasCapture ? " × " : " → ";
+          const notation = this.currentTurnNodes.join(separator);
+          this.history.push(this.state, notation);
+          this.currentTurnNodes = [];
+          this.currentTurnHasCapture = false;
           if (this.onHistoryChange) this.onHistoryChange();
           
           // Check for threefold repetition draw
@@ -490,7 +546,11 @@ export class GameController {
         this.clearSelection();
         
         // Record state in history at turn boundary
-        this.history.push(this.state);
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const notation = this.currentTurnNodes.join(separator);
+        this.history.push(this.state, notation);
+        this.currentTurnNodes = [];
+        this.currentTurnHasCapture = false;
         if (this.onHistoryChange) this.onHistoryChange();
         
         // Check for threefold repetition draw
@@ -520,7 +580,11 @@ export class GameController {
         this.clearSelection();
         
         // Record state in history at turn boundary
-        this.history.push(this.state);
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const notation = this.currentTurnNodes.join(separator);
+        this.history.push(this.state, notation);
+        this.currentTurnNodes = [];
+        this.currentTurnHasCapture = false;
         if (this.onHistoryChange) this.onHistoryChange();
         
         // Check for threefold repetition draw
