@@ -40,7 +40,7 @@
             <g
               id="connectors"
               mask="url(#mask-connectors)"
-              stroke="#111"
+              stroke="#404040"
               stroke-width="16"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -90,7 +90,7 @@
 
             <g id="pieces"></g>
 
-            <g id="nodes" fill="none" stroke="#111" stroke-width="8">
+            <g id="nodes" fill="none" stroke="#404040" stroke-width="8">
               <circle id="r0c0" cx="140" cy="140" r="46" />
               <circle id="r0c2" cx="380" cy="140" r="46" />
               <circle id="r0c4" cx="620" cy="140" r="46" />

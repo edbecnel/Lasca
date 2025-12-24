@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <mask id="connector">
+      <rect x="0" y="0" width="100" height="100" fill="white"/>
+      <circle cx="50" cy="0" r="20" fill="black"/>
+      <circle cx="50" cy="100" r="20" fill="black"/>
+    </mask>
+  </defs>
+</svg>

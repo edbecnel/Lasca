@@ -23,6 +23,27 @@ export const THEMES: ThemeDef[] = [
     boardDefs: new URL("../assets/themes/highContrast/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/highContrast/theme.css", import.meta.url),
   },
+  {
+    id: "wooden",
+    label: "Wooden",
+    piecesDefs: new URL("../assets/themes/wooden/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/wooden/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/wooden/theme.css", import.meta.url),
+  },
+  {
+    id: "metal",
+    label: "Copper & Steel",
+    piecesDefs: new URL("../assets/themes/metal/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/metal/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/metal/theme.css", import.meta.url),
+  },
+  {
+    id: "stone",
+    label: "Granite & Marble",
+    piecesDefs: new URL("../assets/themes/stone/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/stone/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/stone/theme.css", import.meta.url),
+  },
 ];
 
 export function getThemeById(id: string): ThemeDef | null {
