@@ -25,7 +25,7 @@ export function deserializeGameState(data: SerializedGameState): GameState {
   return {
     board: new Map(data.board),
     toMove: data.toMove,
-    phase: data.phase,
+    phase: "idle", // Always load into idle phase
   };
 }
 

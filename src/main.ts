@@ -115,16 +115,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       try {
         const loadedState = await loadGameFromFile(file);
         controller.loadGame(loadedState);
-        
-        // Show brief success message
-        const elMsg = document.getElementById("statusMessage");
-        if (elMsg) {
-          const prevText = elMsg.textContent;
-          elMsg.textContent = "Game loaded successfully";
-          setTimeout(() => {
-            controller.loadGame(loadedState); // Refresh to restore panel state
-          }, 1500);
-        }
       } catch (error) {
         console.error("Failed to load game:", error);
         alert(`Failed to load game: ${error}`);
