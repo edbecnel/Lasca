@@ -386,6 +386,19 @@
           height: 100dvh; /* Use dynamic viewport height to account for mobile browser bars */
         }
 
+        /* Keep both panels stacked at the top; board below */
+        #leftSidebar {
+          order: 1;
+        }
+
+        #rightSidebar {
+          order: 2;
+        }
+
+        #centerArea {
+          order: 3;
+        }
+
         .sidebar {
           width: 100% !important;
           height: auto;
