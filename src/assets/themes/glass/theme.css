@@ -1,0 +1,223 @@
+/* Glass Theme - Shiny Blue & Yellow */
+
+body {
+  background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 50%, #020617 100%);
+  color: #e0f2fe;
+}
+
+/* Page container with glass effect */
+.page-container {
+  background: linear-gradient(to bottom, rgba(30, 58, 138, 0.4), rgba(15, 23, 42, 0.4));
+  border: 2px solid rgba(100, 149, 237, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* Panel backgrounds - translucent glass */
+#info-panel, 
+#controls-panel {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.4));
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+}
+
+/* Help page specific styling */
+.help-container {
+  background: linear-gradient(to bottom, rgba(30, 58, 138, 0.4), rgba(15, 23, 42, 0.4));
+  color: #e0f2fe;
+  backdrop-filter: blur(10px);
+}
+
+.help-container h1,
+.help-container h2 {
+  color: #fbbf24;
+  border-bottom-color: rgba(251, 191, 36, 0.3);
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+}
+
+.help-container section {
+  background: rgba(30, 58, 138, 0.25);
+  border: 1px solid rgba(100, 149, 237, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+}
+
+/* Board styling - glass-like squares */
+.board-light {
+  fill: rgba(255, 235, 59, 0.6);
+  filter: drop-shadow(0 2px 6px rgba(255, 215, 0, 0.4));
+}
+
+.board-dark {
+  fill: rgba(37, 99, 235, 0.6);
+  filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.4));
+}
+
+.board-light.selected {
+  fill: rgba(255, 255, 150, 0.8);
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6));
+}
+
+.board-dark.selected {
+  fill: rgba(96, 165, 250, 0.8);
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+}
+
+.board-light.legal-move {
+  fill: rgba(187, 247, 208, 0.7);
+}
+
+.board-dark.legal-move {
+  fill: rgba(74, 222, 128, 0.5);
+}
+
+.board-light.last-move {
+  fill: rgba(254, 240, 138, 0.8);
+}
+
+.board-dark.last-move {
+  fill: rgba(147, 197, 253, 0.7);
+}
+
+/* Buttons - glass style */
+button {
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.4), rgba(30, 58, 138, 0.5));
+  color: #e0f2fe;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+button:hover:not(:disabled) {
+  background: linear-gradient(to bottom, rgba(96, 165, 250, 0.5), rgba(59, 130, 246, 0.6));
+  border-color: rgba(147, 197, 253, 0.5);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+button:active:not(:disabled) {
+  background: linear-gradient(to bottom, rgba(30, 58, 138, 0.6), rgba(59, 130, 246, 0.5));
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+button:disabled {
+  background: linear-gradient(to bottom, rgba(30, 58, 138, 0.2), rgba(15, 23, 42, 0.3));
+  color: rgba(224, 242, 254, 0.4);
+  border-color: rgba(100, 149, 237, 0.2);
+}
+
+/* Select dropdown - glass effect */
+select {
+  background: linear-gradient(to bottom, rgba(30, 58, 138, 0.5), rgba(15, 23, 42, 0.6));
+  color: #e0f2fe;
+  border: 1px solid rgba(100, 149, 237, 0.3);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
+}
+
+select:focus {
+  border-color: rgba(147, 197, 253, 0.5);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+/* Move history - glass panel */
+#history-panel {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(100, 149, 237, 0.2);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.history-move {
+  background: rgba(30, 58, 138, 0.3);
+  border-left: 3px solid rgba(59, 130, 246, 0.4);
+}
+
+.history-move:hover {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.history-move.current {
+  background: rgba(96, 165, 250, 0.5);
+  border-left-color: #fbbf24;
+  font-weight: bold;
+}
+
+/* Message area - glass background */
+#message-area {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(100, 149, 237, 0.3);
+  color: #fef08a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* Scrollbar - glass theme */
+::-webkit-scrollbar {
+  width: 10px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-track {
+  background: linear-gradient(to right, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.5));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(96, 165, 250, 0.6), rgba(59, 130, 246, 0.7));
+  border-radius: 5px;
+  border: 1px solid rgba(147, 197, 253, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(147, 197, 253, 0.7), rgba(96, 165, 250, 0.8));
+}
+
+/* Links */
+a {
+  color: #fbbf24;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+a:hover {
+  color: #fcd34d;
+  text-shadow: 0 0 12px rgba(252, 211, 77, 0.6);
+}
+
+/* Code blocks in help */
+code {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(100, 149, 237, 0.3);
+  color: #fef08a;
+}
+
+pre {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(100, 149, 237, 0.3);
+  color: #fef08a;
+}
+
+/* Glass glow effects */
+h3, .sidebarTitle {
+  color: #fbbf24;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+.kv {
+  color: #e0f2fe;
+}
+
+.kv .k {
+  color: rgba(224, 242, 254, 0.7);
+}

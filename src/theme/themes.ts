@@ -44,6 +44,13 @@ export const THEMES: ThemeDef[] = [
     boardDefs: new URL("../assets/themes/stone/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/stone/theme.css", import.meta.url),
   },
+  {
+    id: "glass",
+    label: "Glass",
+    piecesDefs: new URL("../assets/themes/glass/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/glass/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/glass/theme.css", import.meta.url),
+  },
 ];
 
 export function getThemeById(id: string): ThemeDef | null {
