@@ -101,7 +101,7 @@
       <!-- White star for officer -->
       <path d="M 50,30 L 54,44 L 68,44 L 57,52 L 61,66 L 50,58 L 39,66 L 43,52 L 32,44 L 46,44 Z" 
             fill="#ffffff" stroke="#ffd700" stroke-width="1.5" opacity="0.95"
-            filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))"/>
+        filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))" transform="translate(0 -2)"/>
       <!-- Inner glass ring -->
       <circle cx="50" cy="50" r="35" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.35"/>
     </symbol>
@@ -118,7 +118,7 @@
       <!-- White star for officer -->
       <path d="M 50,30 L 54,44 L 68,44 L 57,52 L 61,66 L 50,58 L 39,66 L 43,52 L 32,44 L 46,44 Z" 
             fill="#ffffff" stroke="#87ceeb" stroke-width="1.5" opacity="0.95"
-            filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))"/>
+            filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))" transform="translate(0 -2)"/>
       <!-- Inner glass ring -->
       <circle cx="50" cy="50" r="35" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.35"/>
     </symbol>

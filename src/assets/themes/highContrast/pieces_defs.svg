@@ -33,14 +33,14 @@
     <!-- Green Officer (paired with White Soldier) -->
     <symbol id="W_O" viewBox="0 0 100 100">
       <circle cx="50" cy="50" r="44" fill="#21c75a" stroke="#001a08" stroke-width="8"/>
-      <use href="#star5" fill="#ffffff" opacity="0.98"/>
+      <use href="#star5" fill="#ffffff" opacity="0.98" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="20" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.7"/>
     </symbol>
 
     <!-- Red Officer (paired with Black Soldier) -->
     <symbol id="B_O" viewBox="0 0 100 100">
       <circle cx="50" cy="50" r="44" fill="#ff2a2a" stroke="#1a0000" stroke-width="8"/>
-      <use href="#star5" fill="#ffffff" opacity="0.98"/>
+      <use href="#star5" fill="#ffffff" opacity="0.98" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="20" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.7"/>
     </symbol>
   </defs>

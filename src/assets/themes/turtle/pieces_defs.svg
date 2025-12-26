@@ -80,7 +80,7 @@
       <circle cx="50" cy="50" r="43" fill="url(#turtleShellPattern)" opacity="0.55"/>
       <circle cx="50" cy="50" r="43" fill="url(#turtleShine)"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="3"/>
-      <use href="#star5" fill="#2f221a" opacity="0.9"/>
+      <use href="#star5" fill="#2f221a" opacity="0.9" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#2f221a" stroke-opacity="0.75" stroke-width="3"/>
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.14"/>
     </symbol>
@@ -91,7 +91,7 @@
       <circle cx="50" cy="50" r="43" fill="url(#turtleShellPattern)" opacity="0.55"/>
       <circle cx="50" cy="50" r="43" fill="url(#turtleShine)"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="3"/>
-      <use href="#star5" fill="#102a16" opacity="0.9"/>
+      <use href="#star5" fill="#102a16" opacity="0.9" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#102a16" stroke-opacity="0.75" stroke-width="3"/>
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.12"/>
     </symbol>

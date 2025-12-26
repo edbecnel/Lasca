@@ -95,7 +95,7 @@
       <circle cx="50" cy="50" r="43" fill="url(#woodGrainCherry)" stroke="#7a4830" stroke-width="5"/>
       <circle cx="50" cy="50" r="43" fill="url(#woodShineLight)"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#95523a" stroke-opacity="0.4" stroke-width="2"/>
-      <use href="#star5" fill="#ffd700" opacity="0.95" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))"/>
+      <use href="#star5" fill="#ffd700" opacity="0.95" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#ffd700" stroke-opacity="0.6" stroke-width="2.5"/>
       <ellipse cx="38" cy="34" rx="16" ry="10" fill="#ffffff" opacity="0.25"/>
     </symbol>
@@ -105,7 +105,7 @@
       <circle cx="50" cy="50" r="43" fill="url(#woodGrainWalnut)" stroke="#2d1a0d" stroke-width="5"/>
       <circle cx="50" cy="50" r="43" fill="url(#woodShineDark)"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#5a3618" stroke-opacity="0.4" stroke-width="2"/>
-      <use href="#star5" fill="#ffd700" opacity="0.95" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))"/>
+      <use href="#star5" fill="#ffd700" opacity="0.95" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.5))" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#ffd700" stroke-opacity="0.6" stroke-width="2.5"/>
       <ellipse cx="38" cy="34" rx="16" ry="10" fill="#ffffff" opacity="0.15"/>
     </symbol>

@@ -57,7 +57,7 @@
     <symbol id="W_O" viewBox="0 0 100 100">
       <circle cx="50" cy="50" r="43" fill="url(#gradGreen)" stroke="#0b2a12" stroke-width="6"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
-      <use href="#star5" fill="#ffffff" opacity="0.95"/>
+      <use href="#star5" fill="#ffffff" opacity="0.95" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.18"/>
     </symbol>
@@ -66,7 +66,7 @@
     <symbol id="B_O" viewBox="0 0 100 100">
       <circle cx="50" cy="50" r="43" fill="url(#gradRed)" stroke="#3a0b0b" stroke-width="6"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
-      <use href="#star5" fill="#ffffff" opacity="0.95"/>
+      <use href="#star5" fill="#ffffff" opacity="0.95" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="3"/>
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.16"/>
     </symbol>

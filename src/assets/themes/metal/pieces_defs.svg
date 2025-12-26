@@ -118,8 +118,8 @@
       <circle cx="50" cy="50" r="43" fill="url(#steelBrush)"/>
       <circle cx="50" cy="50" r="43" fill="url(#metallicShine)"/>
       <circle cx="50" cy="50" r="34" fill="none" stroke="#707070" stroke-opacity="0.5" stroke-width="2"/>
-      <use href="#star5" fill="#4a9eff" opacity="0.95" filter="drop-shadow(0 2px 3px rgba(0,0,0,0.6))"/>
-      <use href="#star5" fill="url(#gradSteel)" opacity="0.3"/>
+      <use href="#star5" fill="#4a9eff" opacity="0.95" filter="drop-shadow(0 2px 3px rgba(0,0,0,0.6))" transform="translate(0 -2)"/>
+      <use href="#star5" fill="url(#gradSteel)" opacity="0.3" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="19" fill="none" stroke="#4a9eff" stroke-opacity="0.7" stroke-width="2.5"/>
       <ellipse cx="36" cy="32" rx="18" ry="12" fill="#ffffff" opacity="0.5"/>
     </symbol>
@@ -130,8 +130,8 @@
       <circle cx="50" cy="50" r="43" fill="url(#copperBrush)"/>
       <circle cx="50" cy="50" r="43" fill="url(#metallicShine)"/>
       <circle cx="50" cy="50" r="34" fill="none" stroke="#a8682a" stroke-opacity="0.5" stroke-width="2"/>
-      <use href="#star5" fill="#ff9940" opacity="0.95" filter="drop-shadow(0 2px 3px rgba(0,0,0,0.6))"/>
-      <use href="#star5" fill="url(#gradCopper)" opacity="0.3"/>
+      <use href="#star5" fill="#ff9940" opacity="0.95" filter="drop-shadow(0 2px 3px rgba(0,0,0,0.6))" transform="translate(0 -2)"/>
+      <use href="#star5" fill="url(#gradCopper)" opacity="0.3" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="19" fill="none" stroke="#ff9940" stroke-opacity="0.7" stroke-width="2.5"/>
       <ellipse cx="36" cy="32" rx="18" ry="12" fill="#ffffff" opacity="0.35"/>
     </symbol>
