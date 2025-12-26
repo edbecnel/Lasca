@@ -12,6 +12,7 @@ import { ALL_NODES } from "./game/board.ts";
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad.ts";
 import { HistoryManager } from "./game/historyManager.ts";
 import { RULES } from "./game/ruleset.ts";
+import { renderBoardCoords } from "./render/boardCoords";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -19,6 +20,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const boardUrl = new URL("./assets/lasca_board.svg", import.meta.url);
   const svg = await loadSvgFileInto(boardWrap, boardUrl);
+
+  const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
+  const applyBoardCoords = () => renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked));
+  applyBoardCoords();
 
   const zoomTitle = document.getElementById("zoomTitle") as HTMLElement | null;
   const zoomHint = document.getElementById("zoomHint") as HTMLElement | null;
@@ -88,6 +93,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  if (boardCoordsToggle) {
+    boardCoordsToggle.addEventListener("change", () => applyBoardCoords());
+  }
+
   // Wire up threefold repetition toggle
   const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
   if (threefoldToggle) {
@@ -118,7 +127,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     saveGameBtn.addEventListener("click", () => {
       const currentState = controller.getState();
       const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
-      saveGameToFile(currentState, `lasca-game-${timestamp}.json`);
+      saveGameToFile(currentState, history, `lasca-game-${timestamp}.json`);
     });
   }
 
@@ -146,8 +155,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (!file) return;
 
       try {
-        const loadedState = await loadGameFromFile(file);
-        controller.loadGame(loadedState);
+        const loaded = await loadGameFromFile(file);
+        controller.loadGame(loaded.state, loaded.history);
       } catch (error) {
         console.error("Failed to load game:", error);
         alert(`Failed to load game: ${error}`);
@@ -231,6 +240,11 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   controller.setHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
+
+  // If the SVG is hot-reloaded in dev, re-render coordinate labels.
+  if (import.meta.hot) {
+    import.meta.hot.accept(() => applyBoardCoords());
+  }
 
   // Wire up collapsible sections
   const collapsibleSections = document.querySelectorAll('[data-toggle]');

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { serializeGameState, deserializeGameState } from "./saveLoad";
+import { serializeGameState, deserializeGameState, serializeSaveData, deserializeSaveData } from "./saveLoad";
 import type { GameState } from "./state";
+import { HistoryManager } from "./historyManager";
 
 describe("saveLoad", () => {
   it("should serialize and deserialize a simple game state", () => {
@@ -82,5 +83,52 @@ describe("saveLoad", () => {
     expect(deserialized.board.get("r0c0")).toEqual([{ owner: "B", rank: "O" }]);
     expect(deserialized.board.get("r6c6")).toEqual([{ owner: "W", rank: "S" }]);
     expect(deserialized.phase).toBe("anim");
+  });
+
+  it("should serialize and deserialize v2 save data with history", () => {
+    const s0: GameState = {
+      board: new Map([["r6c0", [{ owner: "W", rank: "S" }]]]),
+      toMove: "W",
+      phase: "idle",
+    };
+    const s1: GameState = {
+      board: new Map([["r5c1", [{ owner: "W", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+    };
+    const s2: GameState = {
+      board: new Map([["r4c2", [{ owner: "W", rank: "S" }]]]),
+      toMove: "W",
+      phase: "idle",
+    };
+
+    const history = new HistoryManager();
+    history.push(s0, "Start");
+    history.push(s1, "A1 → B2");
+    history.push(s2, "B2 → C3");
+
+    const save = serializeSaveData(s2, history);
+    const json = JSON.stringify(save);
+    const parsed = JSON.parse(json);
+    const loaded = deserializeSaveData(parsed);
+
+    expect(loaded.history).toBeDefined();
+    expect(loaded.history!.states.length).toBe(3);
+    expect(loaded.history!.notation.length).toBe(3);
+    expect(loaded.history!.notation[1]).toBe("A1 → B2");
+    expect(loaded.state.toMove).toBe("W");
+  });
+
+  it("should keep backward compatibility with v1 state-only saves", () => {
+    const state: GameState = {
+      board: new Map([["r3c3", [{ owner: "B", rank: "O" }]]]),
+      toMove: "B",
+      phase: "idle",
+    };
+
+    const v1 = serializeGameState(state);
+    const loaded = deserializeSaveData(v1);
+    expect(loaded.history).toBeUndefined();
+    expect(loaded.state.board.get("r3c3")).toEqual([{ owner: "B", rank: "O" }]);
   });
 });

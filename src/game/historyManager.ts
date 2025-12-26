@@ -9,6 +9,31 @@ export class HistoryManager {
   private moveNotation: string[] = []; // Parallel array storing move notation
   private currentIndex: number = -1;
 
+  exportSnapshots(): { states: GameState[]; notation: string[]; currentIndex: number } {
+    return {
+      states: this.history.map((s) => this.cloneState(s)),
+      notation: [...this.moveNotation],
+      currentIndex: this.currentIndex,
+    };
+  }
+
+  replaceAll(states: GameState[], notation: string[], currentIndex: number): void {
+    const clonedStates = states.map((s) => this.cloneState(s));
+    const clonedNotation = [...notation];
+
+    // Keep arrays aligned.
+    while (clonedNotation.length < clonedStates.length) clonedNotation.push("");
+    if (clonedNotation.length > clonedStates.length) clonedNotation.length = clonedStates.length;
+
+    const nextIndex = Number.isInteger(currentIndex)
+      ? Math.max(-1, Math.min(currentIndex, clonedStates.length - 1))
+      : clonedStates.length - 1;
+
+    this.history = clonedStates;
+    this.moveNotation = clonedNotation;
+    this.currentIndex = nextIndex;
+  }
+
   /**
    * Record a new state (called after a complete turn).
    * This clears any future history if we're not at the end.

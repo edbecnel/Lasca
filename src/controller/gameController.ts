@@ -10,6 +10,7 @@ import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
 import { animateStack } from "../render/animateMove.ts";
+import { nodeIdToA1 } from "../game/coordFormat.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -191,14 +192,23 @@ export class GameController {
     if (this.onHistoryChange) this.onHistoryChange();
   }
 
-  loadGame(loadedState: GameState): void {
-    // Reset history and start fresh with loaded state
-    this.history.clear();
-    this.history.push(loadedState);
+  loadGame(
+    loadedState: GameState,
+    historyData?: { states: GameState[]; notation: string[]; currentIndex: number }
+  ): void {
+    if (historyData && historyData.states && historyData.states.length > 0) {
+      this.history.replaceAll(historyData.states, historyData.notation, historyData.currentIndex);
+    } else {
+      // Reset history and start fresh with loaded state
+      this.history.clear();
+      this.history.push(loadedState);
+    }
     
-    // Reset game state to idle phase
+    // Reset game state to idle phase; prefer aligning to the restored history's current state.
+    const currentFromHistory = this.history.getCurrent();
+    const baseState = currentFromHistory ?? loadedState;
     this.isGameOver = false;
-    this.state = { ...loadedState, phase: "idle" };
+    this.state = { ...baseState, phase: "idle" };
     
     // Clear any selection, overlays, and capture state
     this.clearSelection();
@@ -500,7 +510,7 @@ export class GameController {
           
           // Record state in history at turn boundary
           const separator = this.currentTurnHasCapture ? " × " : " → ";
-          const notation = this.currentTurnNodes.join(separator);
+          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
           this.history.push(this.state, notation);
           this.currentTurnNodes = [];
           this.currentTurnHasCapture = false;
@@ -549,7 +559,7 @@ export class GameController {
         
         // Record state in history at turn boundary
         const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const notation = this.currentTurnNodes.join(separator);
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
         this.history.push(this.state, notation);
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
@@ -583,7 +593,7 @@ export class GameController {
         
         // Record state in history at turn boundary
         const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const notation = this.currentTurnNodes.join(separator);
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
         this.history.push(this.state, notation);
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;

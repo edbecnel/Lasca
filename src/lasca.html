@@ -294,6 +294,7 @@
         height: auto;
         max-height: calc(100vh - 20px);
         display: block;
+        color: var(--panel-text);
       }
 
       /* ===== Inspector (kept, but now inside right sidebar) ===== */
@@ -692,6 +693,37 @@
                 "
               >
                 Smooth piece movement
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="boardCoordsToggle"
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="boardCoordsToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Show board coordinates
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Column letters (A–G) and row numbers (1–7)
               </div>
 
               <div
