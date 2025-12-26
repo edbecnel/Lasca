@@ -51,6 +51,13 @@ export const THEMES: ThemeDef[] = [
     boardDefs: new URL("../assets/themes/glass/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/glass/theme.css", import.meta.url),
   },
+  {
+    id: "turtle",
+    label: "Turtle",
+    piecesDefs: new URL("../assets/themes/turtle/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/turtle/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/turtle/theme.css", import.meta.url),
+  },
 ];
 
 export function getThemeById(id: string): ThemeDef | null {
