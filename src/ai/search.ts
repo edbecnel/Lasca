@@ -21,6 +21,18 @@ type SearchResult = {
 
 const INF = 1_000_000_000;
 
+function cloneStateForSearch(state: GameState): GameState {
+  const board = new Map<string, any>();
+  for (const [nodeId, stack] of state.board.entries()) {
+    // Deep clone: applyMove/promoteIfNeeded mutate stack arrays and piece objects.
+    board.set(
+      nodeId,
+      stack.map((p) => ({ owner: p.owner, rank: p.rank }))
+    );
+  }
+  return { board, toMove: state.toMove, phase: state.phase };
+}
+
 function hasControlledStacks(state: GameState, p: Player): boolean {
   for (const stack of state.board.values()) {
     if (!stack || stack.length === 0) continue;
@@ -72,7 +84,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   const nextCtx = cloneCtx(ctx);
 
   if (move.kind === "move") {
-    const nextState = applyMove(nextCtx.state, move);
+    const nextState = applyMove(cloneStateForSearch(nextCtx.state), move);
     nextCtx.state = nextState;
     nextCtx.lockedFrom = null;
     nextCtx.excludedJumpSquares.clear();
@@ -80,7 +92,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   }
 
   // Capture
-  const nextState = applyMove(nextCtx.state, move);
+  const nextState = applyMove(cloneStateForSearch(nextCtx.state), move);
   nextCtx.state = nextState;
   nextCtx.excludedJumpSquares.add(move.over);
 
@@ -122,11 +134,11 @@ function moveHeuristic(ctx: SearchContext, move: Move, perspective: Player): num
       if (top.owner !== perspective) s += 10;
     }
     // Promotion check: simulate just enough.
-    const next = applyMove(ctx.state, move);
+    const next = applyMove(cloneStateForSearch(ctx.state), move);
     if (Boolean((next as any).didPromote)) s += 60;
   } else {
     // Quiet move: prefer promoting moves.
-    const next = applyMove(ctx.state, move);
+    const next = applyMove(cloneStateForSearch(ctx.state), move);
     if (Boolean((next as any).didPromote)) s += 50;
   }
   return s;

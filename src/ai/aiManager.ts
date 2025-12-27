@@ -30,6 +30,8 @@ export class AIManager {
   private requestId = 1;
   private busy = false;
   private activeRequestId: number | null = null;
+  private stepping = false;
+  private moveDoneResolvers = new Map<number, () => void>();
 
   private elWhite: HTMLSelectElement | null = null;
   private elBlack: HTMLSelectElement | null = null;
@@ -46,6 +48,21 @@ export class AIManager {
     try {
       this.worker = new Worker(new URL("./aiWorker.ts", import.meta.url), { type: "module" });
       this.worker.onmessage = (ev: MessageEvent<AIWorkerResponse>) => this.onWorkerMessage(ev.data);
+      this.worker.onerror = (ev) => {
+        // If the worker crashes, don't leave the UI frozen.
+        if ((import.meta as any).env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.error("[ai] worker error", ev);
+        }
+        this.onWorkerFailed();
+      };
+      this.worker.onmessageerror = (ev) => {
+        if ((import.meta as any).env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.error("[ai] worker message error", ev);
+        }
+        this.onWorkerFailed();
+      };
     } catch {
       this.worker = null;
     }
@@ -161,6 +178,24 @@ export class AIManager {
     }
   }
 
+  private onWorkerFailed(): void {
+    // Disable worker and unblock any pending request/Step.
+    const doomedRequestId = this.activeRequestId;
+    this.worker = null;
+    this.busy = false;
+    this.activeRequestId = null;
+
+    if (doomedRequestId !== null) {
+      const resolve = this.moveDoneResolvers.get(doomedRequestId);
+      if (resolve) {
+        this.moveDoneResolvers.delete(doomedRequestId);
+        resolve();
+      }
+    }
+
+    this.refreshUI();
+  }
+
   private kick(): void {
     if (this.settings.paused) {
       this.refreshUI();
@@ -177,7 +212,12 @@ export class AIManager {
     const diff = difficultyForPlayer(this.settings, p);
     if (diff === "human") return;
 
-    await this.maybeMove(/*force*/ true);
+    this.stepping = true;
+    try {
+      await this.maybeMove(/*force*/ true);
+    } finally {
+      this.stepping = false;
+    }
   }
 
   private async maybeMove(force: boolean = false): Promise<void> {
@@ -222,6 +262,13 @@ export class AIManager {
 
     // Prefer worker; fall back to greedy.
     if (this.worker) {
+      const waitForMove = force;
+      const done = waitForMove
+        ? new Promise<void>((resolve) => {
+            this.moveDoneResolvers.set(myRequestId, resolve);
+          })
+        : null;
+
       this.worker.postMessage({
         kind: "chooseMove",
         requestId: myRequestId,
@@ -230,6 +277,10 @@ export class AIManager {
         lockedFrom: constraints.lockedCaptureFrom,
         excludedJumpSquares: constraints.jumpedSquares,
       });
+
+      if (done) {
+        await done;
+      }
       return;
     }
 
@@ -259,12 +310,12 @@ export class AIManager {
       }
 
       // Delay before moving, so the user can see what's happening.
-      if (this.settings.delayMs > 0) {
+      if (!this.stepping && this.settings.delayMs > 0) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, this.settings.delayMs));
       }
 
-      // If paused during delay, do nothing.
-      if (this.settings.paused) return;
+      // If paused during delay, do nothing (except when stepping).
+      if (this.settings.paused && !this.stepping) return;
 
       await this.controller.playMove(move);
 
@@ -277,6 +328,11 @@ export class AIManager {
     } finally {
       this.busy = false;
       this.activeRequestId = null;
+      const resolve = this.moveDoneResolvers.get(requestId);
+      if (resolve) {
+        this.moveDoneResolvers.delete(requestId);
+        resolve();
+      }
       this.refreshUI();
 
       // Continue automatically if next side is also AI and not paused.
