@@ -22,7 +22,7 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 - 🎬 Smooth piece animations with toggle control
 - 📝 Move notation display (r0c0 → r1c1 format)
 - 💾 Export move history to JSON format
-- 🤖 Optional AI opponents (Easy / Medium / Advanced per color)
+- 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 
 ## How to Play
