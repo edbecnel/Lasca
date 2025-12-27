@@ -30,7 +30,8 @@ export class GameController {
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
   private history: HistoryManager;
-  private onHistoryChange: (() => void) | null = null;
+  private historyListeners: Array<() => void> = [];
+  private inputEnabled: boolean = true;
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
 
@@ -64,7 +65,68 @@ export class GameController {
   }
 
   setHistoryChangeCallback(callback: () => void): void {
-    this.onHistoryChange = callback;
+    this.historyListeners = [callback];
+  }
+
+  addHistoryChangeCallback(callback: () => void): void {
+    this.historyListeners.push(callback);
+  }
+
+  private fireHistoryChange(): void {
+    for (const cb of this.historyListeners) {
+      try {
+        cb();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[controller] history listener error", err);
+      }
+    }
+  }
+
+  isOver(): boolean {
+    return this.isGameOver;
+  }
+
+  setInputEnabled(enabled: boolean): void {
+    this.inputEnabled = enabled;
+    if (!enabled) {
+      // Avoid leaving stale selection overlays when AI is running.
+      this.clearSelection();
+    }
+  }
+
+  getCaptureChainConstraints(): { lockedCaptureFrom: string | null; jumpedSquares: string[] } {
+    return {
+      lockedCaptureFrom: this.lockedCaptureFrom,
+      jumpedSquares: Array.from(this.jumpedSquares),
+    };
+  }
+
+  getLegalMovesForTurn(): Move[] {
+    const excluded = this.lockedCaptureFrom ? this.jumpedSquares : undefined;
+    const allLegal = generateLegalMoves(this.state, excluded);
+
+    if (this.lockedCaptureFrom) {
+      return allLegal.filter((m) => m.kind === "capture" && m.from === this.lockedCaptureFrom);
+    }
+
+    return allLegal;
+  }
+
+  async playMove(move: Move): Promise<void> {
+    if (this.isGameOver) return;
+
+    // Ensure move is still legal under the current turn constraints.
+    const legal = this.getLegalMovesForTurn();
+    const same = (a: Move, b: Move) => {
+      if (a.kind !== b.kind) return false;
+      if (a.from !== (b as any).from || (a as any).to !== (b as any).to) return false;
+      if (a.kind === "capture") return (a as any).over === (b as any).over;
+      return true;
+    };
+    if (!legal.some((m) => same(m, move))) return;
+
+    await this.applyChosenMove(move);
   }
 
   undo(): void {
@@ -78,7 +140,7 @@ export class GameController {
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
-      if (this.onHistoryChange) this.onHistoryChange();
+      this.fireHistoryChange();
     }
   }
 
@@ -93,7 +155,7 @@ export class GameController {
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
-      if (this.onHistoryChange) this.onHistoryChange();
+      this.fireHistoryChange();
     }
   }
 
@@ -189,7 +251,7 @@ export class GameController {
     this.updatePanel();
     
     // Notify history change
-    if (this.onHistoryChange) this.onHistoryChange();
+    this.fireHistoryChange();
   }
 
   loadGame(
@@ -222,7 +284,7 @@ export class GameController {
     this.updatePanel();
     
     // Notify history change
-    if (this.onHistoryChange) this.onHistoryChange();
+    this.fireHistoryChange();
   }
 
   private updatePanel(): void {
@@ -426,9 +488,185 @@ export class GameController {
     }, durationMs);
   }
 
+  private async applyChosenMove(move: Move): Promise<void> {
+    // Track node path for notation
+    if (this.currentTurnNodes.length === 0) {
+      this.currentTurnNodes.push(move.from);
+    }
+    this.currentTurnNodes.push(move.to);
+    if (move.kind === "capture") {
+      this.currentTurnHasCapture = true;
+    }
+    
+    const next = applyMove(this.state, move);
+    if (import.meta.env && import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log("[controller] apply", move);
+    }
+    this.state = next;
+    
+    // Animate the move before rendering (both quiet moves and captures)
+    if (this.animationsEnabled) {
+      const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${move.from}"]`) as SVGGElement | null;
+      if (movingGroup) {
+        await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300);
+      }
+    }
+    
+    // Now render the new state after animation
+    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    
+    // Clear overlays immediately after move is rendered
+    // Also cancel any pending remainder hint timers
+    if (this.remainderTimer) {
+      window.clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
+    clearOverlays(this.overlayLayer);
+    
+    if (move.kind === "capture") {
+      // Track the jumped-over square to prevent re-jumping it
+      this.jumpedSquares.add(move.over);
+      
+      // Check if promotion happened
+      const didPromote = next.didPromote || false;
+      
+      // Check if there are more captures available from the destination
+      const allCaptures = generateLegalMoves(this.state, this.jumpedSquares).filter(m => m.kind === "capture");
+      const moreCapturesFromDest = allCaptures.filter(m => m.from === move.to);
+      
+      // If promoted and rule says stop on promotion, end the chain
+      if (didPromote && RULES.stopCaptureOnPromotion) {
+        // Switch turn now
+        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+        this.lockedCaptureFrom = null;
+        this.jumpedSquares.clear();
+        this.clearSelection();
+        
+        // Record state in history at turn boundary
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+        this.history.push(this.state, notation);
+        this.currentTurnNodes = [];
+        this.currentTurnHasCapture = false;
+        this.fireHistoryChange();
+        
+        // Check for threefold repetition draw
+        if (this.checkThreefoldRepetition()) {
+          this.isGameOver = true;
+          this.clearSelection();
+          this.showBanner("Draw by threefold repetition", 0);
+          return;
+        }
+        
+        // Update mandatory capture for new turn
+        const allLegal = generateLegalMoves(this.state);
+        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        
+        // Check for game over - check if the player who now has the turn can play
+        const gameResult = checkCurrentPlayerLost(this.state);
+        if (gameResult.winner) {
+          this.isGameOver = true;
+          this.showBanner(gameResult.reason || "Game Over", 0);
+          return;
+        }
+        
+        this.showBanner("Promoted — capture turn ends");
+        // Don't show remainder hint - it will interfere with next turn's overlays
+        return;
+      }
+      
+      // If more captures available from destination, chain the capture
+      if (moreCapturesFromDest.length > 0) {
+        this.lockedCaptureFrom = move.to;
+        this.selected = move.to;
+        this.showSelection(move.to);
+        this.showBanner("Continue capture");
+        // Don't show remainder hint during chain - it will be cleared when selection is shown
+        return;
+      }
+      
+      // No more captures, switch turn and end
+      this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+      this.lockedCaptureFrom = null;
+      this.jumpedSquares.clear();
+      this.clearSelection();
+      
+      // Record state in history at turn boundary
+      const separator = this.currentTurnHasCapture ? " × " : " → ";
+      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+      this.history.push(this.state, notation);
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
+      this.fireHistoryChange();
+      
+      // Check for threefold repetition draw
+      if (this.checkThreefoldRepetition()) {
+        this.isGameOver = true;
+        this.clearSelection();
+        this.showBanner("Draw by threefold repetition", 0);
+        return;
+      }
+      
+      // Update mandatory capture for new turn
+      const allLegal = generateLegalMoves(this.state);
+      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      
+      // Check for game over - check if the player who now has the turn can play
+      const gameResult = checkCurrentPlayerLost(this.state);
+      if (gameResult.winner) {
+        this.isGameOver = true;
+        this.showBanner(gameResult.reason || "Game Over", 0);
+        return;
+      }
+      
+      this.showBanner("Turn changed");
+      // Don't show remainder hint - it will interfere with next turn's overlays
+    } else {
+      // Quiet move - turn already switched in applyMove
+      this.clearSelection();
+      
+      // Record state in history at turn boundary
+      const separator = this.currentTurnHasCapture ? " × " : " → ";
+      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+      this.history.push(this.state, notation);
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
+      this.fireHistoryChange();
+      
+      // Check for threefold repetition draw
+      if (this.checkThreefoldRepetition()) {
+        this.isGameOver = true;
+        this.clearSelection();
+        this.showBanner("Draw by threefold repetition", 0);
+        return;
+      }
+      
+      // Update mandatory capture for new turn
+      const allLegal = generateLegalMoves(this.state);
+      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      
+      // Check for game over after quiet move - check if current player can play
+      const gameResult = checkCurrentPlayerLost(this.state);
+      if (gameResult.winner) {
+        this.isGameOver = true;
+        this.showBanner(gameResult.reason || "Game Over", 0);
+        return;
+      }
+      
+      // Update panel to show capture message if needed
+      this.updatePanel();
+    }
+  }
+
   private async onClick(ev: MouseEvent): Promise<void> {
     // Ignore clicks if game is over
     if (this.isGameOver) {
+      return;
+    }
+
+    // Ignore human input when AI has locked input
+    if (!this.inputEnabled) {
       return;
     }
 
@@ -454,174 +692,7 @@ export class GameController {
       }
       
       
-      // Track node path for notation
-      if (this.currentTurnNodes.length === 0) {
-        this.currentTurnNodes.push(move.from);
-      }
-      this.currentTurnNodes.push(move.to);
-      if (move.kind === "capture") {
-        this.currentTurnHasCapture = true;
-      }
-      
-      const next = applyMove(this.state, move);
-      if (import.meta.env && import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log("[controller] apply", move);
-      }
-      this.state = next;
-      
-      // Animate the move before rendering (both quiet moves and captures)
-      if (this.animationsEnabled) {
-        const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${move.from}"]`) as SVGGElement | null;
-        if (movingGroup) {
-          await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300);
-        }
-      }
-      
-      // Now render the new state after animation
-      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
-      
-      // Clear overlays immediately after move is rendered
-      // Also cancel any pending remainder hint timers
-      if (this.remainderTimer) {
-        window.clearTimeout(this.remainderTimer);
-        this.remainderTimer = null;
-      }
-      clearOverlays(this.overlayLayer);
-      
-      if (move.kind === "capture") {
-        // Track the jumped-over square to prevent re-jumping it
-        this.jumpedSquares.add(move.over);
-        
-        // Check if promotion happened
-        const didPromote = next.didPromote || false;
-        
-        // Check if there are more captures available from the destination
-        const allCaptures = generateLegalMoves(this.state, this.jumpedSquares).filter(m => m.kind === "capture");
-        const moreCapturesFromDest = allCaptures.filter(m => m.from === move.to);
-        
-        // If promoted and rule says stop on promotion, end the chain
-        if (didPromote && RULES.stopCaptureOnPromotion) {
-          // Switch turn now
-          this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
-          this.lockedCaptureFrom = null;
-          this.jumpedSquares.clear();
-          this.clearSelection();
-          
-          // Record state in history at turn boundary
-          const separator = this.currentTurnHasCapture ? " × " : " → ";
-          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
-          this.history.push(this.state, notation);
-          this.currentTurnNodes = [];
-          this.currentTurnHasCapture = false;
-          if (this.onHistoryChange) this.onHistoryChange();
-          
-          // Check for threefold repetition draw
-          if (this.checkThreefoldRepetition()) {
-            this.isGameOver = true;
-            this.clearSelection();
-            this.showBanner("Draw by threefold repetition", 0);
-            return;
-          }
-          
-          // Update mandatory capture for new turn
-          const allLegal = generateLegalMoves(this.state);
-          this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
-          
-          // Check for game over - check if the player who now has the turn can play
-          const gameResult = checkCurrentPlayerLost(this.state);
-          if (gameResult.winner) {
-            this.isGameOver = true;
-            this.showBanner(gameResult.reason || "Game Over", 0);
-            return;
-          }
-          
-          this.showBanner("Promoted — capture turn ends");
-          // Don't show remainder hint - it will interfere with next turn's overlays
-          return;
-        }
-        
-        // If more captures available from destination, chain the capture
-        if (moreCapturesFromDest.length > 0) {
-          this.lockedCaptureFrom = move.to;
-          this.selected = move.to;
-          this.showSelection(move.to);
-          this.showBanner("Continue capture");
-          // Don't show remainder hint during chain - it will be cleared when selection is shown
-          return;
-        }
-        
-        // No more captures, switch turn and end
-        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
-        this.lockedCaptureFrom = null;
-        this.jumpedSquares.clear();
-        this.clearSelection();
-        
-        // Record state in history at turn boundary
-        const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
-        this.history.push(this.state, notation);
-        this.currentTurnNodes = [];
-        this.currentTurnHasCapture = false;
-        if (this.onHistoryChange) this.onHistoryChange();
-        
-        // Check for threefold repetition draw
-        if (this.checkThreefoldRepetition()) {
-          this.isGameOver = true;
-          this.clearSelection();
-          this.showBanner("Draw by threefold repetition", 0);
-          return;
-        }
-        
-        // Update mandatory capture for new turn
-        const allLegal = generateLegalMoves(this.state);
-        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
-        
-        // Check for game over - check if the player who now has the turn can play
-        const gameResult = checkCurrentPlayerLost(this.state);
-        if (gameResult.winner) {
-          this.isGameOver = true;
-          this.showBanner(gameResult.reason || "Game Over", 0);
-          return;
-        }
-        
-        this.showBanner("Turn changed");
-        // Don't show remainder hint - it will interfere with next turn's overlays
-      } else {
-        // Quiet move - turn already switched in applyMove
-        this.clearSelection();
-        
-        // Record state in history at turn boundary
-        const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
-        this.history.push(this.state, notation);
-        this.currentTurnNodes = [];
-        this.currentTurnHasCapture = false;
-        if (this.onHistoryChange) this.onHistoryChange();
-        
-        // Check for threefold repetition draw
-        if (this.checkThreefoldRepetition()) {
-          this.isGameOver = true;
-          this.clearSelection();
-          this.showBanner("Draw by threefold repetition", 0);
-          return;
-        }
-        
-        // Update mandatory capture for new turn
-        const allLegal = generateLegalMoves(this.state);
-        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
-        
-        // Check for game over after quiet move - check if current player can play
-        const gameResult = checkCurrentPlayerLost(this.state);
-        if (gameResult.winner) {
-          this.isGameOver = true;
-          this.showBanner(gameResult.reason || "Game Over", 0);
-          return;
-        }
-        
-        // Update panel to show capture message if needed
-        this.updatePanel();
-      }
+      await this.applyChosenMove(move);
       return;
     }
 

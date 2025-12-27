@@ -124,6 +124,50 @@
         background: rgba(0, 0, 0, 0.18);
       }
 
+      .panelSelect {
+        width: 100%;
+        color-scheme: dark;
+        border: 1px solid var(--themeMenuBorder);
+        background: var(--themeMenuBg);
+        color: var(--themeMenuText);
+        border-radius: 10px;
+        padding: 6px 9px;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .panelSelect option,
+      .panelSelect optgroup {
+        background: var(--themeMenuBg);
+        color: var(--themeMenuText);
+      }
+
+      .iconToggleGroup {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .iconToggleBtn {
+        width: 34px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .iconToggleBtn[aria-pressed="true"] {
+        background: var(--themeMenuSelectedBg);
+        border-color: var(--themeMenuBorder);
+      }
+      .panelSelect:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
       .sidebarBody {
         flex: 1 1 auto;
         overflow: auto;
@@ -585,7 +629,7 @@
         aria-label="Left panel"
       >
         <div class="sidebarHeader">
-          <div class="sidebarTitle">Game Status</div>
+          <div class="sidebarTitle">Game Panel</div>
           <div class="sidebarButtons">
             <a
               href="help.html"
@@ -844,6 +888,89 @@
             </div>
           </div>
 
+          <div class="panelSection" data-section="ai">
+            <div class="sectionHeader" data-toggle="ai">
+              <h3>AI</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 72px 1fr;
+                  gap: 8px 10px;
+                  align-items: center;
+                  font-size: 12px;
+                "
+              >
+                <label for="aiWhiteSelect">White</label>
+                <select id="aiWhiteSelect" class="panelSelect">
+                  <option value="human" selected>Human</option>
+                  <option value="easy">Easy AI</option>
+                  <option value="medium">Medium AI</option>
+                  <option value="advanced">Advanced AI</option>
+                </select>
+
+                <label for="aiBlackSelect">Black</label>
+                <select id="aiBlackSelect" class="panelSelect">
+                  <option value="human" selected>Human</option>
+                  <option value="easy">Easy AI</option>
+                  <option value="medium">Medium AI</option>
+                  <option value="advanced">Advanced AI</option>
+                </select>
+
+                <label for="aiDelay">Speed</label>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <input
+                    id="aiDelay"
+                    type="range"
+                    min="0"
+                    max="2000"
+                    step="50"
+                    value="400"
+                    style="flex: 1"
+                  />
+                  <div
+                    id="aiDelayLabel"
+                    style="
+                      min-width: 64px;
+                      text-align: right;
+                      font-variant-numeric: tabular-nums;
+                    "
+                  >
+                    400 ms
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 12px">
+                <button
+                  id="aiPauseBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Pause AI
+                </button>
+                <button
+                  id="aiStepBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Step
+                </button>
+              </div>
+
+              <div
+                id="aiInfo"
+                style="margin-top: 10px; font-size: 12px; opacity: 0.85"
+              >
+                Set a side to AI to auto-play that color.
+              </div>
+            </div>
+          </div>
+
           <div class="panelSection" data-section="moveHistory">
             <div class="sectionHeader" data-toggle="moveHistory">
               <h3>Move History</h3>
@@ -920,6 +1047,77 @@
         </div>
 
         <div class="sidebarBody">
+          <div
+            class="panelSection"
+            id="evaluationPanel"
+            data-section="evaluation"
+          >
+            <div class="sectionHeader" data-toggle="evaluation">
+              <h3>Evaluation</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 72px 1fr;
+                  gap: 8px 10px;
+                  align-items: center;
+                  font-size: 12px;
+                "
+              >
+                <label for="evaluationMode">Show</label>
+                <div
+                  id="evaluationMode"
+                  class="iconToggleGroup"
+                  role="group"
+                  aria-label="Evaluation display mode"
+                >
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="advantage"
+                    aria-pressed="false"
+                    title="Advantage (estimate)"
+                    aria-label="Advantage (estimate)"
+                  >
+                    ⚖
+                  </button>
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="control"
+                    aria-pressed="false"
+                    title="Controlled stacks"
+                    aria-label="Controlled stacks"
+                  >
+                    ▦
+                  </button>
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="material"
+                    aria-pressed="false"
+                    title="Material (all pieces)"
+                    aria-label="Material (all pieces)"
+                  >
+                    ⛀
+                  </button>
+                </div>
+              </div>
+              <div
+                id="evaluationValue"
+                style="
+                  margin-top: 10px;
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.78);
+                "
+              >
+                —
+              </div>
+            </div>
+          </div>
+
           <div class="panelSection" id="themePanel" data-section="theme">
             <div class="sectionHeader" data-toggle="theme">
               <h3>Theme</h3>

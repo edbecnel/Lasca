@@ -13,6 +13,8 @@ import { saveGameToFile, loadGameFromFile } from "./game/saveLoad.ts";
 import { HistoryManager } from "./game/historyManager.ts";
 import { RULES } from "./game/ruleset.ts";
 import { renderBoardCoords } from "./render/boardCoords";
+import { AIManager } from "./ai/aiManager.ts";
+import { bindEvaluationPanel } from "./ui/evaluationPanel";
 
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
@@ -76,6 +78,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   ensureOverlayLayer(svg);
   const controller = new GameController(svg, piecesLayer, inspector, state, history);
   controller.bind();
+
+  bindEvaluationPanel(controller);
+
+  // AI (human vs AI / AI vs AI)
+  const aiManager = new AIManager(controller);
+  aiManager.bind();
+
 
   // Wire up move hints toggle
   const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
@@ -238,7 +247,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  controller.setHistoryChangeCallback(updateHistoryUI);
+  controller.addHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
 
   // If the SVG is hot-reloaded in dev, re-render coordinate labels.

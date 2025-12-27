@@ -53,7 +53,7 @@ For detailed rules and strategy tips, see [Help](src/help.html).
 
 #### Move History Display
 
-The Move History panel shows each move in algebraic notation:
+The Move History section (in the Game Panel) shows each move in algebraic notation:
 
 - **Quiet moves**: `1. ⚪ r4c2 → r3c3` (start → destination)
 - **Captures**: `1. ⚫ r2c4 × r3c3` (using × symbol)
@@ -198,11 +198,11 @@ MIT
 - Added **New Game** button to restart with fresh state
 - Implemented **threefold repetition draw** detection
   - Same board position occurring 3 times results in a draw
-  - Toggleable via Options panel
+  - Toggleable via the Options section in the Game Panel
   - Prevents infinite game loops
 - Added **smooth piece animations** using Web Animations API
   - Animates all moves including captures and multi-capture chains
-  - Toggleable via Options panel (default: on)
+  - Toggleable via the Options section in the Game Panel (default: on)
 - Implemented **move notation display** in Move History
   - Shows algebraic notation with → for moves, × for captures
   - Clean display for multi-capture chains (no repeated nodes)

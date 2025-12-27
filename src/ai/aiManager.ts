@@ -1,0 +1,296 @@
+import type { Move } from "../game/moveTypes.ts";
+import { serializeGameState } from "../game/saveLoad.ts";
+import type { Player } from "../types.ts";
+import type { GameController } from "../controller/gameController.ts";
+import type { AISettings, AIDifficulty, AIWorkerResponse } from "./aiTypes.ts";
+import { difficultyForPlayer } from "./aiTypes.ts";
+
+const LS_KEYS = {
+  white: "lasca.ai.white",
+  black: "lasca.ai.black",
+  delay: "lasca.ai.delayMs",
+  paused: "lasca.ai.paused",
+};
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function parseDifficulty(v: string | null): AIDifficulty {
+  if (v === "easy" || v === "medium" || v === "advanced" || v === "human") return v;
+  return "human";
+}
+
+type ActiveDifficulty = Exclude<AIDifficulty, "human">;
+
+export class AIManager {
+  private controller: GameController;
+  private settings: AISettings;
+  private worker: Worker | null = null;
+  private requestId = 1;
+  private busy = false;
+  private activeRequestId: number | null = null;
+
+  private elWhite: HTMLSelectElement | null = null;
+  private elBlack: HTMLSelectElement | null = null;
+  private elDelay: HTMLInputElement | null = null;
+  private elDelayLabel: HTMLElement | null = null;
+  private elPause: HTMLButtonElement | null = null;
+  private elStep: HTMLButtonElement | null = null;
+  private elInfo: HTMLElement | null = null;
+
+  constructor(controller: GameController) {
+    this.controller = controller;
+    this.settings = this.loadSettings();
+
+    try {
+      this.worker = new Worker(new URL("./aiWorker.ts", import.meta.url), { type: "module" });
+      this.worker.onmessage = (ev: MessageEvent<AIWorkerResponse>) => this.onWorkerMessage(ev.data);
+    } catch {
+      this.worker = null;
+    }
+
+    // Subscribe to turn boundaries (history changes).
+    this.controller.addHistoryChangeCallback(() => this.onHistoryChanged());
+  }
+
+  bind(): void {
+    this.elWhite = document.getElementById("aiWhiteSelect") as HTMLSelectElement | null;
+    this.elBlack = document.getElementById("aiBlackSelect") as HTMLSelectElement | null;
+    this.elDelay = document.getElementById("aiDelay") as HTMLInputElement | null;
+    this.elDelayLabel = document.getElementById("aiDelayLabel");
+    this.elPause = document.getElementById("aiPauseBtn") as HTMLButtonElement | null;
+    this.elStep = document.getElementById("aiStepBtn") as HTMLButtonElement | null;
+    this.elInfo = document.getElementById("aiInfo");
+
+    if (this.elWhite) {
+      this.elWhite.value = this.settings.white;
+      this.elWhite.addEventListener("change", () => {
+        this.settings.white = parseDifficulty(this.elWhite!.value);
+        localStorage.setItem(LS_KEYS.white, this.settings.white);
+        this.refreshUI();
+        this.kick();
+      });
+    }
+
+    if (this.elBlack) {
+      this.elBlack.value = this.settings.black;
+      this.elBlack.addEventListener("change", () => {
+        this.settings.black = parseDifficulty(this.elBlack!.value);
+        localStorage.setItem(LS_KEYS.black, this.settings.black);
+        this.refreshUI();
+        this.kick();
+      });
+    }
+
+    if (this.elDelay) {
+      this.elDelay.value = String(this.settings.delayMs);
+      this.elDelay.addEventListener("input", () => {
+        const v = clamp(parseInt(this.elDelay!.value || "0", 10) || 0, 0, 3000);
+        this.settings.delayMs = v;
+        localStorage.setItem(LS_KEYS.delay, String(v));
+        this.refreshUI();
+      });
+    }
+
+    if (this.elPause) {
+      this.elPause.addEventListener("click", () => {
+        this.settings.paused = !this.settings.paused;
+        localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
+        this.refreshUI();
+        if (!this.settings.paused) this.kick();
+      });
+    }
+
+    if (this.elStep) {
+      this.elStep.addEventListener("click", () => {
+        // Step one AI move (useful for AI-vs-AI).
+        if (this.busy) return;
+        this.settings.paused = true;
+        localStorage.setItem(LS_KEYS.paused, "true");
+        this.refreshUI();
+        this.stepOnce();
+      });
+    }
+
+    this.refreshUI();
+
+    // If the starting side is AI, start immediately.
+    this.kick();
+  }
+
+  onHistoryChanged(): void {
+    // Turn likely changed; re-evaluate.
+    this.kick();
+  }
+
+  private loadSettings(): AISettings {
+    const white = parseDifficulty(localStorage.getItem(LS_KEYS.white));
+    const black = parseDifficulty(localStorage.getItem(LS_KEYS.black));
+    const delay = clamp(parseInt(localStorage.getItem(LS_KEYS.delay) || "450", 10) || 450, 0, 3000);
+    const paused = localStorage.getItem(LS_KEYS.paused) === "true";
+    return { white, black, delayMs: delay, paused };
+  }
+
+  private refreshUI(): void {
+    if (this.elDelayLabel) this.elDelayLabel.textContent = `${this.settings.delayMs} ms`;
+
+    if (this.elPause) {
+      this.elPause.textContent = this.settings.paused ? "Resume AI" : "Pause AI";
+    }
+
+    // Input lock: if it's an AI turn and we are not paused, lock input.
+    const p: Player = this.controller.getState().toMove;
+    const diff = difficultyForPlayer(this.settings, p);
+    const shouldLock = !this.settings.paused && diff !== "human";
+    if (this.controller.setInputEnabled) {
+      this.controller.setInputEnabled(!shouldLock);
+    }
+
+    if (this.elInfo) {
+      const w = this.settings.white;
+      const b = this.settings.black;
+      const bothAI = w !== "human" && b !== "human";
+      const note = bothAI ? "Both sides are AI — use Pause/Step." : "";
+      this.elInfo.textContent = note;
+    }
+
+    if (this.elStep) {
+      const bothAI = this.settings.white !== "human" && this.settings.black !== "human";
+      this.elStep.disabled = !bothAI;
+    }
+  }
+
+  private kick(): void {
+    if (this.settings.paused) {
+      this.refreshUI();
+      return;
+    }
+
+    // Defer so UI updates and animations settle.
+    window.setTimeout(() => this.maybeMove(), 0);
+  }
+
+  private async stepOnce(): Promise<void> {
+    // Perform exactly one AI move if the current side is AI.
+    const p: Player = this.controller.getState().toMove;
+    const diff = difficultyForPlayer(this.settings, p);
+    if (diff === "human") return;
+
+    await this.maybeMove(/*force*/ true);
+  }
+
+  private async maybeMove(force: boolean = false): Promise<void> {
+    if (this.busy) return;
+    if (this.controller.isOver()) return;
+
+    const state = this.controller.getState();
+    const p: Player = state.toMove;
+    const difficulty = difficultyForPlayer(this.settings, p);
+
+    if (!force && this.settings.paused) return;
+    if (difficulty === "human") {
+      this.refreshUI();
+      return;
+    }
+
+    const legal = this.controller.getLegalMovesForTurn
+      ? this.controller.getLegalMovesForTurn() as Move[]
+      : [];
+
+    if (!legal || legal.length === 0) {
+      // No moves; controller should already handle game-over messaging.
+      this.refreshUI();
+      return;
+    }
+
+    // Lock human input during AI decision.
+    if (this.controller.setInputEnabled) {
+      this.controller.setInputEnabled(false);
+    }
+
+    this.busy = true;
+    const myRequestId = this.requestId++;
+    this.activeRequestId = myRequestId;
+
+    // Grab capture-chain constraints (if any).
+    const constraints = this.controller.getCaptureChainConstraints
+      ? this.controller.getCaptureChainConstraints()
+      : { lockedCaptureFrom: null, jumpedSquares: [] };
+
+    const serialized = serializeGameState(state);
+
+    // Prefer worker; fall back to greedy.
+    if (this.worker) {
+      this.worker.postMessage({
+        kind: "chooseMove",
+        requestId: myRequestId,
+        difficulty: difficulty,
+        state: serialized,
+        lockedFrom: constraints.lockedCaptureFrom,
+        excludedJumpSquares: constraints.jumpedSquares,
+      });
+      return;
+    }
+
+    // No worker: just pick first legal move.
+    const picked = legal[Math.floor(Math.random() * legal.length)];
+    await this.applyPickedMove(myRequestId, picked, undefined);
+  }
+
+  private async applyPickedMove(requestId: number, move: Move | null, info?: { depth?: number; nodes?: number; ms?: number }): Promise<void> {
+    try {
+      if (!move) return;
+
+      // Validate: still legal in current state.
+      const legal = this.controller.getLegalMovesForTurn
+        ? this.controller.getLegalMovesForTurn() as Move[]
+        : [];
+
+      const isSame = (a: Move, b: Move) => {
+        if (a.kind !== b.kind) return false;
+        if (a.from !== (b as any).from || (a as any).to !== (b as any).to) return false;
+        if (a.kind === "capture") return (a as any).over === (b as any).over;
+        return true;
+      };
+
+      if (!legal.some((m) => isSame(m, move))) {
+        return;
+      }
+
+      // Delay before moving, so the user can see what's happening.
+      if (this.settings.delayMs > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, this.settings.delayMs));
+      }
+
+      // If paused during delay, do nothing.
+      if (this.settings.paused) return;
+
+      await this.controller.playMove(move);
+
+      // Optional: show small AI stats in console.
+      if (info && (import.meta as any).env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.log("[ai]", info);
+      }
+
+    } finally {
+      this.busy = false;
+      this.activeRequestId = null;
+      this.refreshUI();
+
+      // Continue automatically if next side is also AI and not paused.
+      if (!this.settings.paused) {
+        window.setTimeout(() => this.maybeMove(), 0);
+      }
+    }
+  }
+
+  private async onWorkerMessage(msg: AIWorkerResponse): Promise<void> {
+    if (!msg || msg.kind !== "chooseMoveResult") return;
+    if (this.activeRequestId !== null && msg.requestId !== this.activeRequestId) return;
+
+    const info = msg.info;
+    await this.applyPickedMove(msg.requestId, msg.move, info);
+  }
+}
