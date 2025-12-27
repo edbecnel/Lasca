@@ -50,7 +50,8 @@ function formatAdvantage(state: GameState): string {
   const units = scoreWhitePerspective / 100;
 
   if (Math.abs(units) < 0.05) return "Even";
-  return units > 0 ? `White ${formatSigned(units)}` : `Black ${formatSigned(units)}`;
+  const magnitude = Math.abs(units);
+  return units > 0 ? `White ${formatSigned(magnitude)}` : `Black ${formatSigned(magnitude)}`;
 }
 
 function formatControl(state: GameState): string {
