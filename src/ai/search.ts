@@ -223,6 +223,11 @@ export function chooseGreedyMove(ctx: SearchContext, perspective: Player): Move 
   return pick ?? moves[0];
 }
 
+function greedyScore(ctx: SearchContext, move: Move, perspective: Player): number {
+  const child = applySearchMove(ctx, move);
+  return evaluateState(child.state, perspective);
+}
+
 export function chooseSearchMove(
   ctx: SearchContext,
   perspective: Player,
@@ -288,19 +293,22 @@ export function chooseMoveByDifficulty(
   const perspective: Player = ctx.state.toMove;
 
   if (difficulty === "easy") {
-    return { move: chooseGreedyMove(ctx, perspective) };
+    const move = chooseGreedyMove(ctx, perspective);
+    const score = move ? greedyScore(ctx, move, perspective) : undefined;
+    return { move, info: score !== undefined ? ({ score } as any) : undefined };
   }
 
   if (difficulty === "medium") {
     const start = performance.now();
-    const res = chooseSearchMove(ctx, perspective, 4, null);
+    // Keep Medium responsive: time-bounded iterative deepening.
+    const res = chooseSearchMove(ctx, perspective, 6, 200);
     const ms = Math.round(performance.now() - start);
-    return { move: res.bestMove, info: { depth: res.depthReached, nodes: res.nodes, ms } };
+    return { move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
   }
 
   // advanced
   const start = performance.now();
   const res = chooseSearchMove(ctx, perspective, 10, 450);
   const ms = Math.round(performance.now() - start);
-  return { move: res.bestMove, info: { depth: res.depthReached, nodes: res.nodes, ms } };
+  return { move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
 }

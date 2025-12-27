@@ -23,6 +23,19 @@ function parseDifficulty(v: string | null): AIDifficulty {
 
 type ActiveDifficulty = Exclude<AIDifficulty, "human">;
 
+function formatScore(score: number | undefined): string {
+  if (score === undefined || !Number.isFinite(score)) return "?";
+  const pawns = score / 100;
+  const sign = pawns > 0 ? "+" : "";
+  return `${sign}${pawns.toFixed(2)}`;
+}
+
+function formatMove(m: Move | null): string {
+  if (!m) return "(none)";
+  if (m.kind === "capture") return `${m.from} x ${m.over} -> ${m.to}`;
+  return `${m.from} -> ${m.to}`;
+}
+
 export class AIManager {
   private controller: GameController;
   private settings: AISettings;
@@ -32,6 +45,8 @@ export class AIManager {
   private activeRequestId: number | null = null;
   private stepping = false;
   private moveDoneResolvers = new Map<number, () => void>();
+  private workerTimers = new Map<number, number>();
+  private workerFallbackMoves = new Map<number, Move>();
 
   private elWhite: HTMLSelectElement | null = null;
   private elBlack: HTMLSelectElement | null = null;
@@ -45,6 +60,14 @@ export class AIManager {
     this.controller = controller;
     this.settings = this.loadSettings();
 
+    this.ensureWorker();
+
+    // Subscribe to turn boundaries (history changes).
+    this.controller.addHistoryChangeCallback(() => this.onHistoryChanged());
+  }
+
+  private ensureWorker(): void {
+    if (this.worker) return;
     try {
       this.worker = new Worker(new URL("./aiWorker.ts", import.meta.url), { type: "module" });
       this.worker.onmessage = (ev: MessageEvent<AIWorkerResponse>) => this.onWorkerMessage(ev.data);
@@ -66,9 +89,15 @@ export class AIManager {
     } catch {
       this.worker = null;
     }
+  }
 
-    // Subscribe to turn boundaries (history changes).
-    this.controller.addHistoryChangeCallback(() => this.onHistoryChanged());
+  private clearWorkerTimer(requestId: number): void {
+    const tid = this.workerTimers.get(requestId);
+    if (tid !== undefined) {
+      window.clearTimeout(tid);
+      this.workerTimers.delete(requestId);
+    }
+    this.workerFallbackMoves.delete(requestId);
   }
 
   bind(): void {
@@ -181,11 +210,19 @@ export class AIManager {
   private onWorkerFailed(): void {
     // Disable worker and unblock any pending request/Step.
     const doomedRequestId = this.activeRequestId;
+    if (this.worker) {
+      try {
+        this.worker.terminate();
+      } catch {
+        // ignore
+      }
+    }
     this.worker = null;
     this.busy = false;
     this.activeRequestId = null;
 
     if (doomedRequestId !== null) {
+      this.clearWorkerTimer(doomedRequestId);
       const resolve = this.moveDoneResolvers.get(doomedRequestId);
       if (resolve) {
         this.moveDoneResolvers.delete(doomedRequestId);
@@ -240,6 +277,9 @@ export class AIManager {
 
     if (!legal || legal.length === 0) {
       // No moves; controller should already handle game-over messaging.
+      if (this.controller.setInputEnabled) {
+        this.controller.setInputEnabled(true);
+      }
       this.refreshUI();
       return;
     }
@@ -261,6 +301,7 @@ export class AIManager {
     const serialized = serializeGameState(state);
 
     // Prefer worker; fall back to greedy.
+    this.ensureWorker();
     if (this.worker) {
       const waitForMove = force;
       const done = waitForMove
@@ -268,6 +309,23 @@ export class AIManager {
             this.moveDoneResolvers.set(myRequestId, resolve);
           })
         : null;
+
+      // If the worker gets stuck, apply a safe fallback move so the game cannot freeze.
+      const timeoutMs = difficulty === "advanced" ? 4000 : 6000;
+      const fallbackMove = legal[Math.floor(Math.random() * legal.length)];
+      this.workerFallbackMoves.set(myRequestId, fallbackMove);
+      const tid = window.setTimeout(() => {
+        if (this.activeRequestId !== myRequestId) return;
+        if ((import.meta as any).env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn("[ai] worker timeout; applying fallback move", { requestId: myRequestId, difficulty });
+        }
+        // Reset the worker for next time.
+        this.onWorkerFailed();
+        // Apply fallback move (still validated against current legal moves).
+        void this.applyPickedMove(myRequestId, fallbackMove, { ms: timeoutMs });
+      }, timeoutMs);
+      this.workerTimers.set(myRequestId, tid);
 
       this.worker.postMessage({
         kind: "chooseMove",
@@ -292,6 +350,11 @@ export class AIManager {
   private async applyPickedMove(requestId: number, move: Move | null, info?: { depth?: number; nodes?: number; ms?: number }): Promise<void> {
     try {
       if (!move) return;
+
+      const before = this.controller.getState();
+      const side: Player = before.toMove;
+      const difficulty = difficultyForPlayer(this.settings, side);
+      const isFallback = this.workerFallbackMoves.get(requestId) === move;
 
       // Validate: still legal in current state.
       const legal = this.controller.getLegalMovesForTurn
@@ -319,15 +382,32 @@ export class AIManager {
 
       await this.controller.playMove(move);
 
-      // Optional: show small AI stats in console.
-      if (info && (import.meta as any).env?.DEV) {
+      // Console telemetry (DEV only): one line per AI move.
+      if ((import.meta as any).env?.DEV) {
+        const depth = info?.depth;
+        const nodes = info?.nodes;
+        const ms = info?.ms;
+        const score = (info as any)?.score as number | undefined;
+        const tag = isFallback ? "fallback" : "move";
+        const parts = [
+          `[ai:${tag}]`,
+          side === "W" ? "White" : "Black",
+          String(difficulty),
+          formatMove(move),
+          `eval=${formatScore(score)}`,
+          depth !== undefined ? `d=${depth}` : null,
+          nodes !== undefined ? `n=${nodes}` : null,
+          ms !== undefined ? `ms=${ms}` : null,
+        ].filter(Boolean);
+
         // eslint-disable-next-line no-console
-        console.log("[ai]", info);
+        console.log(parts.join(" "));
       }
 
     } finally {
       this.busy = false;
       this.activeRequestId = null;
+      this.clearWorkerTimer(requestId);
       const resolve = this.moveDoneResolvers.get(requestId);
       if (resolve) {
         this.moveDoneResolvers.delete(requestId);
@@ -344,7 +424,9 @@ export class AIManager {
 
   private async onWorkerMessage(msg: AIWorkerResponse): Promise<void> {
     if (!msg || msg.kind !== "chooseMoveResult") return;
-    if (this.activeRequestId !== null && msg.requestId !== this.activeRequestId) return;
+    if (msg.requestId !== this.activeRequestId) return;
+
+    this.clearWorkerTimer(msg.requestId);
 
     const info = msg.info;
     await this.applyPickedMove(msg.requestId, msg.move, info);

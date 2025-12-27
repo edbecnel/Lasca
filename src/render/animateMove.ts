@@ -58,28 +58,45 @@ export function animateStack(
     const dx = toPos.x - fromPos.x;
     const dy = toPos.y - fromPos.y;
     
+    const cleanupAndResolve = () => {
+      // Remove clone if still present
+      try {
+        clone.remove();
+      } catch {
+        // ignore
+      }
+
+      // Restore original visibility
+      movingGroupEl.style.visibility = originalVisibility;
+
+      resolve();
+    };
+
     // Animate using Web Animations API
     // Start at 0,0 (current position) and move by dx,dy
-    const animation = clone.animate(
+    const anyClone = clone as any;
+    if (typeof anyClone.animate !== "function") {
+      cleanupAndResolve();
+      return;
+    }
+
+    const animation: Animation = anyClone.animate(
       [
         { transform: `translate(0px, 0px)` },
-        { transform: `translate(${dx}px, ${dy}px)` }
+        { transform: `translate(${dx}px, ${dy}px)` },
       ],
       {
         duration: durationMs,
         easing: "ease-in-out",
-        fill: "forwards"
+        fill: "forwards",
       }
     );
-    
-    animation.onfinish = () => {
-      // Remove clone
-      clone.remove();
-      
-      // Restore original visibility
-      movingGroupEl.style.visibility = originalVisibility;
-      
-      resolve();
-    };
+
+    // Some browsers won't fire onfinish if the animation is cancelled (e.g., element removed).
+    animation.onfinish = cleanupAndResolve;
+    (animation as any).oncancel = cleanupAndResolve;
+
+    // Absolute safety: resolve even if finish/cancel never fires.
+    window.setTimeout(cleanupAndResolve, Math.max(0, durationMs) + 50);
   });
 }

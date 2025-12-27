@@ -34,6 +34,7 @@ export class GameController {
   private inputEnabled: boolean = true;
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
+  private repetitionCounts: Map<string, number> = new Map();
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
     this.svg = svg;
@@ -49,6 +50,7 @@ export class GameController {
     // Check for mandatory captures at game start
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeRepetitionCounts();
     this.updatePanel();
   }
 
@@ -70,6 +72,18 @@ export class GameController {
 
   addHistoryChangeCallback(callback: () => void): void {
     this.historyListeners.push(callback);
+  }
+
+  private checkAndHandleCurrentPlayerLost(): boolean {
+    const result = checkCurrentPlayerLost(this.state);
+    if (result.winner) {
+      this.isGameOver = true;
+      this.clearSelection();
+      this.showBanner(result.reason || "Game Over", 0);
+      this.updatePanel();
+      return true;
+    }
+    return false;
   }
 
   private fireHistoryChange(): void {
@@ -140,6 +154,8 @@ export class GameController {
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
+      this.recomputeRepetitionCounts();
+      this.checkAndHandleCurrentPlayerLost();
       this.fireHistoryChange();
     }
   }
@@ -155,6 +171,8 @@ export class GameController {
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
+      this.recomputeRepetitionCounts();
+      this.checkAndHandleCurrentPlayerLost();
       this.fireHistoryChange();
     }
   }
@@ -208,6 +226,9 @@ export class GameController {
     
     // Game is not over, reset the flag
     this.isGameOver = false;
+
+    // Recompute repetition counts from current history (if any).
+    this.recomputeRepetitionCounts();
     
     // Check if captures are available for the current player
     const allLegal = generateLegalMoves(this.state);
@@ -241,6 +262,8 @@ export class GameController {
     this.state = initialState;
     this.isGameOver = false;
     this.clearSelection();
+
+    this.recomputeRepetitionCounts();
     
     // Re-render the board
     renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
@@ -282,6 +305,11 @@ export class GameController {
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.updatePanel();
+
+    this.recomputeRepetitionCounts();
+
+    // If the loaded position is already terminal for the player to move, end immediately.
+    this.checkAndHandleCurrentPlayerLost();
     
     // Notify history change
     this.fireHistoryChange();
@@ -380,39 +408,31 @@ export class GameController {
     return top.owner === this.state.toMove;
   }
 
+  private recomputeRepetitionCounts(): void {
+    this.repetitionCounts.clear();
+    if (!RULES.drawByThreefold) return;
+
+    const snap = this.history.exportSnapshots();
+    const states = snap.states;
+    const end = snap.currentIndex;
+    for (let i = 0; i <= end && i < states.length; i++) {
+      const h = hashGameState(states[i]);
+      this.repetitionCounts.set(h, (this.repetitionCounts.get(h) || 0) + 1);
+    }
+  }
+
+  private recordRepetitionForCurrentState(): boolean {
+    if (!RULES.drawByThreefold) return false;
+    const h = hashGameState(this.state);
+    const next = (this.repetitionCounts.get(h) || 0) + 1;
+    this.repetitionCounts.set(h, next);
+    return next >= 3;
+  }
+
   private checkThreefoldRepetition(): boolean {
     if (!RULES.drawByThreefold) return false;
-    
-    const currentHash = hashGameState(this.state);
-    const historyData = this.history.getHistory();
-    let count = 0;
-    
-    // Count how many times this exact position has occurred
-    const currentIndex = this.history.getCurrentIndex();
-    for (let i = 0; i < historyData.length; i++) {
-      // Move to position i
-      while (this.history.getCurrentIndex() > i) {
-        this.history.undo();
-      }
-      while (this.history.getCurrentIndex() < i) {
-        this.history.redo();
-      }
-      
-      const state = this.history.getCurrent();
-      if (state && hashGameState(state) === currentHash) {
-        count++;
-      }
-    }
-    
-    // Restore current position
-    while (this.history.getCurrentIndex() > currentIndex) {
-      this.history.undo();
-    }
-    while (this.history.getCurrentIndex() < currentIndex) {
-      this.history.redo();
-    }
-    
-    return count >= 3;
+    const h = hashGameState(this.state);
+    return (this.repetitionCounts.get(h) || 0) >= 3;
   }
 
   private showSelection(nodeId: string): void {
@@ -552,7 +572,7 @@ export class GameController {
         this.fireHistoryChange();
         
         // Check for threefold repetition draw
-        if (this.checkThreefoldRepetition()) {
+        if (this.recordRepetitionForCurrentState()) {
           this.isGameOver = true;
           this.clearSelection();
           this.showBanner("Draw by threefold repetition", 0);
@@ -601,7 +621,7 @@ export class GameController {
       this.fireHistoryChange();
       
       // Check for threefold repetition draw
-      if (this.checkThreefoldRepetition()) {
+      if (this.recordRepetitionForCurrentState()) {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
@@ -635,7 +655,7 @@ export class GameController {
       this.fireHistoryChange();
       
       // Check for threefold repetition draw
-      if (this.checkThreefoldRepetition()) {
+      if (this.recordRepetitionForCurrentState()) {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);

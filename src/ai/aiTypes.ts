@@ -37,6 +37,7 @@ export type AIWorkerResponse = {
   requestId: number;
   move: Move | null;
   info?: {
+    score?: number;
     depth?: number;
     nodes?: number;
     ms?: number;
