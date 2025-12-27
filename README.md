@@ -22,6 +22,8 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 - 🎬 Smooth piece animations with toggle control
 - 📝 Move notation display (r0c0 → r1c1 format)
 - 💾 Export move history to JSON format
+- 🤖 Optional AI opponents (Easy / Medium / Advanced per color)
+- ⚖ Evaluation indicators (advantage / controlled stacks / material)
 
 ## How to Play
 
@@ -48,6 +50,16 @@ You win when your opponent has:
 - No legal moves available
 
 For detailed rules and strategy tips, see [Help](src/help.html).
+
+### AI and Evaluation
+
+- **AI (Game Panel → AI):** Set White and/or Black to an AI difficulty. If both sides are AI, the game can auto-play.
+- **Speed:** Adjusts the pause between AI moves.
+- **Pause / Step:** Pause AI play, or step a single move when both sides are AI.
+- **Evaluation (Info panel → Evaluation):** Choose what to display using the icon buttons (hover for tooltips):
+  - ⚖ Advantage (estimate)
+  - ▦ Controlled stacks
+  - ⛀ Material (all pieces)
 
 ### Move Notation and Export
 
