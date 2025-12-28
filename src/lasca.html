@@ -126,6 +126,7 @@
 
       .panelSelect {
         width: 100%;
+        min-width: 0;
         color-scheme: dark;
         border: 1px solid var(--themeMenuBorder);
         background: var(--themeMenuBg);
@@ -134,12 +135,14 @@
         padding: 6px 9px;
         font-size: 12px;
         line-height: 1.2;
+        white-space: normal;
       }
 
       .panelSelect option,
       .panelSelect optgroup {
         background: var(--themeMenuBg);
         color: var(--themeMenuText);
+        white-space: normal;
       }
 
       .iconToggleGroup {
@@ -897,9 +900,10 @@
               <div
                 style="
                   display: grid;
-                  grid-template-columns: 72px 1fr;
-                  gap: 8px 10px;
+                  grid-template-columns: 52px minmax(0, 1fr);
+                  gap: 8px 2px;
                   align-items: center;
+                  justify-items: start;
                   font-size: 12px;
                 "
               >
@@ -920,21 +924,30 @@
                 </select>
 
                 <label for="aiDelay">Speed</label>
-                <div style="display: flex; gap: 8px; align-items: center">
+                <div style="display: flex; gap: 6px; align-items: center">
                   <input
                     id="aiDelay"
                     type="range"
-                    min="200"
-                    max="5000"
+                    min="100"
+                    max="3000"
                     step="100"
                     value="500"
-                    style="flex: 1"
+                    style="flex: 0 1 105px; width: 105px"
                   />
+                  <button
+                    id="aiDelayReset"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Reset to default speed"
+                    aria-label="Reset AI speed to default"
+                  >
+                    ↺
+                  </button>
                   <div
                     id="aiDelayLabel"
                     style="
-                      min-width: 64px;
-                      text-align: right;
+                      min-width: 52px;
+                      text-align: left;
                       font-variant-numeric: tabular-nums;
                     "
                   >

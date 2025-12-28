@@ -12,6 +12,8 @@ const LS_KEYS = {
   paused: "lasca.ai.paused",
 };
 
+const DEFAULT_DELAY_MS = 500;
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -51,6 +53,7 @@ export class AIManager {
   private elWhite: HTMLSelectElement | null = null;
   private elBlack: HTMLSelectElement | null = null;
   private elDelay: HTMLInputElement | null = null;
+  private elDelayReset: HTMLButtonElement | null = null;
   private elDelayLabel: HTMLElement | null = null;
   private elPause: HTMLButtonElement | null = null;
   private elStep: HTMLButtonElement | null = null;
@@ -104,6 +107,7 @@ export class AIManager {
     this.elWhite = document.getElementById("aiWhiteSelect") as HTMLSelectElement | null;
     this.elBlack = document.getElementById("aiBlackSelect") as HTMLSelectElement | null;
     this.elDelay = document.getElementById("aiDelay") as HTMLInputElement | null;
+    this.elDelayReset = document.getElementById("aiDelayReset") as HTMLButtonElement | null;
     this.elDelayLabel = document.getElementById("aiDelayLabel");
     this.elPause = document.getElementById("aiPauseBtn") as HTMLButtonElement | null;
     this.elStep = document.getElementById("aiStepBtn") as HTMLButtonElement | null;
@@ -132,8 +136,18 @@ export class AIManager {
     if (this.elDelay) {
       this.elDelay.value = String(this.settings.delayMs);
       this.elDelay.addEventListener("input", () => {
-        const v = clamp(parseInt(this.elDelay!.value || "500", 10) || 500, 200, 5000);
+        const v = clamp(parseInt(this.elDelay!.value || String(DEFAULT_DELAY_MS), 10) || DEFAULT_DELAY_MS, 100, 3000);
         this.settings.delayMs = v;
+        localStorage.setItem(LS_KEYS.delay, String(v));
+        this.refreshUI();
+      });
+    }
+
+    if (this.elDelayReset) {
+      this.elDelayReset.addEventListener("click", () => {
+        const v = clamp(DEFAULT_DELAY_MS, 100, 3000);
+        this.settings.delayMs = v;
+        if (this.elDelay) this.elDelay.value = String(v);
         localStorage.setItem(LS_KEYS.delay, String(v));
         this.refreshUI();
       });
@@ -173,13 +187,18 @@ export class AIManager {
   private loadSettings(): AISettings {
     const white = parseDifficulty(localStorage.getItem(LS_KEYS.white));
     const black = parseDifficulty(localStorage.getItem(LS_KEYS.black));
-    const delay = clamp(parseInt(localStorage.getItem(LS_KEYS.delay) || "500", 10) || 500, 200, 5000);
+    const delay = clamp(
+      parseInt(localStorage.getItem(LS_KEYS.delay) || String(DEFAULT_DELAY_MS), 10) || DEFAULT_DELAY_MS,
+      100,
+      3000,
+    );
     const paused = localStorage.getItem(LS_KEYS.paused) === "true";
     return { white, black, delayMs: delay, paused };
   }
 
   private refreshUI(): void {
     if (this.elDelayLabel) this.elDelayLabel.textContent = `${this.settings.delayMs} ms`;
+    if (this.elDelayReset) this.elDelayReset.title = `Reset to default speed (${DEFAULT_DELAY_MS} ms)`;
 
     if (this.elPause) {
       this.elPause.textContent = this.settings.paused ? "Resume AI" : "Pause AI";
