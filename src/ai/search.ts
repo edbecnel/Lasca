@@ -150,6 +150,76 @@ function orderMoves(ctx: SearchContext, moves: Move[], perspective: Player): Mov
     .sort((a, b) => moveHeuristic(ctx, b, perspective) - moveHeuristic(ctx, a, perspective));
 }
 
+// Maximum nodes to explore in quiescence to prevent explosion
+const MAX_QUIESCENCE_NODES = 500;
+
+// Quiescence search: continue searching captures to avoid horizon effect
+function quiescence(
+  ctx: SearchContext,
+  alpha: number,
+  beta: number,
+  perspective: Player,
+  deadlineMs: number | null,
+  stats: { nodes: number },
+  qDepth: number
+): number {
+  stats.nodes++;
+
+  // Hard limit on quiescence nodes to prevent explosion
+  if (stats.nodes > MAX_QUIESCENCE_NODES) {
+    return evaluateState(ctx.state, perspective);
+  }
+
+  if (deadlineMs !== null && performance.now() >= deadlineMs) {
+    return evaluateState(ctx.state, perspective);
+  }
+
+  const term = terminalScore(ctx.state, perspective);
+  if (term !== null) return term;
+
+  // Stand-pat score: can we just not capture and be happy?
+  const standPat = evaluateState(ctx.state, perspective);
+  const isMax = ctx.state.toMove === perspective;
+
+  if (isMax) {
+    if (standPat >= beta) return standPat;
+    if (standPat > alpha) alpha = standPat;
+  } else {
+    if (standPat <= alpha) return standPat;
+    if (standPat < beta) beta = standPat;
+  }
+
+  // Limit quiescence depth to avoid explosion
+  if (qDepth <= 0) return standPat;
+
+  const moves = legalMovesForContext(ctx);
+  // Only search captures in quiescence
+  const captures = moves.filter(m => m.kind === "capture");
+  
+  if (captures.length === 0) return standPat;
+
+  // Only search the best few captures to limit branching
+  const ordered = orderMoves(ctx, captures, perspective).slice(0, 3);
+  let best = standPat;
+
+  for (const m of ordered) {
+    const child = applySearchMove(ctx, m);
+    const val = quiescence(child, alpha, beta, perspective, deadlineMs, stats, qDepth - 1);
+
+    if (isMax) {
+      if (val > best) best = val;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    } else {
+      if (val < best) best = val;
+      if (best < beta) beta = best;
+      if (alpha >= beta) break;
+    }
+  }
+
+  return best;
+}
+
 function alphabeta(
   ctx: SearchContext,
   depth: number,
@@ -169,7 +239,14 @@ function alphabeta(
   const term = terminalScore(ctx.state, perspective);
   if (term !== null) return term;
 
-  if (depth <= 0) return evaluateState(ctx.state, perspective);
+  // At depth 0, use quiescence search instead of static eval
+  if (depth <= 0) {
+    // Use separate node counter for quiescence to enforce the limit properly
+    const qStats = { nodes: 0 };
+    const result = quiescence(ctx, alpha, beta, perspective, deadlineMs, qStats, 3);
+    stats.nodes += qStats.nodes;
+    return result;
+  }
 
   const moves = legalMovesForContext(ctx);
   if (moves.length === 0) {
@@ -283,6 +360,11 @@ export function chooseSearchMove(
     }
   }
 
+  // Safety: if search didn't find a move but moves exist, pick first one
+  if (bestMove === null && moves.length > 0) {
+    bestMove = moves[0];
+  }
+
   return { score: bestScore, bestMove, nodes, depthReached };
 }
 
@@ -291,24 +373,48 @@ export function chooseMoveByDifficulty(
   difficulty: "easy" | "medium" | "advanced"
 ): { move: Move | null; info?: { depth?: number; nodes?: number; ms?: number } } {
   const perspective: Player = ctx.state.toMove;
+  
+  // Get legal moves upfront for fallback
+  const legalMoves = legalMovesForContext(ctx);
+  if (legalMoves.length === 0) {
+    return { move: null, info: { depth: 0, nodes: 0, ms: 0 } };
+  }
+
+  // Helper to ensure we never return null if moves exist
+  const ensureMove = (result: { move: Move | null; info?: any }) => {
+    if (result.move === null && legalMoves.length > 0) {
+      // Fallback: pick any legal move
+      result.move = legalMoves[0];
+    }
+    return result;
+  };
 
   if (difficulty === "easy") {
-    const move = chooseGreedyMove(ctx, perspective);
-    const score = move ? greedyScore(ctx, move, perspective) : undefined;
-    return { move, info: score !== undefined ? ({ score } as any) : undefined };
+    // Easy: shallow search (depth 2-3) with some randomness for variety
+    const start = performance.now();
+    const res = chooseSearchMove(ctx, perspective, 3, 150);
+    const ms = Math.round(performance.now() - start);
+    
+    // Add some randomness: occasionally pick a suboptimal move
+    if (Math.random() < 0.15 && legalMoves.length > 1) {
+      const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+      return { move: randomMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
+    }
+    
+    return ensureMove({ move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any });
   }
 
   if (difficulty === "medium") {
     const start = performance.now();
-    // Keep Medium responsive: time-bounded iterative deepening.
-    const res = chooseSearchMove(ctx, perspective, 6, 200);
+    // Medium: solid search depth with reasonable time budget
+    const res = chooseSearchMove(ctx, perspective, 5, 800);
     const ms = Math.round(performance.now() - start);
-    return { move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
+    return ensureMove({ move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any });
   }
 
-  // advanced
+  // advanced: deep search with very generous time budget
   const start = performance.now();
-  const res = chooseSearchMove(ctx, perspective, 10, 450);
+  const res = chooseSearchMove(ctx, perspective, 10, 3000);
   const ms = Math.round(performance.now() - start);
-  return { move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
+  return ensureMove({ move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any });
 }

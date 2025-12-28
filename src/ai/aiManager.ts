@@ -132,7 +132,7 @@ export class AIManager {
     if (this.elDelay) {
       this.elDelay.value = String(this.settings.delayMs);
       this.elDelay.addEventListener("input", () => {
-        const v = clamp(parseInt(this.elDelay!.value || "0", 10) || 0, 0, 3000);
+        const v = clamp(parseInt(this.elDelay!.value || "500", 10) || 500, 200, 5000);
         this.settings.delayMs = v;
         localStorage.setItem(LS_KEYS.delay, String(v));
         this.refreshUI();
@@ -173,7 +173,7 @@ export class AIManager {
   private loadSettings(): AISettings {
     const white = parseDifficulty(localStorage.getItem(LS_KEYS.white));
     const black = parseDifficulty(localStorage.getItem(LS_KEYS.black));
-    const delay = clamp(parseInt(localStorage.getItem(LS_KEYS.delay) || "450", 10) || 450, 0, 3000);
+    const delay = clamp(parseInt(localStorage.getItem(LS_KEYS.delay) || "500", 10) || 500, 200, 5000);
     const paused = localStorage.getItem(LS_KEYS.paused) === "true";
     return { white, black, delayMs: delay, paused };
   }
