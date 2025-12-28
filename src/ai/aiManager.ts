@@ -69,6 +69,27 @@ export class AIManager {
     this.controller.addHistoryChangeCallback(() => this.onHistoryChanged());
   }
 
+  private isBothAI(): boolean {
+    return this.settings.white !== "human" && this.settings.black !== "human";
+  }
+
+  private isFreshGame(): boolean {
+    // Heuristic: `newGame()` clears history and pushes exactly one state.
+    // Avoid auto-pausing on normal moves/undo/redo.
+    try {
+      const h = this.controller.getHistory ? this.controller.getHistory() : null;
+      return Array.isArray(h) && h.length === 1 && !!h[0]?.isCurrent;
+    } catch {
+      return false;
+    }
+  }
+
+  private forcePausedUI(): void {
+    this.settings.paused = true;
+    localStorage.setItem(LS_KEYS.paused, "true");
+    this.refreshUI();
+  }
+
   private ensureWorker(): void {
     if (this.worker) return;
     try {
@@ -173,13 +194,24 @@ export class AIManager {
       });
     }
 
-    this.refreshUI();
+    // When both sides are AI, start in paused mode so the user can Resume/Step.
+    if (this.isBothAI()) {
+      this.forcePausedUI();
+    } else {
+      this.refreshUI();
+    }
 
-    // If the starting side is AI, start immediately.
+    // If the starting side is AI and we're not paused, start immediately.
     this.kick();
   }
 
   onHistoryChanged(): void {
+    // New Game should start paused when both sides are AI.
+    if (this.isBothAI() && this.isFreshGame()) {
+      this.forcePausedUI();
+      return;
+    }
+
     // Turn likely changed; re-evaluate.
     this.kick();
   }
