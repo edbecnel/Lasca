@@ -65,7 +65,7 @@ For detailed rules and strategy tips, see [Help](src/help.html).
 
 #### Move History Display
 
-The Move History section (in the Game Panel) shows each move in algebraic notation:
+The Move History section (in the Info panel, below the Lasca Stack Inspector) shows each move in algebraic notation and auto-scrolls so the latest move stays visible:
 
 - **Quiet moves**: `1. ⚪ r4c2 → r3c3` (start → destination)
 - **Captures**: `1. ⚫ r2c4 × r3c3` (using × symbol)

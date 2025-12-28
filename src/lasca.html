@@ -360,6 +360,7 @@
 
       #zoomBody {
         overflow: auto;
+        max-height: 160px;
         border-radius: 10px;
         background: rgba(0, 0, 0, 0.18);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -987,27 +988,6 @@
               </div>
             </div>
           </div>
-
-          <div class="panelSection" data-section="moveHistory">
-            <div class="sectionHeader" data-toggle="moveHistory">
-              <h3>Move History</h3>
-              <span class="collapseBtn">▼</span>
-            </div>
-            <div class="sectionContent">
-              <div
-                id="moveHistory"
-                style="
-                  max-height: 200px;
-                  overflow-y: auto;
-                  font-size: 12px;
-                  color: rgba(255, 255, 255, 0.7);
-                  line-height: 1.5;
-                "
-              >
-                No moves yet
-              </div>
-            </div>
-          </div>
         </div>
 
         <div
@@ -1202,6 +1182,27 @@
               </div>
               <div id="zoomBody">
                 <!-- Zoom SVG is created dynamically by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="moveHistory">
+            <div class="sectionHeader" data-toggle="moveHistory">
+              <h3>Move History</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                id="moveHistory"
+                style="
+                  max-height: 200px;
+                  overflow-y: auto;
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.7);
+                  line-height: 1.5;
+                "
+              >
+                No moves yet
               </div>
             </div>
           </div>

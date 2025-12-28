@@ -220,6 +220,12 @@ window.addEventListener("DOMContentLoaded", async () => {
           })
           .join("");
       }
+
+      // Keep the latest move visible.
+      // Use rAF so layout reflects the updated HTML before scrolling.
+      requestAnimationFrame(() => {
+        moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
+      });
     }
   };
 
