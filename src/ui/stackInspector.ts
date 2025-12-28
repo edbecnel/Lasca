@@ -1,4 +1,5 @@
 import { MINI_SPINE_MAX_SHOWN, MINI_SPINE_KEEP_BOTTOM, MINI_SPINE_KEEP_TOP } from "../config/constants";
+import { nodeIdToA1 } from "../game/coordFormat";
 import { pieceToHref } from "../pieces/pieceToHref";
 import { makeUse } from "../render/svgUse";
 import type { Stack } from "../types";
@@ -21,7 +22,7 @@ export function createStackInspector(
   function show(nodeId: string, stack: Stack): void {
     const n = stack.length;
 
-    zoomTitle.textContent = `Stack @ ${nodeId} (×${n})`;
+    zoomTitle.textContent = `Stack @ ${nodeIdToA1(nodeId)} (×${n})`;
     zoomHint.textContent = n > MINI_SPINE_MAX_SHOWN
       ? "Full column order (bottom → top). Brackets mark pieces omitted in the mini preview spine."
       : "Full column order (bottom → top).";
