@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
   root: "src",
   server: {
     port: 8080,
-    open: "/lasca.html",
+    open: "/index.html",
   },
   build: {
     outDir: "../dist",
@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => ({
         index: path.resolve(__dirname, "src/index.html"),
         lasca: path.resolve(__dirname, "src/lasca.html"),
         help: path.resolve(__dirname, "src/help.html"),
+        startHelp: path.resolve(__dirname, "src/start-help.html"),
       },
     },
   },

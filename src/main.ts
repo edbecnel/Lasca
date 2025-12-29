@@ -16,6 +16,25 @@ import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
 
+const LS_OPT_KEYS = {
+  moveHints: "lasca.opt.moveHints",
+  animations: "lasca.opt.animations",
+  boardCoords: "lasca.opt.boardCoords",
+  threefold: "lasca.opt.threefold",
+} as const;
+
+function readOptionalBoolPref(key: string): boolean | null {
+  const raw = localStorage.getItem(key);
+  if (raw == null) return null;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return null;
+}
+
+function writeBoolPref(key: string, value: boolean): void {
+  localStorage.setItem(key, value ? "1" : "0");
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
@@ -24,6 +43,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   const svg = await loadSvgFileInto(boardWrap, boardUrl);
 
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
+  const savedBoardCoords = readOptionalBoolPref(LS_OPT_KEYS.boardCoords);
+  if (boardCoordsToggle && savedBoardCoords !== null) {
+    boardCoordsToggle.checked = savedBoardCoords;
+  }
   const applyBoardCoords = () => renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked));
   applyBoardCoords();
 
@@ -79,6 +102,34 @@ window.addEventListener("DOMContentLoaded", async () => {
   const controller = new GameController(svg, piecesLayer, inspector, state, history);
   controller.bind();
 
+  // Apply startup preferences (if present) without changing defaults.
+  const savedMoveHints = readOptionalBoolPref(LS_OPT_KEYS.moveHints);
+  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
+  if (moveHintsToggle && savedMoveHints !== null) {
+    moveHintsToggle.checked = savedMoveHints;
+  }
+  if (moveHintsToggle) {
+    controller.setMoveHints(Boolean(moveHintsToggle.checked));
+  }
+
+  const savedAnimations = readOptionalBoolPref(LS_OPT_KEYS.animations);
+  const animationsToggle = document.getElementById("animationsToggle") as HTMLInputElement | null;
+  if (animationsToggle && savedAnimations !== null) {
+    animationsToggle.checked = savedAnimations;
+  }
+  if (animationsToggle) {
+    controller.setAnimations(Boolean(animationsToggle.checked));
+  }
+
+  const savedThreefold = readOptionalBoolPref(LS_OPT_KEYS.threefold);
+  const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
+  if (threefoldToggle && savedThreefold !== null) {
+    threefoldToggle.checked = savedThreefold;
+  }
+  if (threefoldToggle) {
+    RULES.drawByThreefold = Boolean(threefoldToggle.checked);
+  }
+
   bindEvaluationPanel(controller);
 
   // AI (human vs AI / AI vs AI)
@@ -87,30 +138,33 @@ window.addEventListener("DOMContentLoaded", async () => {
 
 
   // Wire up move hints toggle
-  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
   if (moveHintsToggle) {
     moveHintsToggle.addEventListener("change", () => {
       controller.setMoveHints(moveHintsToggle.checked);
+      writeBoolPref(LS_OPT_KEYS.moveHints, moveHintsToggle.checked);
     });
   }
 
   // Wire up animations toggle
-  const animationsToggle = document.getElementById("animationsToggle") as HTMLInputElement | null;
   if (animationsToggle) {
     animationsToggle.addEventListener("change", () => {
       controller.setAnimations(animationsToggle.checked);
+      writeBoolPref(LS_OPT_KEYS.animations, animationsToggle.checked);
     });
   }
 
   if (boardCoordsToggle) {
-    boardCoordsToggle.addEventListener("change", () => applyBoardCoords());
+    boardCoordsToggle.addEventListener("change", () => {
+      applyBoardCoords();
+      writeBoolPref(LS_OPT_KEYS.boardCoords, boardCoordsToggle.checked);
+    });
   }
 
   // Wire up threefold repetition toggle
-  const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
   if (threefoldToggle) {
     threefoldToggle.addEventListener("change", () => {
       RULES.drawByThreefold = threefoldToggle.checked;
+      writeBoolPref(LS_OPT_KEYS.threefold, threefoldToggle.checked);
     });
   }
 

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Start Page Help</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #e8e6e3;
+        background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        background: rgba(42, 42, 42, 0.95);
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+
+      h1 {
+        color: #fff;
+        font-size: 2.2em;
+        margin-bottom: 10px;
+        border-bottom: 3px solid #4a9eff;
+        padding-bottom: 10px;
+      }
+
+      h2 {
+        color: #4a9eff;
+        font-size: 1.5em;
+        margin-top: 26px;
+        margin-bottom: 12px;
+      }
+
+      p {
+        margin-bottom: 12px;
+        color: #d4d4d4;
+      }
+
+      ul {
+        margin-left: 22px;
+        margin-bottom: 14px;
+      }
+
+      li {
+        margin-bottom: 8px;
+        color: #d4d4d4;
+      }
+
+      .highlight {
+        background: rgba(74, 158, 255, 0.12);
+        padding: 14px;
+        border-left: 4px solid #4a9eff;
+        border-radius: 6px;
+        margin: 14px 0;
+      }
+
+      a {
+        color: #4a9eff;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .links {
+        margin-top: 22px;
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-block;
+        background: rgba(74, 158, 255, 0.18);
+        border: 1px solid rgba(74, 158, 255, 0.35);
+        padding: 10px 14px;
+        border-radius: 10px;
+        color: #e8e6e3;
+      }
+
+      .btn:hover {
+        background: rgba(74, 158, 255, 0.26);
+        text-decoration: none;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        font-size: 0.95em;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 2px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Start Page Help</h1>
+      <p>
+        The start page (<span class="mono">index.html</span>) lets you choose a
+        game variant and configure common options before launching.
+      </p>
+
+      <div class="highlight">
+        <p>
+          Settings chosen here are saved in your browser (localStorage) and will
+          be used when the game page loads.
+        </p>
+      </div>
+
+      <h2>1) Choose game</h2>
+      <ul>
+        <li><b>Lasca</b>: Lasca rules on a 7×7 board (11 pieces per side).</li>
+        <li>
+          <b>Damasca</b>: (when available) Lasca rules on an 8×8 board (12
+          pieces per side).
+        </li>
+      </ul>
+
+      <h2>2) Theme</h2>
+      <p>
+        The theme dropdown selects the same theme options found on the game’s
+        Info panel. Your choice is applied when the board loads.
+      </p>
+
+      <h2>3) Startup options</h2>
+      <p>These match the toggles on the Game panel:</p>
+      <ul>
+        <li>
+          <b>Show move hints</b>: show capture/landing hints on selection.
+        </li>
+        <li><b>Animations</b>: smooth piece movement.</li>
+        <li>
+          <b>Show board coordinates</b>: show row/column labels on the board.
+        </li>
+        <li>
+          <b>Threefold repetition draw</b>: enable/disable draw by repetition.
+        </li>
+      </ul>
+
+      <h2>4) AI options</h2>
+      <p>These match the AI section on the Game panel:</p>
+      <ul>
+        <li>
+          <b>White/Black</b>: set each side to Human / Beginner / Intermediate /
+          Expert.
+        </li>
+        <li><b>Speed</b>: delay between AI moves in milliseconds.</li>
+      </ul>
+
+      <h2>Launch</h2>
+      <p>
+        Click <b>Launch</b> to open the selected game page. If a game variant
+        isn’t available yet, Launch will be disabled.
+      </p>
+
+      <h2>More help</h2>
+      <p>
+        For game rules and gameplay instructions, see the main Lasca help page.
+      </p>
+
+      <div class="links">
+        <a class="btn" href="./index.html">Back to Start</a>
+        <a class="btn" href="./help.html?from=startHelp">Lasca Help & Rules</a>
+      </div>
+    </div>
+  </body>
+</html>

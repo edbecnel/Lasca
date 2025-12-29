@@ -2,24 +2,343 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Lasca</title>
-    <meta http-equiv="refresh" content="0; url=./lasca.html" />
-    <script>
-      window.location.replace("./lasca.html");
-    </script>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Lasca — Start</title>
     <style>
+      :root {
+        --page-bg: #1b1b1b;
+
+        --panel-bg: rgba(255, 255, 255, 0.06);
+        --panel-border: rgba(255, 255, 255, 0.1);
+        --panel-text: rgba(255, 255, 255, 0.9);
+        --panel-subtext: rgba(255, 255, 255, 0.7);
+
+        /* Match Lasca dropdown option styling */
+        --themeMenuBg: rgba(0, 0, 0, 0.88);
+        --themeMenuBorder: rgba(255, 255, 255, 0.18);
+        --themeMenuText: rgba(255, 255, 255, 0.92);
+        --themeMenuHoverBg: rgba(255, 255, 255, 0.1);
+        --themeMenuSelectedBg: rgba(255, 255, 255, 0.16);
+
+        --gutter-w: 8px;
+        --panel-radius: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--page-bg);
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
           sans-serif;
-        padding: 2rem;
+        color: var(--panel-text);
       }
-      a {
-        color: #0b74ff;
+
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 750;
+        letter-spacing: 0.2px;
+      }
+
+      .subtle {
+        margin: 0;
+        color: var(--panel-subtext);
+        font-size: 12px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      @media (min-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .panelSection {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--panel-radius);
+        padding: 12px;
+      }
+
+      .panelSection h2 {
+        margin: 0 0 10px 0;
+        font-size: 12px;
+        font-weight: 800;
+        color: rgba(255, 255, 255, 0.86);
+        letter-spacing: 0.3px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 8px 10px;
+        align-items: center;
+        font-size: 12px;
+      }
+
+      label {
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .panelSelect {
+        width: 100%;
+        min-width: 0;
+        color-scheme: dark;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 6px 9px;
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: normal;
+      }
+
+      .panelSelect:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .panelSelect option,
+      .panelSelect optgroup {
+        background: var(--themeMenuBg);
+        color: var(--themeMenuText);
+        white-space: normal;
+      }
+
+      .panelBtn {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .panelBtn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .panelBtn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .checkRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .checkRow input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      .checkRow label {
+        cursor: pointer;
+        user-select: none;
+        font-size: 13px;
+      }
+
+      .hint {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-top: 6px;
+        margin-left: 24px;
+      }
+
+      .footer {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .warn {
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 12px;
+        margin: 0;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      a.panelBtn {
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
     </style>
+    <script type="module" src="./indexMain.ts"></script>
   </head>
   <body>
-    <p>Redirecting to <a href="./lasca.html">lasca.html</a>…</p>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Choose game & options</h1>
+          <p class="subtle">Configure startup options, then launch.</p>
+        </div>
+        <div class="actions">
+          <a
+            class="panelBtn"
+            href="./start-help.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Help</a
+          >
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="panelSection" aria-label="Game">
+          <h2>Game</h2>
+          <div class="row">
+            <label for="launchGame">Variant</label>
+            <select id="launchGame" class="panelSelect">
+              <option value="lasca">Lasca</option>
+              <option value="damasca">Damasca</option>
+            </select>
+          </div>
+          <p
+            id="launchGameNote"
+            class="hint"
+            style="margin-left: 0; margin-top: 10px"
+          >
+            —
+          </p>
+        </section>
+
+        <section class="panelSection" aria-label="Theme">
+          <h2>Theme</h2>
+          <div class="row">
+            <label for="launchTheme">Theme</label>
+            <select id="launchTheme" class="panelSelect"></select>
+          </div>
+        </section>
+
+        <section class="panelSection" aria-label="Startup options">
+          <h2>Startup options</h2>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchMoveHints" />
+            <label for="launchMoveHints">Show move hints</label>
+          </div>
+          <div class="hint">
+            Red = piece to capture<br />Orange = landing position
+          </div>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchAnimations" checked />
+            <label for="launchAnimations">Animations</label>
+          </div>
+          <div class="hint">Smooth piece movement</div>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchBoardCoords" />
+            <label for="launchBoardCoords">Show board coordinates</label>
+          </div>
+          <div class="hint">Column letters and row numbers</div>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchThreefold" checked />
+            <label for="launchThreefold">Threefold repetition draw</label>
+          </div>
+          <div class="hint">Same position 3× = draw</div>
+        </section>
+
+        <section class="panelSection" aria-label="AI">
+          <h2>AI</h2>
+          <div class="row" style="grid-template-columns: 64px minmax(0, 1fr)">
+            <label for="launchAiWhite">White</label>
+            <select id="launchAiWhite" class="panelSelect">
+              <option value="human">Human</option>
+              <option value="easy">Beginner AI</option>
+              <option value="medium">Intermediate AI</option>
+              <option value="advanced">Expert AI</option>
+            </select>
+
+            <label for="launchAiBlack">Black</label>
+            <select id="launchAiBlack" class="panelSelect">
+              <option value="human">Human</option>
+              <option value="easy">Beginner AI</option>
+              <option value="medium">Intermediate AI</option>
+              <option value="advanced">Expert AI</option>
+            </select>
+
+            <label for="launchAiDelay">Speed</label>
+            <div style="display: flex; gap: 6px; align-items: center">
+              <input
+                id="launchAiDelay"
+                type="range"
+                min="100"
+                max="3000"
+                step="100"
+                value="500"
+                style="flex: 0 1 140px; width: 140px"
+              />
+              <button id="launchAiDelayReset" class="panelBtn" type="button">
+                ↺
+              </button>
+              <div
+                id="launchAiDelayLabel"
+                style="
+                  min-width: 52px;
+                  text-align: left;
+                  font-variant-numeric: tabular-nums;
+                "
+              >
+                500 ms
+              </div>
+            </div>
+          </div>
+          <div class="hint" style="margin-left: 0">
+            Set a side to AI to auto-play that color.
+          </div>
+        </section>
+      </div>
+
+      <div class="footer">
+        <p id="launchWarning" class="warn">—</p>
+        <div class="actions">
+          <button id="launchBtn" class="panelBtn" type="button">Launch</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

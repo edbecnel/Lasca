@@ -569,6 +569,21 @@
       </p>
 
       <a href="lasca.html" class="back-link">← Back to Game</a>
+      <script>
+        (function () {
+          try {
+            var params = new URLSearchParams(window.location.search);
+            if (params.get("from") !== "startHelp") return;
+
+            var a = document.querySelector("a.back-link");
+            if (!a) return;
+            a.setAttribute("href", "./start-help.html");
+            a.textContent = "\u2190 Back to Start Page Help";
+          } catch (e) {
+            // ignore
+          }
+        })();
+      </script>
     </div>
   </body>
 </html>

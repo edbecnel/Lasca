@@ -24,14 +24,16 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 - 💾 Export move history to JSON format
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
+- 🧭 Start Page launcher to configure options before playing
 
 ## How to Play
 
 ### Starting the Game
 
-1. Open `src/lasca.html` in a browser (or run the dev server with `npm start`)
-2. White moves first from the bottom of the board
-3. Click a piece to select it, then click a valid destination to move
+1. Run the dev server with `npm start` (it opens the Start Page at `src/index.html`)
+2. Choose options (theme, startup toggles, AI), then click **Launch**
+3. White moves first from the bottom of the board
+4. Click a piece to select it, then click a valid destination to move
 
 ### Basic Rules
 
@@ -50,6 +52,8 @@ You win when your opponent has:
 - No legal moves available
 
 For detailed rules and strategy tips, see [Help](src/help.html).
+
+If you want help using the Start Page itself (launcher UI), see [Start Page Help](src/start-help.html).
 
 ### AI and Evaluation
 
@@ -224,10 +228,13 @@ MIT
 - Improved save/load behavior to reset game state properly
 - Enhanced deployment configuration for GitHub Pages
 - Fixed Help link to open in new tab (preserves game state)
+- Added a **Start Page** launcher (`src/index.html`) for configuring theme / options / AI before launching
+- Added **Start Page Help** (`src/start-help.html`) and context-aware navigation between help pages
 
 For example: Change --themeMenuBg to try different backgrounds.
 
 ## Notes
 
-- The entry HTML is `src/lasca.html`, which loads `src/main.ts`.
+- The default entry HTML is `src/index.html` (Start Page), which loads `src/indexMain.ts`.
+- The Lasca game page is `src/lasca.html`, which loads `src/main.ts`.
 - If you prefer, you can also open `src/lasca.html` directly in a browser, but using a local server avoids potential file URL quirks.
