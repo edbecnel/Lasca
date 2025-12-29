@@ -35,6 +35,8 @@ Lasca is a two-player checkers variant played on a 7×7 board with unique stacki
 3. White moves first from the bottom of the board
 4. Click a piece to select it, then click a valid destination to move
 
+Alternatively, you can open `src/lasca.html` directly to jump straight into the game.
+
 ### Basic Rules
 
 - **Movement**: Soldiers move forward diagonally one square. Officers move diagonally in any direction.
