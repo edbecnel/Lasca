@@ -19,10 +19,12 @@ export function promoteIfNeeded(state: GameState, nodeId: string): boolean {
 
   const { r } = parseNodeId(nodeId);
 
-  // Black promotes at row 6 (bottom row)
-  // White promotes at row 0 (top row)
+  const boardSize = state.meta?.boardSize ?? 7;
+  const lastRow = boardSize - 1;
+
+  // Black promotes at the bottom row; White promotes at the top row.
   let shouldPromote = false;
-  if (top.owner === "B" && r === 6) {
+  if (top.owner === "B" && r === lastRow) {
     shouldPromote = true;
   } else if (top.owner === "W" && r === 0) {
     shouldPromote = true;

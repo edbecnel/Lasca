@@ -37,7 +37,7 @@ export function applyMove(state: GameState, move: Move): GameState & { didPromot
     const didPromote = promoteIfNeeded(tempState, move.to);
 
     // For captures, don't switch turn yet - let controller handle it based on capture chaining
-    return { board: nextBoard, toMove: state.toMove, phase: "idle", didPromote };
+    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", didPromote };
   }
 
   const nextBoard = new Map(state.board);
@@ -54,5 +54,5 @@ export function applyMove(state: GameState, move: Move): GameState & { didPromot
   const didPromote = promoteIfNeeded(tempState, move.to);
 
   const nextToMove = state.toMove === "B" ? "W" : "B";
-  return { board: nextBoard, toMove: nextToMove, phase: "idle", didPromote };
+  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote };
 }

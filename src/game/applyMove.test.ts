@@ -22,6 +22,18 @@ describe("applyMove (quiet)", () => {
     expect(next.phase).toBe("idle");
   });
 
+  it("preserves meta (boardSize) across moves", () => {
+    const state: GameState = {
+      board: new Map([["r6c0", [{ owner: "B", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+      meta: { variantId: "lasca_8_dama_board", rulesetId: "lasca", boardSize: 8 },
+    };
+
+    const next = applyMove(state, { kind: "move", from: "r6c0", to: "r7c1" });
+    expect(next.meta?.boardSize).toBe(8);
+  });
+
   it("applies a single capture: move stack, take top enemy, captured goes to bottom (no turn switch)", () => {
     const state: GameState = {
       board: new Map([

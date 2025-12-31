@@ -13,10 +13,10 @@ export function makeNodeId(r: number, c: number): NodeId {
   return `r${r}c${c}`;
 }
 
-export function inBounds(r: number, c: number): boolean {
-  return r >= 0 && r <= 6 && c >= 0 && c <= 6;
+export function inBounds(r: number, c: number, boardSize: 7 | 8 = 7): boolean {
+  return r >= 0 && r < boardSize && c >= 0 && c < boardSize;
 }
 
-export function isPlayable(r: number, c: number): boolean {
-  return inBounds(r, c) && (r + c) % 2 === 0;
+export function isPlayable(r: number, c: number, boardSize: 7 | 8 = 7): boolean {
+  return inBounds(r, c, boardSize) && (r + c) % 2 === 0;
 }

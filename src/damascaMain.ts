@@ -56,7 +56,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (boardCoordsToggle && savedBoardCoords !== null) {
     boardCoordsToggle.checked = savedBoardCoords;
   }
-  const applyBoardCoords = () => renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked));
+  const applyBoardCoords = () =>
+    renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked), activeVariant.boardSize);
   applyBoardCoords();
 
   const zoomTitle = document.getElementById("zoomTitle") as HTMLElement | null;

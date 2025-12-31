@@ -1,7 +1,5 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-const BOARD_SIZE = 7;
-
 function ensureBoardCoordsLayer(svg: SVGSVGElement): SVGGElement {
   const existing = svg.querySelector("#boardCoords") as SVGGElement | null;
   if (existing) return existing;
@@ -31,16 +29,16 @@ function readCircle(svg: SVGSVGElement, id: string): { cx: number; cy: number } 
   return { cx, cy };
 }
 
-function findAnyColX(svg: SVGSVGElement, col: number): number | null {
-  for (let row = 0; row < BOARD_SIZE; row++) {
+function findAnyColX(svg: SVGSVGElement, boardSize: number, col: number): number | null {
+  for (let row = 0; row < boardSize; row++) {
     const p = readCircle(svg, `r${row}c${col}`);
     if (p) return p.cx;
   }
   return null;
 }
 
-function findAnyRowY(svg: SVGSVGElement, row: number): number | null {
-  for (let col = 0; col < BOARD_SIZE; col++) {
+function findAnyRowY(svg: SVGSVGElement, boardSize: number, row: number): number | null {
+  for (let col = 0; col < boardSize; col++) {
     const p = readCircle(svg, `r${row}c${col}`);
     if (p) return p.cy;
   }
@@ -51,7 +49,7 @@ function clearLayer(layer: SVGGElement): void {
   while (layer.firstChild) layer.removeChild(layer.firstChild);
 }
 
-export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean): void {
+export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSize: 7 | 8 = 7): void {
   const layer = ensureBoardCoordsLayer(svg);
   if (!enabled) {
     clearLayer(layer);
@@ -66,8 +64,8 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean): void {
   const stepY = p00 && p20 ? Math.abs(p20.cy - p00.cy) / 2 : 120;
   const step = Math.min(stepX, stepY);
 
-  const minX = findAnyColX(svg, 0) ?? 140;
-  const maxY = findAnyRowY(svg, BOARD_SIZE - 1) ?? 860;
+  const minX = findAnyColX(svg, boardSize, 0) ?? 140;
+  const maxY = findAnyRowY(svg, boardSize, boardSize - 1) ?? 860;
 
   // Place column labels below the bottom-row node circles.
   // Clamp so we don't render past the 1000×1000 viewBox.
@@ -78,9 +76,9 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean): void {
 
   clearLayer(layer);
 
-  // Column labels: A..G
-  for (let col = 0; col < BOARD_SIZE; col++) {
-    const x = findAnyColX(svg, col);
+  // Column labels: A..(A+boardSize-1)
+  for (let col = 0; col < boardSize; col++) {
+    const x = findAnyColX(svg, boardSize, col);
     if (x == null) continue;
 
     const t = document.createElementNS(SVG_NS, "text") as SVGTextElement;
@@ -98,13 +96,13 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean): void {
     layer.appendChild(t);
   }
 
-  // Row labels: 7..1 (since 1 starts at bottom)
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    const y = findAnyRowY(svg, row);
+  // Row labels: boardSize..1 (since 1 starts at bottom)
+  for (let row = 0; row < boardSize; row++) {
+    const y = findAnyRowY(svg, boardSize, row);
     if (y == null) continue;
 
     const t = document.createElementNS(SVG_NS, "text") as SVGTextElement;
-    t.textContent = String(BOARD_SIZE - row);
+    t.textContent = String(boardSize - row);
     t.setAttribute("x", String(rowLabelX));
     t.setAttribute("y", String(y));
     t.setAttribute("text-anchor", "middle");

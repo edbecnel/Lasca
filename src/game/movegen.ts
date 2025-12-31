@@ -5,6 +5,7 @@ import type { NodeId } from "./state.ts";
 
 export function generateCaptureMoves(state: GameState, excludedJumpSquares?: Set<NodeId>): CaptureMove[] {
   const captures: CaptureMove[] = [];
+  const boardSize = state.meta?.boardSize ?? 7;
 
   const isEmpty = (id: string) => !state.board.has(id) || (state.board.get(id) ?? []).length === 0;
   const isEnemyTopAt = (id: string) => {
@@ -47,8 +48,8 @@ export function generateCaptureMoves(state: GameState, excludedJumpSquares?: Set
       const toR = r + dr;
       const toC = c + dc;
 
-      if (!inBounds(overR, overC) || !inBounds(toR, toC)) continue;
-      if (!isPlayable(toR, toC)) continue; // landing must be on playable square
+      if (!inBounds(overR, overC, boardSize) || !inBounds(toR, toC, boardSize)) continue;
+      if (!isPlayable(toR, toC, boardSize)) continue; // landing must be on playable square
 
       const overId = makeNodeId(overR, overC);
       const toId = makeNodeId(toR, toC);
@@ -71,6 +72,7 @@ export function generateLegalMoves(state: GameState, excludedJumpSquares?: Set<N
   if (captures.length > 0) return captures; // mandatory capture
 
   const moves: Move[] = [];
+  const boardSize = state.meta?.boardSize ?? 7;
 
   const isEmpty = (id: string) => !state.board.has(id) || (state.board.get(id) ?? []).length === 0;
 
@@ -89,7 +91,7 @@ export function generateLegalMoves(state: GameState, excludedJumpSquares?: Set<N
       for (const dc of [-1, +1]) {
         const nr = r + dr;
         const nc = c + dc;
-        if (inBounds(nr, nc) && isPlayable(nr, nc)) {
+        if (inBounds(nr, nc, boardSize) && isPlayable(nr, nc, boardSize)) {
           const to = makeNodeId(nr, nc);
           if (isEmpty(to)) candidates.push(to);
         }
@@ -105,7 +107,7 @@ export function generateLegalMoves(state: GameState, excludedJumpSquares?: Set<N
       for (const { dr, dc } of deltas) {
         const nr = r + dr;
         const nc = c + dc;
-        if (inBounds(nr, nc) && isPlayable(nr, nc)) {
+        if (inBounds(nr, nc, boardSize) && isPlayable(nr, nc, boardSize)) {
           const to = makeNodeId(nr, nc);
           if (isEmpty(to)) candidates.push(to);
         }

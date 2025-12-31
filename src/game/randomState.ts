@@ -1,6 +1,6 @@
 import type { GameState } from "./state.ts";
 import type { Player, Stack } from "../types";
-import { ALL_NODES } from "./board.ts";
+import { getAllNodes } from "./board.ts";
 import { parseNodeId } from "./coords.ts";
 
 function shuffle<T>(arr: T[]): T[] {
@@ -15,11 +15,18 @@ function shuffle<T>(arr: T[]): T[] {
 export type RandomStateOptions = {
   totalPerSide?: number; // default: 11
   toMove?: Player;       // default: "B"
+  boardSize?: 7 | 8;     // default: 7
   ranks?: { B?: ("S"|"O")[], W?: ("S"|"O")[] }; // optional ranks per side; default all "S"
 };
 
 export function createRandomGameState(opts: RandomStateOptions = {}): GameState {
-  const totalPerSide = Math.min(Math.max(opts.totalPerSide ?? 11, 1), Math.floor(ALL_NODES.length / 2));
+  const boardSize = opts.boardSize ?? 7;
+  const allNodes = getAllNodes(boardSize);
+
+  const totalPerSide = Math.min(
+    Math.max(opts.totalPerSide ?? 11, 1),
+    Math.floor(allNodes.length / 2),
+  );
   const toMove = opts.toMove ?? "B";
 
   const bRanks = opts.ranks?.B ?? Array(totalPerSide).fill("S");
@@ -28,18 +35,18 @@ export function createRandomGameState(opts: RandomStateOptions = {}): GameState 
   // Filter nodes for placement:
   // Black soldiers can't be on row 6 (their promotion row)
   // White soldiers can't be on row 0 (their promotion row)
-  const blackSoldierNodes = ALL_NODES.filter(n => {
+  const blackSoldierNodes = allNodes.filter(n => {
     const { r } = parseNodeId(n);
-    return r !== 6; // Black can't have soldiers on row 6
+    return r !== boardSize - 1; // can't place on promotion row
   });
-  const whiteSoldierNodes = ALL_NODES.filter(n => {
+  const whiteSoldierNodes = allNodes.filter(n => {
     const { r } = parseNodeId(n);
     return r !== 0; // White can't have soldiers on row 0
   });
 
   const shuffledBlackSoldiers = shuffle(blackSoldierNodes);
   const shuffledWhiteSoldiers = shuffle(whiteSoldierNodes);
-  const allNodesShuffled = shuffle(ALL_NODES);
+  const allNodesShuffled = shuffle(allNodes);
 
   const board = new Map<string, Stack>();
 
@@ -82,5 +89,14 @@ export function createRandomGameState(opts: RandomStateOptions = {}): GameState 
     }
   }
 
-  return { board, toMove, phase: "idle" };
+  return {
+    board,
+    toMove,
+    phase: "idle",
+    meta: {
+      variantId: boardSize === 8 ? "lasca_8_dama_board" : "lasca_7_classic",
+      rulesetId: "lasca",
+      boardSize,
+    },
+  };
 }

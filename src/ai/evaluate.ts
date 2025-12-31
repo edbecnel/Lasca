@@ -13,11 +13,11 @@ function depthDiscount(depthFromTop: number): number {
 }
 
 // Center squares are more valuable for control
-function centerBonus(nodeId: string): number {
+function centerBonus(nodeId: string, boardSize: number): number {
   const { r, c } = parseNodeId(nodeId);
-  // Center rows (2-4) and center columns are better
-  const rowBonus = r >= 2 && r <= 4 ? 10 : 0;
-  const colBonus = c >= 1 && c <= 5 ? 5 : 0;
+  // Keep the same behavior for 7×7, and scale to 8×8 with a slightly larger center.
+  const rowBonus = r >= 2 && r <= boardSize - 3 ? 10 : 0;
+  const colBonus = c >= 1 && c <= boardSize - 2 ? 5 : 0;
   return rowBonus + colBonus;
 }
 
@@ -25,24 +25,35 @@ function centerBonus(nodeId: string): number {
 function advancementBonus(nodeId: string, piece: Piece): number {
   if (piece.rank === "O") return 0; // Officers don't need advancement bonus
   const { r } = parseNodeId(nodeId);
+  const lastRow = 6;
   
   if (piece.owner === "B") {
-    // Black advances toward row 6
-    return r * 6; // 0-36 bonus based on row
+    // Black advances toward the bottom row
+    return r * 6;
   } else {
     // White advances toward row 0
-    return (6 - r) * 6;
+    return (lastRow - r) * 6;
   }
+}
+
+function advancementBonusForBoard(nodeId: string, piece: Piece, boardSize: number): number {
+  if (piece.rank === "O") return 0;
+  const { r } = parseNodeId(nodeId);
+  const lastRow = boardSize - 1;
+  if (piece.owner === "B") return r * 6;
+  return (lastRow - r) * 6;
 }
 
 function promotionBonus(state: GameState, nodeId: string, top: Piece, perspective: Player): number {
   if (top.owner !== perspective) return 0;
   if (top.rank !== "S") return 0;
   const { r } = parseNodeId(nodeId);
+  const boardSize = state.meta?.boardSize ?? 7;
+  const lastRow = boardSize - 1;
   // Black promotes at r=6; White promotes at r=0.
   if (top.owner === "B") {
     // Closer to row 6 is better.
-    const dist = 6 - r; // 1 means next move to promote.
+    const dist = lastRow - r; // 1 means next move to promote.
     if (dist <= 0) return 0;
     if (dist === 1) return 40;
     if (dist === 2) return 20;
@@ -59,12 +70,12 @@ function promotionBonus(state: GameState, nodeId: string, top: Piece, perspectiv
 }
 
 // Back rank protection bonus - pieces on back rank are safer
-function backRankBonus(nodeId: string, piece: Piece): number {
+function backRankBonus(nodeId: string, piece: Piece, boardSize: number): number {
   if (piece.rank === "O") return 0; // Officers can move backwards
   const { r } = parseNodeId(nodeId);
   
   if (piece.owner === "B" && r === 0) return 8; // Black's back rank
-  if (piece.owner === "W" && r === 6) return 8; // White's back rank
+  if (piece.owner === "W" && r === boardSize - 1) return 8; // White's back rank
   return 0;
 }
 
@@ -73,6 +84,7 @@ export function evaluateState(state: GameState, perspective: Player): number {
   let score = 0;
   let ownStacks = 0;
   let oppStacks = 0;
+  const boardSize = state.meta?.boardSize ?? 7;
 
   // Material (with depth discount) + control bonus + positional factors.
   for (const [nodeId, stack] of state.board.entries()) {
@@ -84,7 +96,7 @@ export function evaluateState(state: GameState, perspective: Player): number {
     if (top.owner === perspective) {
       ownStacks++;
       score += 35 + 15 * Math.max(0, height - 1);
-      score += centerBonus(nodeId);
+      score += centerBonus(nodeId, boardSize);
       
       // Prisoner value - pieces we've captured under our stack
       for (let i = 0; i < stack.length - 1; i++) {
@@ -95,7 +107,7 @@ export function evaluateState(state: GameState, perspective: Player): number {
     } else {
       oppStacks++;
       score -= 35 + 15 * Math.max(0, height - 1);
-      score -= centerBonus(nodeId);
+      score -= centerBonus(nodeId, boardSize);
       
       // Opponent's prisoners
       for (let i = 0; i < stack.length - 1; i++) {
@@ -110,8 +122,8 @@ export function evaluateState(state: GameState, perspective: Player): number {
       const piece = stack[stack.length - 1 - i]; // from top down
       const sgn = piece.owner === perspective ? 1 : -1;
       const baseVal = pieceBaseValue(piece) * depthDiscount(i);
-      const advBonus = i === 0 ? advancementBonus(nodeId, piece) : 0;
-      const backBonus = i === 0 ? backRankBonus(nodeId, piece) : 0;
+      const advBonus = i === 0 ? advancementBonusForBoard(nodeId, piece, boardSize) : 0;
+      const backBonus = i === 0 ? backRankBonus(nodeId, piece, boardSize) : 0;
       score += sgn * (baseVal + advBonus + backBonus);
     }
 

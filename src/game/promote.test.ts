@@ -115,4 +115,30 @@ describe("promoteIfNeeded", () => {
     expect(stack![0].rank).toBe("S"); // bottom unchanged
     expect(stack![1].rank).toBe("O"); // top promoted
   });
+
+  it("promotes Black on row 7 for 8×8", () => {
+    const state: GameState = {
+      board: new Map([["r7c1", [{ owner: "B", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+      meta: { variantId: "lasca_8_dama_board", rulesetId: "lasca", boardSize: 8 },
+    };
+
+    const didPromote = promoteIfNeeded(state, "r7c1");
+    expect(didPromote).toBe(true);
+    expect(state.board.get("r7c1")![0].rank).toBe("O");
+  });
+
+  it("does not promote Black on row 6 for 8×8", () => {
+    const state: GameState = {
+      board: new Map([["r6c0", [{ owner: "B", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+      meta: { variantId: "lasca_8_dama_board", rulesetId: "lasca", boardSize: 8 },
+    };
+
+    const didPromote = promoteIfNeeded(state, "r6c0");
+    expect(didPromote).toBe(false);
+    expect(state.board.get("r6c0")![0].rank).toBe("S");
+  });
 });
