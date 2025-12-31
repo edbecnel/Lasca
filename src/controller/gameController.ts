@@ -565,7 +565,8 @@ export class GameController {
         
         // Record state in history at turn boundary
         const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+        const boardSize = this.state.meta?.boardSize ?? 7;
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
         this.history.push(this.state, notation);
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
@@ -614,7 +615,8 @@ export class GameController {
       
       // Record state in history at turn boundary
       const separator = this.currentTurnHasCapture ? " × " : " → ";
-      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+      const boardSize = this.state.meta?.boardSize ?? 7;
+      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
       this.history.push(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
@@ -648,7 +650,8 @@ export class GameController {
       
       // Record state in history at turn boundary
       const separator = this.currentTurnHasCapture ? " × " : " → ";
-      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id)).join(separator);
+      const boardSize = this.state.meta?.boardSize ?? 7;
+      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
       this.history.push(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
