@@ -615,6 +615,13 @@ export class GameController {
         }
         // Switch turn now
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+
+        // In Dama end-of-sequence capture mode, finalizeDamaCaptureChain may remove jumped pieces
+        // (and/or promote). We already rendered after applyMove, so re-render now to reflect finalization.
+        if (isDama && damaCaptureRemoval === "end_of_sequence") {
+          renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+        }
+
         this.lockedCaptureFrom = null;
         this.jumpedSquares.clear();
         this.clearSelection();
@@ -668,6 +675,11 @@ export class GameController {
         this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
       }
       this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+
+      if (isDama && damaCaptureRemoval === "end_of_sequence") {
+        renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      }
+
       this.lockedCaptureFrom = null;
       this.jumpedSquares.clear();
       this.clearSelection();

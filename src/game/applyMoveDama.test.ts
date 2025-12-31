@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { applyMove } from "./applyMove.ts";
 import type { GameState } from "./state.ts";
+import { finalizeDamaCaptureChain } from "./damaCaptureChain.ts";
 
 function mkDamaState(boardEntries: Array<[string, any]>, toMove: "B" | "W" = "B"): GameState {
   return {
@@ -36,5 +37,28 @@ describe("applyMoveDama", () => {
     expect(next.toMove).toBe("W");
     expect(Boolean((next as any).didPromote)).toBe(true);
     expect(next.board.get("r7c1")?.[0]).toEqual({ owner: "B", rank: "O" });
+  });
+
+  it("end_of_sequence: jumped piece removed only after chain finalizes", () => {
+    const s: GameState = {
+      board: new Map([
+        ["r2c2", [{ owner: "W", rank: "S" }]],
+        ["r3c3", [{ owner: "B", rank: "S" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+      meta: {
+        variantId: "dama_8_classic_international",
+        rulesetId: "dama",
+        boardSize: 8,
+        damaCaptureRemoval: "end_of_sequence",
+      },
+    };
+
+    const after = applyMove(s, { kind: "capture", from: "r2c2", over: "r3c3", to: "r4c4" });
+    expect(after.board.has("r3c3")).toBe(true);
+
+    const finalized = finalizeDamaCaptureChain(after, "r4c4", new Set(["r3c3"]));
+    expect(finalized.board.has("r3c3")).toBe(false);
   });
 });
