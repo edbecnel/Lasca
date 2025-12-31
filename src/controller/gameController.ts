@@ -13,6 +13,8 @@ import { animateStack } from "../render/animateMove.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 
+export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame";
+
 export class GameController {
   private svg: SVGSVGElement;
   private piecesLayer: SVGGElement;
@@ -31,11 +33,37 @@ export class GameController {
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
   private history: HistoryManager;
-  private historyListeners: Array<() => void> = [];
+  private historyListeners: Array<(reason: HistoryChangeReason) => void> = [];
   private inputEnabled: boolean = true;
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
   private repetitionCounts: Map<string, number> = new Map();
+
+  private drawPendingDamaCapturedMarks(): void {
+    const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+    if (rulesetId !== "dama") return;
+    if (this.jumpedSquares.size === 0) return;
+
+    const mode = getDamaCaptureRemovalMode(this.state);
+    if (mode !== "end_of_sequence") return;
+
+    for (const over of this.jumpedSquares) {
+      // Mark pieces that have been captured but remain on-board until end-of-sequence.
+      drawHighlightRing(this.overlayLayer, over, "#ff6b6b", 5);
+    }
+  }
+
+  private clearSelectionForInputLock(): void {
+    // Clear only the *interactive* selection/targets.
+    // Do NOT clear capture-chain constraints like `lockedCaptureFrom`/`jumpedSquares`,
+    // otherwise the same piece can become capturable again during a chain.
+    this.selected = null;
+    this.currentTargets = [];
+    this.currentMoves = [];
+    clearOverlays(this.overlayLayer);
+    this.drawPendingDamaCapturedMarks();
+    this.updatePanel();
+  }
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
     this.svg = svg;
@@ -67,11 +95,11 @@ export class GameController {
     this.animationsEnabled = enabled;
   }
 
-  setHistoryChangeCallback(callback: () => void): void {
+  setHistoryChangeCallback(callback: (reason: HistoryChangeReason) => void): void {
     this.historyListeners = [callback];
   }
 
-  addHistoryChangeCallback(callback: () => void): void {
+  addHistoryChangeCallback(callback: (reason: HistoryChangeReason) => void): void {
     this.historyListeners.push(callback);
   }
 
@@ -87,10 +115,10 @@ export class GameController {
     return false;
   }
 
-  private fireHistoryChange(): void {
+  private fireHistoryChange(reason: HistoryChangeReason): void {
     for (const cb of this.historyListeners) {
       try {
-        cb();
+        cb(reason);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[controller] history listener error", err);
@@ -106,7 +134,7 @@ export class GameController {
     this.inputEnabled = enabled;
     if (!enabled) {
       // Avoid leaving stale selection overlays when AI is running.
-      this.clearSelection();
+      this.clearSelectionForInputLock();
     }
   }
 
@@ -123,9 +151,7 @@ export class GameController {
     const constraints = this.lockedCaptureFrom
       ? {
           forcedFrom: this.lockedCaptureFrom,
-          ...(rulesetId === "dama" && captureRemoval === "immediate"
-            ? {}
-            : { excludedJumpSquares: this.jumpedSquares }),
+          ...(rulesetId === "dama" ? { excludedJumpSquares: this.jumpedSquares } : {}),
         }
       : undefined;
     const allLegal = generateLegalMoves(this.state, constraints);
@@ -181,7 +207,7 @@ export class GameController {
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
-      this.fireHistoryChange();
+      this.fireHistoryChange("undo");
     }
   }
 
@@ -212,7 +238,7 @@ export class GameController {
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
-      this.fireHistoryChange();
+      this.fireHistoryChange("redo");
     }
   }
 
@@ -313,7 +339,7 @@ export class GameController {
     this.updatePanel();
     
     // Notify history change
-    this.fireHistoryChange();
+    this.fireHistoryChange("newGame");
   }
 
   loadGame(
@@ -351,7 +377,7 @@ export class GameController {
     this.checkAndHandleCurrentPlayerLost();
     
     // Notify history change
-    this.fireHistoryChange();
+    this.fireHistoryChange("loadGame");
   }
 
   private updatePanel(): void {
@@ -494,6 +520,10 @@ export class GameController {
     this.currentMoves = movesForNode;
     this.currentTargets = this.currentMoves.map(m => m.to);
     drawTargets(this.overlayLayer, this.currentTargets);
+
+    // Dama International (end-of-sequence capture removal): visually mark already-captured pieces
+    // that are pending removal so the player understands they cannot be jumped again.
+    this.drawPendingDamaCapturedMarks();
     
     // Draw move hints if enabled
     if (this.moveHintsEnabled) {
@@ -602,7 +632,7 @@ export class GameController {
       // Check if there are more captures available from the destination
       const allCaptures = generateLegalMoves(this.state, {
         forcedFrom: move.to,
-        ...(isDama && damaCaptureRemoval === "immediate" ? {} : { excludedJumpSquares: this.jumpedSquares }),
+        ...(isDama ? { excludedJumpSquares: this.jumpedSquares } : {}),
       }).filter((m) => m.kind === "capture");
       const moreCapturesFromDest = allCaptures;
       
@@ -633,7 +663,7 @@ export class GameController {
         this.history.push(this.state, notation);
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
-        this.fireHistoryChange();
+        this.fireHistoryChange("move");
         
         // Check for threefold repetition draw
         if (this.recordRepetitionForCurrentState()) {
@@ -691,7 +721,7 @@ export class GameController {
       this.history.push(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
-      this.fireHistoryChange();
+      this.fireHistoryChange("move");
       
       // Check for threefold repetition draw
       if (this.recordRepetitionForCurrentState()) {
@@ -726,7 +756,7 @@ export class GameController {
       this.history.push(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
-      this.fireHistoryChange();
+      this.fireHistoryChange("move");
       
       // Check for threefold repetition draw
       if (this.recordRepetitionForCurrentState()) {

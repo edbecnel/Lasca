@@ -159,4 +159,35 @@ describe("movegen Dama (Phase 4)", () => {
     }).filter((m: any) => m.kind === "capture");
     expect(nextCapsEnd.some((m: any) => m.over === "r5c5")).toBe(false);
   });
+
+  it("end_of_sequence: cannot jump the same captured piece twice", () => {
+    // Simple recapture-back scenario:
+    // Black man captures white at r3c3 from r2c2 to r4c4.
+    // In end_of_sequence, r3c3 remains on the board visually, but it must not be capturable again.
+    const before: any = mkDamaState(
+      [
+        ["r2c2", [{ owner: "B", rank: "S" }]],
+        ["r3c3", [{ owner: "W", rank: "S" }]],
+      ],
+      "B"
+    );
+    before.meta = {
+      variantId: "dama_8_classic_international",
+      rulesetId: "dama",
+      boardSize: 8,
+      damaCaptureRemoval: "end_of_sequence",
+    };
+
+    const first: any = { kind: "capture", from: "r2c2", over: "r3c3", to: "r4c4" };
+    const after = applyMove(before, first);
+    expect(after.board.has("r3c3")).toBe(true);
+
+    const cont = generateLegalMoves(after, {
+      forcedFrom: "r4c4",
+      excludedJumpSquares: new Set(["r3c3"]),
+    }).filter((m: any) => m.kind === "capture");
+
+    // The only geometric capture would be jumping back over r3c3 to r2c2, which is illegal.
+    expect(cont.some((m: any) => m.over === "r3c3")).toBe(false);
+  });
 });

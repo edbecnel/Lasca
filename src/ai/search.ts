@@ -31,7 +31,9 @@ function cloneStateForSearch(state: GameState): GameState {
       stack.map((p) => ({ owner: p.owner, rank: p.rank }))
     );
   }
-  return { board, toMove: state.toMove, phase: state.phase };
+  // Preserve meta so movegen/applyMove/eval follow the correct ruleset.
+  // Without this, Dama positions get treated like Lasca during search.
+  return { board, toMove: state.toMove, phase: state.phase, meta: state.meta ? { ...state.meta } : undefined };
 }
 
 function hasControlledStacks(state: GameState, p: Player): boolean {
@@ -45,11 +47,10 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
   const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
-  const damaRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(ctx.state) : null;
   const constraints = ctx.lockedFrom
     ? {
         forcedFrom: ctx.lockedFrom,
-        ...(rulesetId === "dama" && damaRemoval === "immediate" ? {} : { excludedJumpSquares: ctx.excludedJumpSquares }),
+        ...(rulesetId === "dama" ? { excludedJumpSquares: ctx.excludedJumpSquares } : {}),
       }
     : undefined;
   const all = generateLegalMoves(ctx.state, constraints);
@@ -124,7 +125,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Check for more captures from the landing square.
   const allNext = generateLegalMoves(nextCtx.state, {
     forcedFrom: move.to,
-    ...(isDama && damaRemoval === "immediate" ? {} : { excludedJumpSquares: nextCtx.excludedJumpSquares }),
+    ...(isDama ? { excludedJumpSquares: nextCtx.excludedJumpSquares } : {}),
   });
   const moreFromDest = allNext.filter((m) => m.kind === "capture");
 
@@ -340,6 +341,8 @@ export function chooseSearchMove(
     return { score: 0, bestMove: null, nodes: 0, depthReached: 0 };
   }
 
+  const rootOrdered = orderMoves(ctx, moves, perspective);
+
   let bestMove: Move | null = null;
   let bestScore = -INF;
   let depthReached = 0;
@@ -353,7 +356,7 @@ export function chooseSearchMove(
     let localBestMove: Move | null = null;
     let localBestScore = -INF;
 
-    const ordered = orderMoves(ctx, moves, perspective);
+    const ordered = rootOrdered;
 
     for (const m of ordered) {
       const child = applySearchMove(ctx, m);
@@ -383,7 +386,7 @@ export function chooseSearchMove(
 
   // Safety: if search didn't find a move but moves exist, pick first one
   if (bestMove === null && moves.length > 0) {
-    bestMove = moves[0];
+    bestMove = rootOrdered[0] ?? moves[0];
   }
 
   return { score: bestScore, bestMove, nodes, depthReached };
@@ -416,10 +419,15 @@ export function chooseMoveByDifficulty(
     const res = chooseSearchMove(ctx, perspective, 3, 150);
     const ms = Math.round(performance.now() - start);
     
-    // Add some randomness: occasionally pick a suboptimal move
+    // Add some randomness: occasionally pick a suboptimal move,
+    // but keep it among the better candidates (avoid obvious blunders).
     if (Math.random() < 0.15 && legalMoves.length > 1) {
-      const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-      return { move: randomMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
+      const scored = legalMoves
+        .map((m) => ({ m, s: greedyScore(ctx, m, perspective) }))
+        .sort((a, b) => b.s - a.s);
+      const pool = scored.slice(0, Math.min(3, scored.length)).map((x) => x.m);
+      const randomMove = pool[Math.floor(Math.random() * pool.length)];
+      return { move: randomMove ?? scored[0]!.m, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
     }
     
     return ensureMove({ move: res.bestMove, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any });

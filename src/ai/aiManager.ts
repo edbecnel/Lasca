@@ -2,6 +2,7 @@ import type { Move } from "../game/moveTypes.ts";
 import { serializeGameState } from "../game/saveLoad.ts";
 import type { Player } from "../types.ts";
 import type { GameController } from "../controller/gameController.ts";
+import type { HistoryChangeReason } from "../controller/gameController.ts";
 import type { AISettings, AIDifficulty, AIWorkerResponse } from "./aiTypes.ts";
 import { difficultyForPlayer } from "./aiTypes.ts";
 
@@ -66,7 +67,7 @@ export class AIManager {
     this.ensureWorker();
 
     // Subscribe to turn boundaries (history changes).
-    this.controller.addHistoryChangeCallback(() => this.onHistoryChanged());
+    this.controller.addHistoryChangeCallback((reason) => this.onHistoryChanged(reason));
   }
 
   private isBothAI(): boolean {
@@ -205,9 +206,16 @@ export class AIManager {
     this.kick();
   }
 
-  onHistoryChanged(): void {
+  onHistoryChanged(reason?: HistoryChangeReason): void {
+    // Undo/Redo are explicit user navigation: immediately pause AI.
+    // This prevents AI from instantly replaying a just-undone move.
+    if (reason === "undo" || reason === "redo") {
+      this.forcePausedUI();
+      return;
+    }
+
     // New Game should start paused when both sides are AI.
-    if (this.isBothAI() && this.isFreshGame()) {
+    if (this.isBothAI() && (reason === "newGame" || this.isFreshGame())) {
       this.forcePausedUI();
       return;
     }
@@ -253,8 +261,10 @@ export class AIManager {
     }
 
     if (this.elStep) {
-      const bothAI = this.settings.white !== "human" && this.settings.black !== "human";
-      this.elStep.disabled = !bothAI;
+      const p: Player = this.controller.getState().toMove;
+      const diff = difficultyForPlayer(this.settings, p);
+      const canStep = !this.busy && !this.controller.isOver() && diff !== "human";
+      this.elStep.disabled = !canStep;
     }
   }
 
