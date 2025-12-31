@@ -127,6 +127,28 @@ describe("HistoryManager", () => {
     expect(stored!.board.get("r3c3")![0].rank).toBe("S");
   });
 
+  it("should preserve meta when cloning", () => {
+    const withMeta: GameState = {
+      board: new Map([[
+        "r6c0",
+        [{ owner: "B", rank: "S" }],
+      ]]),
+      toMove: "B",
+      phase: "idle",
+      meta: {
+        variantId: "lasca_8_dama_board",
+        rulesetId: "lasca",
+        boardSize: 8,
+      },
+    };
+
+    history.push(withMeta);
+
+    const stored = history.getCurrent();
+    expect(stored?.meta?.boardSize).toBe(8);
+    expect(stored?.meta?.variantId).toBe("lasca_8_dama_board");
+  });
+
   it("should provide history overview", () => {
     history.push(state1);
     history.push(state2);

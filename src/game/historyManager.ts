@@ -148,6 +148,7 @@ export class HistoryManager {
       ),
       toMove: state.toMove,
       phase: state.phase,
+      meta: state.meta ? { ...state.meta } : undefined,
     };
   }
 }

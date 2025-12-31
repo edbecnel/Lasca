@@ -144,11 +144,26 @@ export class GameController {
   }
 
   undo(): void {
-    if (this.isGameOver) return;
     const prevState = this.history.undo();
     if (prevState) {
+      // Allow undoing out of terminal states.
+      this.isGameOver = false;
+
+      // Cancel any transient UI timers from the previous position.
+      if (this.bannerTimer) {
+        window.clearTimeout(this.bannerTimer);
+        this.bannerTimer = null;
+      }
+      if (this.remainderTimer) {
+        window.clearTimeout(this.remainderTimer);
+        this.remainderTimer = null;
+      }
+
       this.state = prevState;
       this.lockedCaptureFrom = null;
+      this.jumpedSquares.clear();
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
       this.clearSelection();
       renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       const allLegal = generateLegalMoves(this.state);
@@ -161,11 +176,25 @@ export class GameController {
   }
 
   redo(): void {
-    if (this.isGameOver) return;
     const nextState = this.history.redo();
     if (nextState) {
+      // Redo should also work after undoing out of a terminal state.
+      this.isGameOver = false;
+
+      if (this.bannerTimer) {
+        window.clearTimeout(this.bannerTimer);
+        this.bannerTimer = null;
+      }
+      if (this.remainderTimer) {
+        window.clearTimeout(this.remainderTimer);
+        this.remainderTimer = null;
+      }
+
       this.state = nextState;
       this.lockedCaptureFrom = null;
+      this.jumpedSquares.clear();
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
       this.clearSelection();
       renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       const allLegal = generateLegalMoves(this.state);
