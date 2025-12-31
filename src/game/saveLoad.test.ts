@@ -85,7 +85,7 @@ describe("saveLoad", () => {
     expect(deserialized.phase).toBe("anim");
   });
 
-  it("should serialize and deserialize v2 save data with history", () => {
+  it("should serialize and deserialize v3 save data with history", () => {
     const s0: GameState = {
       board: new Map([["r6c0", [{ owner: "W", rank: "S" }]]]),
       toMove: "W",
@@ -110,6 +110,10 @@ describe("saveLoad", () => {
     const save = serializeSaveData(s2, history);
     const json = JSON.stringify(save);
     const parsed = JSON.parse(json);
+    expect(parsed.saveVersion).toBe(3);
+    expect(parsed.variantId).toBeDefined();
+    expect(parsed.rulesetId).toBeDefined();
+    expect(parsed.boardSize).toBeDefined();
     const loaded = deserializeSaveData(parsed);
 
     expect(loaded.history).toBeDefined();
@@ -117,6 +121,8 @@ describe("saveLoad", () => {
     expect(loaded.history!.notation.length).toBe(3);
     expect(loaded.history!.notation[1]).toBe("A1 → B2");
     expect(loaded.state.toMove).toBe("W");
+    expect(loaded.state.meta).toBeDefined();
+    expect(loaded.state.meta!.variantId).toBeDefined();
   });
 
   it("should keep backward compatibility with v1 state-only saves", () => {
@@ -130,5 +136,6 @@ describe("saveLoad", () => {
     const loaded = deserializeSaveData(v1);
     expect(loaded.history).toBeUndefined();
     expect(loaded.state.board.get("r3c3")).toEqual([{ owner: "B", rank: "O" }]);
+    expect(loaded.state.meta).toBeDefined();
   });
 });

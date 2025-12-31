@@ -1,4 +1,6 @@
 import { DEFAULT_THEME_ID, getThemeById, THEMES } from "./theme/themes";
+import { DEFAULT_VARIANT_ID, VARIANTS, getVariantById, isVariantId } from "./variants/variantRegistry";
+import type { VariantId } from "./variants/variantTypes";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -7,13 +9,13 @@ const LS_KEYS = {
   aiDelayMs: "lasca.ai.delayMs",
   aiPaused: "lasca.ai.paused",
 
+  variantId: "lasca.variantId",
+
   optMoveHints: "lasca.opt.moveHints",
   optAnimations: "lasca.opt.animations",
   optBoardCoords: "lasca.opt.boardCoords",
   optThreefold: "lasca.opt.threefold",
 } as const;
-
-type GameChoice = "lasca" | "damasca";
 
 type Difficulty = "human" | "easy" | "medium" | "advanced";
 
@@ -54,18 +56,11 @@ function readDelayMs(key: string, fallback: number): number {
   return clamp(Math.round(n), 100, 3000);
 }
 
-function setOptionsNote(choice: GameChoice, elNote: HTMLElement): void {
-  if (choice === "lasca") {
-    elNote.textContent = "Rules: Lasca • Board: 7×7 • Pieces: 11/side";
-  } else {
-    elNote.textContent = "Rules: Lasca • Board: 8×8 • Pieces: 12/side";
-  }
-}
 
-function isGameAvailable(choice: GameChoice): boolean {
-  // Damasca page will be added in Phase 1.
-  if (choice === "lasca") return true;
-  return false;
+function readVariantId(key: string, fallback: VariantId): VariantId {
+  const raw = localStorage.getItem(key);
+  if (raw && isVariantId(raw)) return raw;
+  return fallback;
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -87,6 +82,16 @@ window.addEventListener("DOMContentLoaded", () => {
   const elWarning = byId<HTMLElement>("launchWarning");
   const elLaunch = byId<HTMLButtonElement>("launchBtn");
 
+  // Populate variant select
+  elGame.textContent = "";
+  for (const v of VARIANTS) {
+    const opt = document.createElement("option");
+    opt.value = v.variantId;
+    opt.textContent = v.displayName;
+    if (!v.available) opt.disabled = true;
+    elGame.appendChild(opt);
+  }
+
   // Populate theme select
   elTheme.textContent = "";
   for (const t of THEMES) {
@@ -100,6 +105,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const savedTheme = localStorage.getItem(LS_KEYS.theme);
   const initialTheme = (savedTheme && getThemeById(savedTheme)) ? savedTheme : DEFAULT_THEME_ID;
   elTheme.value = initialTheme;
+
+  const initialVariantId = readVariantId(LS_KEYS.variantId, DEFAULT_VARIANT_ID);
+  elGame.value = initialVariantId;
 
   elMoveHints.checked = readBool(LS_KEYS.optMoveHints, false);
   elAnimations.checked = readBool(LS_KEYS.optAnimations, true);
@@ -125,23 +133,24 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   const syncAvailability = () => {
-    const choice = (elGame.value === "damasca" ? "damasca" : "lasca") as GameChoice;
-    setOptionsNote(choice, elGameNote);
+    const vId = (isVariantId(elGame.value) ? elGame.value : DEFAULT_VARIANT_ID) as VariantId;
+    const v = getVariantById(vId);
 
-    const ok = isGameAvailable(choice);
+    elGameNote.textContent = v.subtitle;
+    localStorage.setItem(LS_KEYS.variantId, v.variantId);
+
+    const ok = Boolean(v.available && v.entryUrl);
     elLaunch.disabled = !ok;
-
-    elWarning.textContent = ok
-      ? "—"
-      : "Damasca is not available yet in this build. (Phase 1 will add it.)";
+    elWarning.textContent = ok ? "—" : `${v.displayName} is not available yet in this build.`;
   };
 
   elGame.addEventListener("change", syncAvailability);
   syncAvailability();
 
   elLaunch.addEventListener("click", () => {
-    const choice = (elGame.value === "damasca" ? "damasca" : "lasca") as GameChoice;
-    if (!isGameAvailable(choice)) return;
+    const vId = (isVariantId(elGame.value) ? elGame.value : DEFAULT_VARIANT_ID) as VariantId;
+    const v = getVariantById(vId);
+    if (!v.available || !v.entryUrl) return;
 
     localStorage.setItem(LS_KEYS.theme, elTheme.value);
 
@@ -159,7 +168,6 @@ window.addEventListener("DOMContentLoaded", () => {
     // Startup should not force paused; let AIManager decide (it auto-pauses when both sides are AI).
     localStorage.setItem(LS_KEYS.aiPaused, "false");
 
-    const url = choice === "lasca" ? "./lasca.html" : "./damasca.html";
-    window.location.assign(url);
+    window.location.assign(v.entryUrl);
   });
 });

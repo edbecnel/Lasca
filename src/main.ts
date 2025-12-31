@@ -15,6 +15,8 @@ import { RULES } from "./game/ruleset.ts";
 import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
+import { ACTIVE_VARIANT_ID } from "./variants/activeVariant";
+import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
@@ -36,6 +38,8 @@ function writeBoolPref(key: string, value: boolean): void {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  const activeVariant = getVariantById(ACTIVE_VARIANT_ID);
+
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
@@ -84,9 +88,11 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Update left panel status
   const elTurn = document.getElementById("statusTurn");
+  const elRulesBoard = document.getElementById("statusRulesBoard");
   const elPhase = document.getElementById("statusPhase");
   const elMsg = document.getElementById("statusMessage");
   if (elTurn) elTurn.textContent = state.toMove === "B" ? "Black" : "White";
+  if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
   if (elPhase) elPhase.textContent = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
   if (elMsg) elMsg.textContent = "—";
 
@@ -189,8 +195,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (saveGameBtn) {
     saveGameBtn.addEventListener("click", () => {
       const currentState = controller.getState();
-      const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
-      saveGameToFile(currentState, history, `lasca-game-${timestamp}.json`);
+      saveGameToFile(currentState, history, activeVariant.defaultSaveName);
     });
   }
 
@@ -202,7 +207,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `lasca-history-${timestamp}.json`;
+      a.download = `${ACTIVE_VARIANT_ID}-history-${timestamp}.json`;
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -218,11 +223,16 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (!file) return;
 
       try {
-        const loaded = await loadGameFromFile(file);
+        const loaded = await loadGameFromFile(file, {
+          variantId: activeVariant.variantId,
+          rulesetId: activeVariant.rulesetId,
+          boardSize: activeVariant.boardSize,
+        });
         controller.loadGame(loaded.state, loaded.history);
       } catch (error) {
         console.error("Failed to load game:", error);
-        alert(`Failed to load game: ${error}`);
+        const msg = error instanceof Error ? error.message : String(error);
+        alert(`Failed to load game: ${msg}`);
       }
 
       // Reset file input so the same file can be loaded again
@@ -369,9 +379,11 @@ window.addEventListener("DOMContentLoaded", async () => {
       } catch {}
       renderGameState(svg, piecesLayer, inspector, next);
       const elTurn = document.getElementById("statusTurn");
+      const elRulesBoard = document.getElementById("statusRulesBoard");
       const elPhase = document.getElementById("statusPhase");
       const elMsg = document.getElementById("statusMessage");
       if (elTurn) elTurn.textContent = next.toMove === "B" ? "Black" : "White";
+      if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
       if (elPhase) elPhase.textContent = next.phase.charAt(0).toUpperCase() + next.phase.slice(1);
       if (elMsg) elMsg.textContent = "—";
       currentState = next;
