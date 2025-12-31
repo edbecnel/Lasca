@@ -26,9 +26,10 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "lasca",
     boardSize: 8,
     piecesPerSide: 12,
+    svgAsset: "./assets/damasca_board.svg",
     entryUrl: "./damasca.html",
     defaultSaveName: "lasca_8_dama_board-save.json",
-    available: false,
+    available: true,
   },
   {
     variantId: "dama_8_classic",

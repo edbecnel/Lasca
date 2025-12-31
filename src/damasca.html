@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Damasca Online!</title>
+    <!-- Explicit favicon to avoid /favicon.ico 404 during dev -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      sizes="any"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' ry='3' fill='%231b1b1b'/%3E%3Ccircle cx='8' cy='8' r='6' fill='%2300e676'/%3E%3C/svg%3E"
+    />
+
+    <style>
+      :root {
+        --page-bg: #1b1b1b;
+
+        --panel-bg: rgba(255, 255, 255, 0.06);
+        --panel-border: rgba(255, 255, 255, 0.1);
+        --panel-text: rgba(255, 255, 255, 0.9);
+        --panel-subtext: rgba(255, 255, 255, 0.7);
+
+        /* Theme dropdown popup (custom) */
+        --themeMenuBg: rgba(0, 0, 0, 0.88);
+        --themeMenuBorder: rgba(255, 255, 255, 0.18);
+        --themeMenuText: rgba(255, 255, 255, 0.92);
+        --themeMenuHoverBg: rgba(255, 255, 255, 0.1);
+        --themeMenuSelectedBg: rgba(255, 255, 255, 0.16);
+
+        --gutter-w: 8px;
+        --tab-w: 22px;
+        --panel-radius: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+        background: var(--page-bg);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+        color: var(--panel-text);
+      }
+
+      /* ===== App Layout ===== */
+      #appRoot {
+        height: 100%;
+        width: 100%;
+        display: flex;
+        align-items: stretch;
+      }
+
+      .sidebar {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 0;
+        overflow: hidden;
+        transition: width 120ms ease;
+        min-width: 0;
+      }
+
+      .sidebarHeader {
+        height: 44px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .sidebarTitle {
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sidebarButtons {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .panelBtn {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 6px 9px;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .panelBtn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .panelBtn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .panelBtn:disabled:hover {
+        background: rgba(0, 0, 0, 0.18);
+      }
+
+      .panelSelect {
+        width: 100%;
+        min-width: 0;
+        color-scheme: dark;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 6px 9px;
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: normal;
+      }
+
+      .panelSelect:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .panelSelect option,
+      .panelSelect optgroup {
+        background: var(--themeMenuBg);
+        color: var(--themeMenuText);
+        white-space: normal;
+      }
+
+      .iconToggleGroup {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .iconToggleBtn {
+        width: 34px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .iconToggleBtn[aria-pressed="true"] {
+        background: var(--themeMenuSelectedBg);
+        border-color: var(--themeMenuBorder);
+      }
+      .panelSelect:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .sidebarBody {
+        flex: 1 1 auto;
+        overflow: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .panelSection {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--panel-radius);
+        padding: 10px;
+      }
+
+      .panelSection h3 {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.86);
+        letter-spacing: 0.3px;
+      }
+
+      /* Collapsible section styles */
+      .sectionHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+        margin: 0 0 8px 0;
+      }
+
+      .sectionHeader h3 {
+        margin: 0;
+        flex: 1;
+      }
+
+      .collapseBtn {
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.6);
+        transition: transform 0.2s ease, color 0.2s ease;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sectionHeader:hover .collapseBtn {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .panelSection.collapsed .collapseBtn {
+        transform: rotate(-90deg);
+      }
+
+      .sectionContent {
+        overflow: visible;
+        transition: max-height 0.25s ease, opacity 0.2s ease;
+        max-height: 2000px;
+        opacity: 1;
+      }
+
+      .panelSection.collapsed .sectionContent {
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+      }
+
+      .panelSection.collapsed .sectionHeader {
+        margin-bottom: 0;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 6px 10px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.78);
+      }
+      .kv .k {
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      /* Collapsed state: keep a small tab-width column */
+      .sidebar.collapsed {
+        width: var(--tab-w) !important;
+        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        border-right: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .sidebar.collapsed .sidebarHeader,
+      .sidebar.collapsed .sidebarBody {
+        display: none;
+      }
+
+      .sidebarTab {
+        height: 100%;
+        width: var(--tab-w);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.18);
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.75);
+        user-select: none;
+      }
+      .sidebar.collapsed .sidebarTab {
+        display: flex;
+      }
+      .sidebarTab:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.92);
+      }
+
+      /* ===== Gutters (resizers) ===== */
+      .gutter {
+        width: var(--gutter-w);
+        background: rgba(255, 255, 255, 0.04);
+        cursor: col-resize;
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .gutter:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .gutter::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 2px;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .gutter.disabled {
+        cursor: default;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .gutter.disabled::after {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      /* ===== Center Area (board) ===== */
+      #centerArea {
+        flex: 1 1 auto;
+        min-width: 420px;
+        height: 100%;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 10px;
+        overflow: auto;
+      }
+
+      #boardWrap {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+
+      svg#lascaBoard {
+        width: min(100%, 980px);
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+        color: var(--panel-text);
+      }
+
+      /* ===== Inspector (kept, but now inside right sidebar) ===== */
+      #zoomHint {
+        color: var(--panel-subtext);
+        font-size: 12px;
+        line-height: 1.35;
+        margin-bottom: 10px;
+      }
+
+      #zoomBody {
+        overflow: auto;
+        max-height: 160px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.18);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 10px;
+      }
+
+      #zoomSvg {
+        width: 100%;
+        display: block;
+      }
+
+      /* ===== Theme Dropdown (custom popup so we can style options) ===== */
+      .themeDropdown {
+        position: relative;
+        width: 100%;
+      }
+
+      .themeDropdownBtn {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(0, 0, 0, 0.18);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        outline: none;
+        cursor: pointer;
+        text-align: left;
+      }
+      .themeDropdownBtn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .themeDropdownMenu {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        z-index: 30;
+        border-radius: 12px;
+        background: var(--themeMenuBg);
+        border: 1px solid var(--themeMenuBorder);
+        padding: 6px;
+        flex-direction: column;
+        gap: 4px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+        display: none;
+      }
+
+      .themeDropdownMenu:not([hidden]) {
+        display: flex;
+      }
+
+      .themeOption {
+        appearance: none;
+        border: none;
+        background: transparent;
+        color: var(--themeMenuText);
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+      }
+      .themeOption:hover {
+        background: var(--themeMenuHoverBg);
+      }
+      .themeOption[aria-selected="true"] {
+        background: var(--themeMenuSelectedBg);
+      }
+
+      /* ===== Mobile & Tablet Styles ===== */
+      /*
+        Use capability-based media queries (pointer: coarse) instead of width alone.
+        This avoids desktop/laptop browsers triggering the stacked layout due to OS scaling/zoom.
+      */
+      @media (max-width: 1024px) and (pointer: coarse) {
+        /* Tablets and smaller: Stack vertically */
+        #appRoot {
+          flex-direction: column;
+          height: 100dvh; /* Use dynamic viewport height to account for mobile browser bars */
+        }
+
+        /* Keep both panels stacked at the top; board below */
+        #leftSidebar {
+          order: 1;
+        }
+
+        #rightSidebar {
+          order: 2;
+        }
+
+        #centerArea {
+          order: 3;
+        }
+
+        .sidebar {
+          width: 100% !important;
+          height: auto;
+          max-height: 40vh;
+          border-radius: 0;
+        }
+
+        .sidebar.collapsed {
+          width: 100% !important;
+          height: 44px;
+          max-height: 44px;
+        }
+
+        .sidebarTab {
+          display: none; /* Hide by default on mobile; show only when collapsed */
+        }
+
+        .sidebar.collapsed .sidebarTab {
+          display: flex;
+          width: 100%;
+        }
+
+        /* Make collapse buttons in header more prominent for touch */
+        .sidebarHeader .panelBtn {
+          min-width: 32px;
+          min-height: 32px;
+          padding: 8px 12px;
+          font-size: 14px;
+        }
+
+        /* Larger touch targets for collapsible section headers */
+        .sectionHeader {
+          padding: 8px 0;
+          margin: 0 0 12px 0;
+        }
+
+        .collapseBtn {
+          width: 32px;
+          height: 32px;
+          font-size: 16px;
+        }
+
+        /* Hide gutters on mobile */
+        .gutter {
+          display: none;
+        }
+
+        /* Center area adjustments */
+        #centerArea {
+          flex: 1 1 auto;
+          min-width: 0;
+          min-height: 300px;
+          padding: 10px;
+          /* Add extra padding at bottom to account for Android navigation bar */
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        svg#lascaBoard {
+          max-height: calc(100dvh - 200px);
+          max-width: 100%;
+        }
+
+        /* Sidebar body gets scrollable on mobile */
+        .sidebarBody {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        /* Adjust panel sections for mobile */
+        .panelSection {
+          padding: 12px;
+        }
+
+        /* Make buttons larger for touch */
+        .panelBtn {
+          padding: 10px 14px;
+          font-size: 13px;
+          min-height: 40px;
+        }
+
+        /* Checkboxes larger for touch */
+        input[type="checkbox"] {
+          width: 20px !important;
+          height: 20px !important;
+        }
+
+        /* Theme dropdown button larger */
+        .themeDropdownBtn {
+          padding: 12px 14px;
+          font-size: 13px;
+          min-height: 44px;
+        }
+
+        .themeOption {
+          padding: 12px 14px;
+          font-size: 13px;
+          min-height: 44px;
+        }
+      }
+
+      @media (max-width: 768px) and (pointer: coarse) {
+        /* Phones: Even more compact */
+        .sidebar {
+          max-height: 35vh;
+        }
+
+        #centerArea {
+          padding: 8px;
+          padding-bottom: max(8px, env(safe-area-inset-bottom));
+        }
+
+        svg#lascaBoard {
+          max-height: calc(100dvh - 150px);
+        }
+
+        .panelSection {
+          padding: 10px;
+        }
+
+        .sidebarHeader {
+          padding: 8px 10px;
+        }
+
+        .sidebarBody {
+          padding: 8px;
+          gap: 8px;
+        }
+
+        /* Even larger touch targets on phones */
+        .sectionHeader {
+          padding: 10px 0;
+        }
+
+        .collapseBtn {
+          width: 36px;
+          height: 36px;
+          font-size: 18px;
+        }
+      }
+
+      /* Landscape phones and small tablets */
+      @media (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
+        .sidebar {
+          max-height: 50vh;
+        }
+
+        #centerArea {
+          min-height: 200px;
+        }
+
+        svg#lascaBoard {
+          max-height: calc(100dvh - 120px);
+        }
+      }
+
+      /* Support for safe areas (notches, etc.) */
+      @supports (padding: max(0px)) {
+        body {
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
+        }
+
+        #centerArea {
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="appRoot">
+      <!-- LEFT SIDEBAR -->
+      <aside
+        id="leftSidebar"
+        class="sidebar"
+        style="width: 280px"
+        aria-label="Left panel"
+      >
+        <div class="sidebarHeader">
+          <div class="sidebarTitle" id="gameTitle">Lasca Classic</div>
+          <div class="sidebarButtons">
+            <a
+              href="./index.html"
+              class="panelBtn"
+              title="Back to Start Page"
+              style="
+                text-decoration: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              "
+            >
+              Start Page
+            </a>
+            <a
+              href="help.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="panelBtn"
+              title="Help & Rules"
+              style="
+                text-decoration: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              "
+            >
+              ?
+            </a>
+            <button
+              class="panelBtn"
+              type="button"
+              data-action="collapse-left"
+              title="Collapse left panel"
+            >
+              ⟨
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebarBody">
+          <div class="panelSection" data-section="status">
+            <div class="sectionHeader" data-toggle="status">
+              <h3>Status</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div class="kv">
+                <div class="k">Turn</div>
+                <div id="statusTurn">Black</div>
+                <div class="k">Rules/Board</div>
+                <div id="statusRulesBoard">—</div>
+                <div class="k">Phase</div>
+                <div id="statusPhase">Setup</div>
+                <div class="k">Message</div>
+                <div id="statusMessage">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="options">
+            <div class="sectionHeader" data-toggle="options">
+              <h3>Options</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 8px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="moveHintsToggle"
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="moveHintsToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Show move hints
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Red = piece to capture<br />
+                Orange = landing position
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="animationsToggle"
+                  checked
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="animationsToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Animations
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Smooth piece movement
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="boardCoordsToggle"
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="boardCoordsToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Show board coordinates
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Column letters (A–G) and row numbers (1–7)
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="threefoldToggle"
+                  checked
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="threefoldToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Threefold repetition draw
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Same position 3× = draw
+              </div>
+
+              <div style="margin-top: 16px">
+                <button
+                  id="newGameBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="width: 100%; padding: 6px 12px; font-size: 12px"
+                >
+                  New Game
+                </button>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 16px">
+                <button
+                  id="saveGameBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Save Game
+                </button>
+                <button
+                  id="loadGameBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Load Game
+                </button>
+              </div>
+              <div style="margin-top: 8px">
+                <button
+                  id="exportHistoryBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="width: 100%; padding: 6px 12px; font-size: 12px"
+                >
+                  Export Move History
+                </button>
+              </div>
+              <input
+                type="file"
+                id="loadGameInput"
+                accept=".json"
+                style="display: none"
+              />
+
+              <div style="display: flex; gap: 8px; margin-top: 16px">
+                <button
+                  id="undoBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                  disabled
+                >
+                  ← Undo
+                </button>
+                <button
+                  id="redoBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                  disabled
+                >
+                  Redo →
+                </button>
+              </div>
+
+              <div style="margin-top: 16px">
+                <button
+                  id="resignBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="width: 100%; padding: 6px 12px; font-size: 12px"
+                >
+                  Resign
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="ai">
+            <div class="sectionHeader" data-toggle="ai">
+              <h3>AI</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 52px minmax(0, 1fr);
+                  gap: 8px 2px;
+                  align-items: center;
+                  justify-items: start;
+                  font-size: 12px;
+                "
+              >
+                <label for="aiWhiteSelect">White</label>
+                <select id="aiWhiteSelect" class="panelSelect">
+                  <option value="human" selected>Human</option>
+                  <option value="easy">Beginner AI</option>
+                  <option value="medium">Intermediate AI</option>
+                  <option value="advanced">Expert AI</option>
+                </select>
+
+                <label for="aiBlackSelect">Black</label>
+                <select id="aiBlackSelect" class="panelSelect">
+                  <option value="human" selected>Human</option>
+                  <option value="easy">Beginner AI</option>
+                  <option value="medium">Intermediate AI</option>
+                  <option value="advanced">Expert AI</option>
+                </select>
+
+                <label for="aiDelay">Speed</label>
+                <div style="display: flex; gap: 6px; align-items: center">
+                  <input
+                    id="aiDelay"
+                    type="range"
+                    min="100"
+                    max="3000"
+                    step="100"
+                    value="500"
+                    style="flex: 0 1 105px; width: 105px"
+                  />
+                  <button
+                    id="aiDelayReset"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Reset to default speed"
+                    aria-label="Reset AI speed to default"
+                  >
+                    ↺
+                  </button>
+                  <div
+                    id="aiDelayLabel"
+                    style="
+                      min-width: 52px;
+                      text-align: left;
+                      font-variant-numeric: tabular-nums;
+                    "
+                  >
+                    500 ms
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 12px">
+                <button
+                  id="aiPauseBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Pause AI
+                </button>
+                <button
+                  id="aiStepBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="flex: 1; padding: 6px 12px; font-size: 12px"
+                >
+                  Step
+                </button>
+              </div>
+
+              <div
+                id="aiInfo"
+                style="margin-top: 10px; font-size: 12px; opacity: 0.85"
+              >
+                Set a side to AI to auto-play that color.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="sidebarTab"
+          data-action="expand-left"
+          title="Expand left panel"
+        >
+          ⟩
+        </div>
+      </aside>
+
+      <div
+        id="gutterLeft"
+        class="gutter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize left panel"
+      ></div>
+
+      <!-- CENTER (BOARD) -->
+      <main id="centerArea" aria-label="Board area">
+        <div id="boardWrap">
+          <!-- Board SVG is loaded from ./assets/lasca_board.svg at runtime -->
+        </div>
+      </main>
+
+      <div
+        id="gutterRight"
+        class="gutter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize right panel"
+      ></div>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside
+        id="rightSidebar"
+        class="sidebar"
+        style="width: 320px"
+        aria-label="Right panel"
+      >
+        <div class="sidebarHeader">
+          <div class="sidebarTitle">Info</div>
+          <div class="sidebarButtons">
+            <button
+              class="panelBtn"
+              type="button"
+              data-action="collapse-right"
+              title="Collapse right panel"
+            >
+              ⟩
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebarBody">
+          <div
+            class="panelSection"
+            id="evaluationPanel"
+            data-section="evaluation"
+          >
+            <div class="sectionHeader" data-toggle="evaluation">
+              <h3>Evaluation</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 72px 1fr;
+                  gap: 8px 10px;
+                  align-items: center;
+                  font-size: 12px;
+                "
+              >
+                <label for="evaluationMode">Show</label>
+                <div
+                  id="evaluationMode"
+                  class="iconToggleGroup"
+                  role="group"
+                  aria-label="Evaluation display mode"
+                >
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="advantage"
+                    aria-pressed="false"
+                    title="Advantage (estimate)"
+                    aria-label="Advantage (estimate)"
+                  >
+                    ⚖
+                  </button>
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="control"
+                    aria-pressed="false"
+                    title="Controlled stacks"
+                    aria-label="Controlled stacks"
+                  >
+                    ▦
+                  </button>
+                  <button
+                    type="button"
+                    class="panelBtn iconToggleBtn evalModeBtn"
+                    data-mode="material"
+                    aria-pressed="false"
+                    title="Material (all pieces)"
+                    aria-label="Material (all pieces)"
+                  >
+                    ⛀
+                  </button>
+                </div>
+              </div>
+              <div
+                id="evaluationValue"
+                style="
+                  margin-top: 10px;
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.78);
+                "
+              >
+                —
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" id="themePanel" data-section="theme">
+            <div class="sectionHeader" data-toggle="theme">
+              <h3>Theme</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div style="display: flex; gap: 8px; align-items: center">
+                <div id="themeDropdown" class="themeDropdown">
+                  <button
+                    id="themeDropdownBtn"
+                    class="themeDropdownBtn"
+                    type="button"
+                    aria-expanded="false"
+                  ></button>
+                  <div
+                    id="themeDropdownMenu"
+                    class="themeDropdownMenu"
+                    hidden
+                  ></div>
+                </div>
+              </div>
+              <div
+                style="
+                  margin-top: 8px;
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.6);
+                  line-height: 1.3;
+                "
+              >
+                Switches piece/board SVG defs at runtime (hot-swappable).
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" id="messagesPanel" data-section="messages">
+            <div class="sectionHeader" data-toggle="messages">
+              <h3>Messages</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                id="messagesBody"
+                style="font-size: 12px; color: rgba(255, 255, 255, 0.72)"
+              >
+                (Reserved for special messages, prompts, help, etc.)
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="panelSection"
+            id="inspectorPanel"
+            data-section="inspector"
+            aria-label="Stack inspector"
+          >
+            <div class="sectionHeader" data-toggle="inspector">
+              <h3 id="zoomTitle" style="margin: 0">Lasca Stack Inspector</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div id="zoomHint">
+                Hover a stacked piece to see the full column order (bottom →
+                top). If a crack appears on the mini spine, brackets mark the
+                omitted middle here.
+              </div>
+              <div id="zoomBody">
+                <!-- Zoom SVG is created dynamically by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="moveHistory">
+            <div class="sectionHeader" data-toggle="moveHistory">
+              <h3>Move History</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                id="moveHistory"
+                style="
+                  max-height: 200px;
+                  overflow-y: auto;
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.7);
+                  line-height: 1.5;
+                "
+              >
+                No moves yet
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="sidebarTab"
+          data-action="expand-right"
+          title="Expand right panel"
+        >
+          ⟨
+        </div>
+      </aside>
+    </div>
+
+    <script type="module" src="./damascaMain.ts"></script>
+  </body>
+</html>

@@ -15,8 +15,10 @@ import { RULES } from "./game/ruleset.ts";
 import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
-import { ACTIVE_VARIANT_ID } from "./variants/activeVariant";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
+import type { VariantId } from "./variants/variantTypes";
+
+const ACTIVE_VARIANT_ID: VariantId = "lasca_8_dama_board";
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
@@ -46,7 +48,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
-  const boardUrl = new URL("./assets/lasca_board.svg", import.meta.url);
+  const boardUrl = new URL("./assets/damasca_board.svg", import.meta.url);
   const svg = await loadSvgFileInto(boardWrap, boardUrl);
 
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
@@ -83,7 +85,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const inspector = createStackInspector(zoomTitle, zoomHint, zoomSvg);
 
   // Create initial game state and render once
-  const state = createInitialGameStateForVariant(activeVariant.variantId);
+  const state = createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
   
   // Create history manager and record initial state
   const history = new HistoryManager();
@@ -183,7 +185,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     newGameBtn.addEventListener("click", () => {
       const confirmed = confirm("Start a new game? This will clear the current game and undo history.");
       if (confirmed) {
-        const freshState = createInitialGameStateForVariant(activeVariant.variantId);
+        const freshState = createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
         controller.newGame(freshState);
       }
     });

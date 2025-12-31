@@ -2,10 +2,8 @@ import type { Stack, Player } from "../types";
 import type { GameMeta } from "../variants/variantTypes";
 import { ACTIVE_VARIANT_ID } from "../variants/activeVariant";
 import { getVariantById } from "../variants/variantRegistry";
-import {
-  BLACK_START_NODE_IDS,
-  WHITE_START_NODE_IDS,
-} from "./initialPosition.ts";
+import { computeStartNodeIds } from "./initialPosition.ts";
+import type { VariantId } from "../variants/variantTypes";
 
 export type NodeId = string;
 export type BoardState = Map<NodeId, Stack>;
@@ -17,17 +15,22 @@ export interface GameState {
   meta?: GameMeta;
 }
 
-export function createInitialGameState(): GameState {
+export function createInitialGameStateForVariant(variantId: VariantId): GameState {
   const board: BoardState = new Map();
-  const variant = getVariantById(ACTIVE_VARIANT_ID);
+  const variant = getVariantById(variantId);
+
+  const { blackStartNodeIds, whiteStartNodeIds } = computeStartNodeIds({
+    boardSize: variant.boardSize,
+    piecesPerSide: variant.piecesPerSide,
+  });
 
   // Place Black soldiers on their starting nodes
-  for (const id of BLACK_START_NODE_IDS) {
+  for (const id of blackStartNodeIds) {
     board.set(id, [{ owner: "B", rank: "S" }]);
   }
 
   // Place White soldiers on their starting nodes
-  for (const id of WHITE_START_NODE_IDS) {
+  for (const id of whiteStartNodeIds) {
     board.set(id, [{ owner: "W", rank: "S" }]);
   }
 
@@ -36,9 +39,13 @@ export function createInitialGameState(): GameState {
     toMove: "W",
     phase: "select",
     meta: {
-      variantId: ACTIVE_VARIANT_ID,
+      variantId,
       rulesetId: variant.rulesetId,
       boardSize: variant.boardSize,
     },
   };
+}
+
+export function createInitialGameState(): GameState {
+  return createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
 }

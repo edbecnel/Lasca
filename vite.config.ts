@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
       input: {
         index: path.resolve(__dirname, "src/index.html"),
         lasca: path.resolve(__dirname, "src/lasca.html"),
+        damasca: path.resolve(__dirname, "src/damasca.html"),
         help: path.resolve(__dirname, "src/help.html"),
         startHelp: path.resolve(__dirname, "src/start-help.html"),
       },
