@@ -5,6 +5,8 @@ import { createStackInspector } from "./ui/stackInspector";
 import { initSplitLayout } from "./ui/layout/splitLayout";
 import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager } from "./theme/themeManager";
+
+import damascaBoardSvgUrl from "./assets/damasca_board.svg?url";
 import type { Player } from "./types";
 import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
@@ -48,8 +50,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
-  const boardUrl = new URL("./assets/damasca_board.svg", import.meta.url);
-  const svg = await loadSvgFileInto(boardWrap, boardUrl);
+  const svg = await loadSvgFileInto(boardWrap, damascaBoardSvgUrl);
 
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
   const savedBoardCoords = readOptionalBoolPref(LS_OPT_KEYS.boardCoords);

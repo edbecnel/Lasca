@@ -60,8 +60,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
   const svgAsset = activeVariant.svgAsset ?? "./assets/damasca_board.svg";
-  const boardUrl = new URL(svgAsset, import.meta.url);
-  const svg = await loadSvgFileInto(boardWrap, boardUrl);
+  const svg = await loadSvgFileInto(boardWrap, svgAsset);
 
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
   const savedBoardCoords = readOptionalBoolPref(LS_OPT_KEYS.boardCoords);

@@ -1,5 +1,8 @@
 import type { RulesetId, VariantId, VariantSpec } from "./variantTypes";
 
+import lascaBoardSvgUrl from "../assets/lasca_board.svg?url";
+import damascaBoardSvgUrl from "../assets/damasca_board.svg?url";
+
 const RULESET_LABEL: Record<RulesetId, string> = {
   lasca: "Lasca",
   dama: "Dama",
@@ -14,7 +17,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "lasca",
     boardSize: 7,
     piecesPerSide: 11,
-    svgAsset: "./assets/lasca_board.svg",
+    svgAsset: lascaBoardSvgUrl,
     entryUrl: "./lasca.html",
     defaultSaveName: "lasca_7_classic-save.json",
     available: true,
@@ -26,7 +29,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "lasca",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: "./assets/damasca_board.svg",
+    svgAsset: damascaBoardSvgUrl,
     entryUrl: "./damasca.html",
     defaultSaveName: "lasca_8_dama_board-save.json",
     available: true,
@@ -38,7 +41,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: "./assets/damasca_board.svg",
+    svgAsset: damascaBoardSvgUrl,
     entryUrl: "./dama.html",
     defaultSaveName: "dama_8_classic_standard-save.json",
     damaCaptureRemoval: "immediate",
@@ -51,7 +54,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: "./assets/damasca_board.svg",
+    svgAsset: damascaBoardSvgUrl,
     entryUrl: "./dama.html",
     defaultSaveName: "dama_8_classic_international-save.json",
     damaCaptureRemoval: "end_of_sequence",
