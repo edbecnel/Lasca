@@ -32,15 +32,30 @@ export const VARIANTS: readonly VariantSpec[] = [
     available: true,
   },
   {
-    variantId: "dama_8_classic",
-    displayName: "Dama Classic",
-    subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side",
+    variantId: "dama_8_classic_standard",
+    displayName: "Dama Classic (Standard)",
+    subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: Immediate",
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
+    svgAsset: "./assets/damasca_board.svg",
     entryUrl: "./dama.html",
-    defaultSaveName: "dama_8_classic-save.json",
-    available: false,
+    defaultSaveName: "dama_8_classic_standard-save.json",
+    damaCaptureRemoval: "immediate",
+    available: true,
+  },
+  {
+    variantId: "dama_8_classic_international",
+    displayName: "Dama Classic (International)",
+    subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: End-of-sequence",
+    rulesetId: "dama",
+    boardSize: 8,
+    piecesPerSide: 12,
+    svgAsset: "./assets/damasca_board.svg",
+    entryUrl: "./dama.html",
+    defaultSaveName: "dama_8_classic_international-save.json",
+    damaCaptureRemoval: "end_of_sequence",
+    available: true,
   },
   {
     variantId: "hybrid_8_damasca",
@@ -55,16 +70,25 @@ export const VARIANTS: readonly VariantSpec[] = [
   },
 ] as const;
 
+// Backward-compatibility aliases for removed/renamed variant IDs.
+const VARIANT_ID_ALIASES: Partial<Record<string, VariantId>> = {
+  dama_8_classic: "dama_8_classic_standard",
+};
+
 export const DEFAULT_VARIANT_ID: VariantId = "lasca_7_classic";
 
 export function getVariantById(id: VariantId): VariantSpec {
-  const found = VARIANTS.find((v) => v.variantId === id);
+  const canonical = (VARIANT_ID_ALIASES[id] ?? id) as VariantId;
+  const found = VARIANTS.find((v) => v.variantId === canonical);
   if (!found) throw new Error(`Unknown variantId: ${id}`);
   return found;
 }
 
 export function isVariantId(id: string): id is VariantId {
-  return (VARIANTS as readonly VariantSpec[]).some((v) => v.variantId === id);
+  return (
+    (VARIANTS as readonly VariantSpec[]).some((v) => v.variantId === id) ||
+    Object.prototype.hasOwnProperty.call(VARIANT_ID_ALIASES, id)
+  );
 }
 
 export function rulesBoardLine(rulesetId: RulesetId, boardSize: 7 | 8): string {

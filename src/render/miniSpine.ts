@@ -15,6 +15,7 @@ interface MiniSpineOptions {
   spineGap: number;
   spinePad: number;
   crackGap: number;
+  rulesetId?: string;
 }
 
 export function drawMiniStackSpine(
@@ -35,6 +36,7 @@ export function drawMiniStackSpine(
     spineGap = 10,
     spinePad = 6,
     crackGap = 12,
+    rulesetId,
   } = opts;
 
   const n = stack.length;
@@ -101,7 +103,7 @@ export function drawMiniStackSpine(
 
   for (let i = 0; i < countShown; i++) {
     const p = shown[i];
-    const href = pieceToHref(p);
+    const href = pieceToHref(p, { rulesetId });
 
     let yOffset = i * (miniSize + miniGap);
     if (hasCrack && i > crackAfterIndex) {

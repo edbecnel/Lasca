@@ -10,7 +10,9 @@ export function renderGameState(
 ): void {
   piecesLayer.textContent = "";
 
+  const rulesetId = state.meta?.rulesetId ?? "lasca";
+
   for (const [nodeId, stack] of state.board.entries()) {
-    renderStackAtNode(svgRoot, piecesLayer, inspector, nodeId, stack);
+    renderStackAtNode(svgRoot, piecesLayer, inspector, nodeId, stack, { rulesetId });
   }
 }

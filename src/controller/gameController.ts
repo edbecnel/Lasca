@@ -11,6 +11,7 @@ import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
 import { animateStack } from "../render/animateMove.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
+import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -117,11 +118,20 @@ export class GameController {
   }
 
   getLegalMovesForTurn(): Move[] {
-    const excluded = this.lockedCaptureFrom ? this.jumpedSquares : undefined;
-    const allLegal = generateLegalMoves(this.state, excluded);
+    const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+    const captureRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(this.state) : null;
+    const constraints = this.lockedCaptureFrom
+      ? {
+          forcedFrom: this.lockedCaptureFrom,
+          ...(rulesetId === "dama" && captureRemoval === "immediate"
+            ? {}
+            : { excludedJumpSquares: this.jumpedSquares }),
+        }
+      : undefined;
+    const allLegal = generateLegalMoves(this.state, constraints);
 
     if (this.lockedCaptureFrom) {
-      return allLegal.filter((m) => m.kind === "capture" && m.from === this.lockedCaptureFrom);
+      return allLegal.filter((m) => m.kind === "capture");
     }
 
     return allLegal;
@@ -467,7 +477,12 @@ export class GameController {
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
     drawSelection(this.overlayLayer, nodeId);
-    const allLegal = generateLegalMoves(this.state, this.lockedCaptureFrom ? this.jumpedSquares : undefined);
+    const allLegal = generateLegalMoves(
+      this.state,
+      this.lockedCaptureFrom
+        ? { forcedFrom: this.lockedCaptureFrom, excludedJumpSquares: this.jumpedSquares }
+        : undefined
+    );
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     
     // If in a capture chain, only allow moves from the locked position
@@ -576,16 +591,28 @@ export class GameController {
     if (move.kind === "capture") {
       // Track the jumped-over square to prevent re-jumping it
       this.jumpedSquares.add(move.over);
+
+      const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+      const isDama = rulesetId === "dama";
+      const damaCaptureRemoval = isDama ? getDamaCaptureRemovalMode(this.state) : null;
       
       // Check if promotion happened
       const didPromote = next.didPromote || false;
       
       // Check if there are more captures available from the destination
-      const allCaptures = generateLegalMoves(this.state, this.jumpedSquares).filter(m => m.kind === "capture");
-      const moreCapturesFromDest = allCaptures.filter(m => m.from === move.to);
+      const allCaptures = generateLegalMoves(this.state, {
+        forcedFrom: move.to,
+        ...(isDama && damaCaptureRemoval === "immediate" ? {} : { excludedJumpSquares: this.jumpedSquares }),
+      }).filter((m) => m.kind === "capture");
+      const moreCapturesFromDest = allCaptures;
       
       // If promoted and rule says stop on promotion, end the chain
       if (didPromote && RULES.stopCaptureOnPromotion) {
+        if (isDama) {
+          // Dama promotes only at the end of the sequence; if we ever get here,
+          // still finalize the chain correctly.
+          this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+        }
         // Switch turn now
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
         this.lockedCaptureFrom = null;
@@ -637,6 +664,9 @@ export class GameController {
       }
       
       // No more captures, switch turn and end
+      if (isDama) {
+        this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+      }
       this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
       this.lockedCaptureFrom = null;
       this.jumpedSquares.clear();

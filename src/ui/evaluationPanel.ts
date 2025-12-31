@@ -32,12 +32,22 @@ function countControlledStacks(state: GameState, p: Player): number {
   return n;
 }
 
+function countTopPieces(state: GameState, p: Player): number {
+  // For Dama: there are no stacks/columns; each occupied square is one piece.
+  return countControlledStacks(state, p);
+}
+
 function sumMaterial(state: GameState, p: Player): number {
   let total = 0;
   for (const stack of state.board.values()) {
     if (!stack || stack.length === 0) continue;
-    for (const piece of stack) {
-      if (piece.owner === p) total += pieceValue(piece);
+    if (state.meta?.rulesetId === "dama") {
+      const top = stack[stack.length - 1];
+      if (top.owner === p) total += pieceValue(top);
+    } else {
+      for (const piece of stack) {
+        if (piece.owner === p) total += pieceValue(piece);
+      }
     }
   }
   return total;
@@ -55,12 +65,14 @@ function formatAdvantage(state: GameState): string {
 }
 
 function formatControl(state: GameState): string {
-  const w = countControlledStacks(state, "W");
-  const b = countControlledStacks(state, "B");
-  if (w === b) return `Controlled stacks: White ${w} / Black ${b} (even)`;
+  const isDama = state.meta?.rulesetId === "dama";
+  const w = isDama ? countTopPieces(state, "W") : countControlledStacks(state, "W");
+  const b = isDama ? countTopPieces(state, "B") : countControlledStacks(state, "B");
+  const label = isDama ? "Pieces" : "Controlled stacks";
+  if (w === b) return `${label}: White ${w} / Black ${b} (even)`;
   const leader = w > b ? "White" : "Black";
   const diff = Math.abs(w - b);
-  return `Controlled stacks: White ${w} / Black ${b} (${leader} +${diff})`;
+  return `${label}: White ${w} / Black ${b} (${leader} +${diff})`;
 }
 
 function formatMaterial(state: GameState): string {

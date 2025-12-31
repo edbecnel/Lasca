@@ -54,6 +54,21 @@
       L 43.5 43.2
       Z" />
 
+    <path id="crown" d="
+      M 26 64
+      L 26 40
+      L 38 52
+      L 50 36
+      L 62 52
+      L 74 40
+      L 74 64
+      Z
+      M 28 66
+      H 72
+      V 72
+      H 28
+      Z" />
+
     <!-- ======== PIECE SYMBOLS ======== -->
 
     <!-- White Soldier (tan shell) -->
@@ -92,6 +107,28 @@
       <circle cx="50" cy="50" r="43" fill="url(#turtleShine)"/>
       <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="3"/>
       <use href="#star5" fill="#102a16" opacity="0.9" transform="translate(0 -2)"/>
+      <circle cx="50" cy="50" r="18" fill="none" stroke="#102a16" stroke-opacity="0.75" stroke-width="3"/>
+      <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.12"/>
+    </symbol>
+
+    <!-- White King (tan shell + crown, Dama) -->
+    <symbol id="W_K" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="url(#turtleTanBase)" stroke="#2f221a" stroke-width="5"/>
+      <circle cx="50" cy="50" r="43" fill="url(#turtleShellPattern)" opacity="0.55"/>
+      <circle cx="50" cy="50" r="43" fill="url(#turtleShine)"/>
+      <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="3"/>
+      <use href="#crown" fill="#2f221a" opacity="0.9" transform="translate(0 -2)"/>
+      <circle cx="50" cy="50" r="18" fill="none" stroke="#2f221a" stroke-opacity="0.75" stroke-width="3"/>
+      <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.14"/>
+    </symbol>
+
+    <!-- Black King (green shell + crown, Dama) -->
+    <symbol id="B_K" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="url(#turtleGreenBase)" stroke="#102a16" stroke-width="5"/>
+      <circle cx="50" cy="50" r="43" fill="url(#turtleShellPattern)" opacity="0.55"/>
+      <circle cx="50" cy="50" r="43" fill="url(#turtleShine)"/>
+      <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.16" stroke-width="3"/>
+      <use href="#crown" fill="#102a16" opacity="0.9" transform="translate(0 -2)"/>
       <circle cx="50" cy="50" r="18" fill="none" stroke="#102a16" stroke-opacity="0.75" stroke-width="3"/>
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.12"/>
     </symbol>

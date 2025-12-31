@@ -122,5 +122,39 @@
       <!-- Inner glass ring -->
       <circle cx="50" cy="50" r="35" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.35"/>
     </symbol>
+
+    <!-- Light Yellow Glass King (Dama) -->
+    <symbol id="W_K" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="url(#gradYellowGlassPolished)" stroke="#daa520" stroke-width="2.5" stroke-opacity="0.7"/>
+      <circle cx="50" cy="50" r="42" fill="url(#glassShine)"/>
+      <!-- Rounded edge effect -->
+      <circle cx="50" cy="50" r="42" fill="url(#glassEdge)"/>
+      <circle cx="50" cy="50" r="42" fill="url(#glassTopHighlight)"/>
+      <!-- Glass reflection -->
+      <ellipse cx="38" cy="32" rx="20" ry="16" fill="url(#glassReflection)"/>
+      <!-- White crown for king -->
+      <path d="M 26 64 L 26 40 L 38 52 L 50 36 L 62 52 L 74 40 L 74 64 Z M 28 66 H 72 V 72 H 28 Z"
+            fill="#ffffff" stroke="#ffd700" stroke-width="1.5" opacity="0.95"
+            filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))" transform="translate(0 -2)"/>
+      <!-- Inner glass ring -->
+      <circle cx="50" cy="50" r="35" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.35"/>
+    </symbol>
+
+    <!-- Dark Blue Glass King (Dama) -->
+    <symbol id="B_K" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="url(#gradBlueGlassPolished)" stroke="#2563eb" stroke-width="2.5" stroke-opacity="0.7"/>
+      <circle cx="50" cy="50" r="42" fill="url(#glassShine)"/>
+      <!-- Rounded edge effect -->
+      <circle cx="50" cy="50" r="42" fill="url(#glassEdge)"/>
+      <circle cx="50" cy="50" r="42" fill="url(#glassTopHighlight)"/>
+      <!-- Glass reflection -->
+      <ellipse cx="38" cy="32" rx="20" ry="16" fill="url(#glassReflection)"/>
+      <!-- White crown for king -->
+      <path d="M 26 64 L 26 40 L 38 52 L 50 36 L 62 52 L 74 40 L 74 64 Z M 28 66 H 72 V 72 H 28 Z"
+            fill="#ffffff" stroke="#87ceeb" stroke-width="1.5" opacity="0.95"
+            filter="drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))" transform="translate(0 -2)"/>
+      <!-- Inner glass ring -->
+      <circle cx="50" cy="50" r="35" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.35"/>
+    </symbol>
   </defs>
 </svg>

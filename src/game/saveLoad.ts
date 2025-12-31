@@ -1,7 +1,7 @@
 import type { GameState } from "./state.ts";
 import type { Stack } from "../types.ts";
 import type { HistoryManager } from "./historyManager.ts";
-import type { GameMeta, RulesetId, VariantId } from "../variants/variantTypes";
+import type { DamaCaptureRemoval, GameMeta, RulesetId, VariantId } from "../variants/variantTypes";
 import { DEFAULT_VARIANT_ID, getVariantById, isVariantId } from "../variants/variantRegistry";
 
 interface SerializedGameState {
@@ -28,6 +28,7 @@ interface SerializedSaveFileV3 {
   variantId: VariantId;
   rulesetId: RulesetId;
   boardSize: 7 | 8;
+  damaCaptureRemoval?: DamaCaptureRemoval;
   current: SerializedGameState;
   history?: SerializedHistory;
 }
@@ -42,9 +43,18 @@ function isBoardSize(raw: unknown): raw is 7 | 8 {
   return raw === 7 || raw === 8;
 }
 
+function isDamaCaptureRemoval(raw: unknown): raw is DamaCaptureRemoval {
+  return raw === "immediate" || raw === "end_of_sequence";
+}
+
 function defaultMeta(): GameMeta {
   const v = getVariantById(DEFAULT_VARIANT_ID);
-  return { variantId: v.variantId, rulesetId: v.rulesetId, boardSize: v.boardSize };
+  return {
+    variantId: v.variantId,
+    rulesetId: v.rulesetId,
+    boardSize: v.boardSize,
+    ...(v.rulesetId === "dama" ? { damaCaptureRemoval: v.damaCaptureRemoval ?? "immediate" } : {}),
+  };
 }
 
 function coerceMeta(raw: unknown): GameMeta | null {
@@ -53,6 +63,14 @@ function coerceMeta(raw: unknown): GameMeta | null {
   const rulesetId = isRulesetId(m?.rulesetId) ? (m.rulesetId as RulesetId) : null;
   const boardSize = isBoardSize(m?.boardSize) ? (m.boardSize as 7 | 8) : null;
   if (!variantId || !rulesetId || !boardSize) return null;
+
+  if (rulesetId === "dama") {
+    const damaCaptureRemoval: DamaCaptureRemoval = isDamaCaptureRemoval(m?.damaCaptureRemoval)
+      ? (m.damaCaptureRemoval as DamaCaptureRemoval)
+      : "immediate";
+    return { variantId, rulesetId, boardSize, damaCaptureRemoval };
+  }
+
   return { variantId, rulesetId, boardSize };
 }
 
@@ -99,6 +117,7 @@ export function serializeSaveData(state: GameState, history?: HistoryManager): S
     variantId: meta.variantId,
     rulesetId: meta.rulesetId,
     boardSize: meta.boardSize,
+    ...(meta.rulesetId === "dama" ? { damaCaptureRemoval: meta.damaCaptureRemoval ?? "immediate" } : {}),
     current: serializeGameState({ ...state, meta }),
   };
 
@@ -131,11 +150,21 @@ export function deserializeSaveData(
       throw new Error("Invalid save file: missing or invalid variant metadata");
     }
 
-    const meta: GameMeta = {
-      variantId: v3.variantId as VariantId,
-      rulesetId: v3.rulesetId as RulesetId,
-      boardSize: v3.boardSize as 7 | 8,
-    };
+    const variantId = v3.variantId as VariantId;
+    const rulesetId = v3.rulesetId as RulesetId;
+    const boardSize = v3.boardSize as 7 | 8;
+
+    let meta: GameMeta;
+    if (rulesetId === "dama") {
+      const embedded = coerceMeta((v3.current as any)?.meta);
+      const embeddedRemoval = embedded && embedded.rulesetId === "dama" ? embedded.damaCaptureRemoval : null;
+      const damaCaptureRemoval: DamaCaptureRemoval = isDamaCaptureRemoval(v3.damaCaptureRemoval)
+        ? (v3.damaCaptureRemoval as DamaCaptureRemoval)
+        : (embeddedRemoval ?? "immediate");
+      meta = { variantId, rulesetId, boardSize, damaCaptureRemoval };
+    } else {
+      meta = { variantId, rulesetId, boardSize };
+    }
 
     if (
       expectedMeta &&
@@ -153,7 +182,7 @@ export function deserializeSaveData(
 
     if (!v3.history) return { state };
 
-    const states = (v3.history.states || []).map((s) => ({ ...deserializeGameState(s), meta }));
+    const states = (v3.history.states || []).map((s: SerializedGameState) => ({ ...deserializeGameState(s), meta }));
     const notation = Array.isArray(v3.history.notation) ? v3.history.notation : [];
     const currentIndex = Number.isInteger(v3.history.currentIndex) ? v3.history.currentIndex : states.length - 1;
 
@@ -198,7 +227,7 @@ export function deserializeSaveData(
       );
     }
 
-    const states = (v2.history.states || []).map((s) => ({ ...deserializeGameState(s), meta }));
+    const states = (v2.history.states || []).map((s: SerializedGameState) => ({ ...deserializeGameState(s), meta }));
     const notation = Array.isArray(v2.history.notation) ? v2.history.notation : [];
     const currentIndex = Number.isInteger(v2.history.currentIndex) ? v2.history.currentIndex : states.length - 1;
 

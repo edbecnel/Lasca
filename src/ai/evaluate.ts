@@ -2,6 +2,10 @@ import type { GameState } from "../game/state.ts";
 import type { Player, Piece } from "../types.ts";
 import { parseNodeId } from "../game/coords.ts";
 
+function getRulesetId(state: GameState): string {
+  return state.meta?.rulesetId ?? "lasca";
+}
+
 function pieceBaseValue(p: Piece): number {
   return p.rank === "O" ? 200 : 100;
 }
@@ -80,6 +84,39 @@ function backRankBonus(nodeId: string, piece: Piece, boardSize: number): number 
 }
 
 export function evaluateState(state: GameState, perspective: Player): number {
+  const rulesetId = getRulesetId(state);
+  if (rulesetId === "dama") {
+    const opp: Player = perspective === "B" ? "W" : "B";
+    let score = 0;
+    let ownPieces = 0;
+    let oppPieces = 0;
+    const boardSize = state.meta?.boardSize ?? 8;
+
+    for (const [nodeId, stack] of state.board.entries()) {
+      if (!stack || stack.length === 0) continue;
+      const top = stack[stack.length - 1];
+
+      if (top.owner === perspective) ownPieces++;
+      else oppPieces++;
+
+      const sgn = top.owner === perspective ? 1 : -1;
+      score += sgn * pieceBaseValue(top);
+      score += sgn * centerBonus(nodeId, boardSize);
+
+      // Positional nudges for men only.
+      score += sgn * advancementBonusForBoard(nodeId, top, boardSize);
+      score += sgn * backRankBonus(nodeId, top, boardSize);
+
+      // Promotion proximity (men near back rank).
+      score += promotionBonus(state, nodeId, top, perspective);
+      score -= promotionBonus(state, nodeId, top, opp);
+    }
+
+    // Material count advantage.
+    score += 25 * (ownPieces - oppPieces);
+    return score;
+  }
+
   const opp: Player = perspective === "B" ? "W" : "B";
   let score = 0;
   let ownStacks = 0;

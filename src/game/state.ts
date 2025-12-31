@@ -42,6 +42,9 @@ export function createInitialGameStateForVariant(variantId: VariantId): GameStat
       variantId,
       rulesetId: variant.rulesetId,
       boardSize: variant.boardSize,
+      ...(variant.rulesetId === "dama"
+        ? { damaCaptureRemoval: variant.damaCaptureRemoval ?? "immediate" }
+        : {}),
     },
   };
 }

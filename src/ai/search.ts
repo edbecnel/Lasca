@@ -5,6 +5,7 @@ import { generateLegalMoves } from "../game/movegen.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { RULES } from "../game/ruleset.ts";
 import { evaluateState } from "./evaluate.ts";
+import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 
 export type SearchContext = {
   state: GameState;
@@ -43,12 +44,19 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 }
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
-  const excluded = ctx.lockedFrom ? ctx.excludedJumpSquares : undefined;
-  const all = generateLegalMoves(ctx.state, excluded);
+  const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
+  const damaRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(ctx.state) : null;
+  const constraints = ctx.lockedFrom
+    ? {
+        forcedFrom: ctx.lockedFrom,
+        ...(rulesetId === "dama" && damaRemoval === "immediate" ? {} : { excludedJumpSquares: ctx.excludedJumpSquares }),
+      }
+    : undefined;
+  const all = generateLegalMoves(ctx.state, constraints);
 
   if (ctx.lockedFrom) {
     // During a capture chain, only the capturing stack may continue, and only via captures.
-    return all.filter((m) => m.kind === "capture" && m.from === ctx.lockedFrom);
+    return all.filter((m) => m.kind === "capture");
   }
 
   return all;
@@ -96,10 +104,17 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   nextCtx.state = nextState;
   nextCtx.excludedJumpSquares.add(move.over);
 
+  const rulesetId = nextCtx.state.meta?.rulesetId ?? "lasca";
+  const isDama = rulesetId === "dama";
+  const damaRemoval = isDama ? getDamaCaptureRemovalMode(nextCtx.state) : null;
+
   const didPromote = Boolean((nextState as any).didPromote);
 
   // Promotion can optionally end the capture chain.
   if (didPromote && RULES.stopCaptureOnPromotion) {
+    if (isDama) {
+      nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
+    }
     nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
     nextCtx.lockedFrom = null;
     nextCtx.excludedJumpSquares.clear();
@@ -107,8 +122,11 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   }
 
   // Check for more captures from the landing square.
-  const allNext = generateLegalMoves(nextCtx.state, nextCtx.excludedJumpSquares);
-  const moreFromDest = allNext.filter((m) => m.kind === "capture" && m.from === move.to);
+  const allNext = generateLegalMoves(nextCtx.state, {
+    forcedFrom: move.to,
+    ...(isDama && damaRemoval === "immediate" ? {} : { excludedJumpSquares: nextCtx.excludedJumpSquares }),
+  });
+  const moreFromDest = allNext.filter((m) => m.kind === "capture");
 
   if (moreFromDest.length > 0) {
     nextCtx.lockedFrom = move.to;
@@ -116,6 +134,9 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   }
 
   // Chain ends: switch turn.
+  if (isDama) {
+    nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
+  }
   nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
   nextCtx.lockedFrom = null;
   nextCtx.excludedJumpSquares.clear();
