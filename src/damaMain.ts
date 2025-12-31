@@ -1,7 +1,6 @@
 import { createInitialGameStateForVariant } from "./game/state.ts";
 import type { GameState } from "./game/state.ts";
 import { renderGameState } from "./render/renderGameState.ts";
-import { createStackInspector } from "./ui/stackInspector";
 import { initSplitLayout } from "./ui/layout/splitLayout";
 import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager } from "./theme/themeManager";
@@ -71,19 +70,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked), activeVariant.boardSize);
   applyBoardCoords();
 
-  const zoomTitle = document.getElementById("zoomTitle") as HTMLElement | null;
-  const zoomHint = document.getElementById("zoomHint") as HTMLElement | null;
-  const zoomBody = document.getElementById("zoomBody") as HTMLElement | null;
-  if (!zoomBody) throw new Error("Missing inspector container: #zoomBody");
-
-  const zoomSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
-  zoomSvg.id = "zoomSvg";
-  zoomSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  zoomSvg.setAttribute("viewBox", "0 0 120 200");
-  zoomSvg.setAttribute("role", "img");
-  zoomSvg.setAttribute("aria-label", "Stack column");
-  zoomBody.replaceChildren(zoomSvg);
-
   initSplitLayout();
 
   const themeDropdown = document.getElementById("themeDropdown") as HTMLElement | null;
@@ -92,9 +78,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
-  if (!zoomTitle || !zoomHint) throw new Error("Missing inspector DOM nodes (zoomTitle/zoomHint)");
 
-  const inspector = createStackInspector(zoomTitle, zoomHint, zoomSvg);
+  // Dama has no stacks, so there is no stack inspector.
+  const inspector = null;
 
   // Create initial game state and render once
   const state = createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
