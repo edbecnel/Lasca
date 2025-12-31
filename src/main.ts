@@ -40,6 +40,9 @@ function writeBoolPref(key: string, value: boolean): void {
 window.addEventListener("DOMContentLoaded", async () => {
   const activeVariant = getVariantById(ACTIVE_VARIANT_ID);
 
+  const gameTitleEl = document.getElementById("gameTitle");
+  if (gameTitleEl) gameTitleEl.textContent = activeVariant.displayName;
+
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
