@@ -10,6 +10,7 @@ import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
 import { animateStack } from "../render/animateMove.ts";
+import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 
@@ -603,7 +604,9 @@ export class GameController {
     if (this.animationsEnabled) {
       const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${move.from}"]`) as SVGGElement | null;
       if (movingGroup) {
-        await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300);
+        const countsLayer = ensureStackCountsLayer(this.svg);
+        const movingCount = countsLayer.querySelector(`g.stackCount[data-node="${move.from}"]`) as SVGGElement | null;
+        await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300, movingCount ? [movingCount] : []);
       }
     }
     

@@ -15,9 +15,9 @@ export function renderStackAtNode(
   inspector: Inspector | null,
   nodeId: string,
   stack: Stack,
-  opts: { pieceSize?: number; rulesetId?: string } = {}
+  opts: { pieceSize?: number; rulesetId?: string; countsLayer?: SVGGElement | null } = {}
 ): void {
-  const { pieceSize = 86, rulesetId } = opts;
+  const { pieceSize = 86, rulesetId, countsLayer } = opts;
 
   const node = document.getElementById(nodeId) as SVGCircleElement | null;
   if (!node || !stack.length) return;
@@ -34,7 +34,7 @@ export function renderStackAtNode(
 
   g.appendChild(makeUse(pieceToHref(top, { rulesetId }), cx - half, cy - half, pieceSize));
 
-  drawMiniStackSpine(svgRoot, g, cx, cy, stack, { pieceSize, miniSize: 18, rulesetId });
+  drawMiniStackSpine(svgRoot, g, cx, cy, stack, { pieceSize, miniSize: 18, rulesetId, countLayer: countsLayer ?? undefined });
 
   if (inspector && stack.length > 1) {
     g.style.cursor = "pointer";

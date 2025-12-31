@@ -1,4 +1,5 @@
 import { renderStackAtNode } from "./renderStackAtNode.ts";
+import { ensureStackCountsLayer, clearStackCounts } from "./stackCountsLayer.ts";
 import type { GameState } from "../game/state.ts";
 import type { createStackInspector } from "../ui/stackInspector";
 
@@ -10,9 +11,15 @@ export function renderGameState(
 ): void {
   piecesLayer.textContent = "";
 
+  const countsLayer = ensureStackCountsLayer(svgRoot);
+  clearStackCounts(countsLayer);
+
   const rulesetId = state.meta?.rulesetId ?? "lasca";
 
   for (const [nodeId, stack] of state.board.entries()) {
-    renderStackAtNode(svgRoot, piecesLayer, inspector, nodeId, stack, { rulesetId });
+    renderStackAtNode(svgRoot, piecesLayer, inspector, nodeId, stack, {
+      rulesetId,
+      countsLayer,
+    });
   }
 }

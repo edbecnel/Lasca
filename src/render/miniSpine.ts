@@ -16,6 +16,7 @@ interface MiniSpineOptions {
   spinePad: number;
   crackGap: number;
   rulesetId?: string;
+  countLayer?: SVGGElement | null;
 }
 
 export function drawMiniStackSpine(
@@ -37,6 +38,7 @@ export function drawMiniStackSpine(
     spinePad = 6,
     crackGap = 12,
     rulesetId,
+    countLayer,
   } = opts;
 
   const n = stack.length;
@@ -179,6 +181,17 @@ export function drawMiniStackSpine(
   t.textContent = String(n);
   t.setAttribute("pointer-events", "none");
 
-  g.appendChild(bubble);
-  g.appendChild(t);
+  const targetLayer = countLayer ?? g;
+  if (targetLayer !== g) {
+    const countGroup = document.createElementNS(SVG_NS, "g") as SVGGElement;
+    countGroup.setAttribute("class", "stackCount");
+    countGroup.setAttribute("data-node", String(g.getAttribute("data-node") || ""));
+    countGroup.setAttribute("pointer-events", "none");
+    countGroup.appendChild(bubble);
+    countGroup.appendChild(t);
+    targetLayer.appendChild(countGroup);
+  } else {
+    g.appendChild(bubble);
+    g.appendChild(t);
+  }
 }

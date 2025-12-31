@@ -28,7 +28,8 @@ export function animateStack(
   fromNodeId: string,
   toNodeId: string,
   movingGroupEl: SVGGElement,
-  durationMs: number = 300
+  durationMs: number = 300,
+  extraEls: SVGElement[] = []
 ): Promise<void> {
   return new Promise((resolve) => {
     const fromPos = getNodeCenter(svg, fromNodeId);
@@ -40,41 +41,71 @@ export function animateStack(
       return;
     }
     
-    // Clone the moving group
-    const clone = movingGroupEl.cloneNode(true) as SVGGElement;
-    clone.setAttribute("data-animating", "true");
+    // Clone the moving group (+ any extra elements that should move with it)
+    const clones: SVGElement[] = [];
+
+    const cloneMain = movingGroupEl.cloneNode(true) as SVGGElement;
+    cloneMain.setAttribute("data-animating", "true");
+    clones.push(cloneMain);
+
+    for (const el of extraEls) {
+      try {
+        const c = el.cloneNode(true) as SVGElement;
+        c.setAttribute("data-animating", "true");
+        clones.push(c);
+      } catch {
+        // ignore
+      }
+    }
     
     // Don't set transform on clone - it already has correctly positioned children
     // The children have absolute x,y coordinates, so we'll animate using transform
     
-    // Hide the original during animation
-    const originalVisibility = movingGroupEl.style.visibility;
-    movingGroupEl.style.visibility = "hidden";
+    // Hide originals during animation
+    const originals: SVGElement[] = [movingGroupEl, ...extraEls];
+    const originalVisibility = originals.map((el) => el.style.visibility);
+    for (const el of originals) {
+      try {
+        el.style.visibility = "hidden";
+      } catch {
+        // ignore
+      }
+    }
     
-    // Append clone to overlay layer
-    overlayLayer.appendChild(clone);
+    // Append clones to overlay layer
+    for (const c of clones) {
+      overlayLayer.appendChild(c);
+    }
     
     // Calculate translation distance
     const dx = toPos.x - fromPos.x;
     const dy = toPos.y - fromPos.y;
     
     const cleanupAndResolve = () => {
-      // Remove clone if still present
-      try {
-        clone.remove();
-      } catch {
-        // ignore
+      // Remove clones if still present
+      for (const c of clones) {
+        try {
+          c.remove();
+        } catch {
+          // ignore
+        }
       }
 
-      // Restore original visibility
-      movingGroupEl.style.visibility = originalVisibility;
+      // Restore original visibility (originals may have been removed by a re-render)
+      for (let i = 0; i < originals.length; i++) {
+        try {
+          originals[i].style.visibility = originalVisibility[i] ?? "";
+        } catch {
+          // ignore
+        }
+      }
 
       resolve();
     };
 
     // Animate using Web Animations API
     // Start at 0,0 (current position) and move by dx,dy
-    const anyClone = clone as any;
+    const anyClone = cloneMain as any;
     if (typeof anyClone.animate !== "function") {
       cleanupAndResolve();
       return;
@@ -91,6 +122,25 @@ export function animateStack(
         fill: "forwards",
       }
     );
+
+    // Keep extra clones in lockstep
+    for (let i = 1; i < clones.length; i++) {
+      try {
+        (clones[i] as any).animate(
+          [
+            { transform: `translate(0px, 0px)` },
+            { transform: `translate(${dx}px, ${dy}px)` },
+          ],
+          {
+            duration: durationMs,
+            easing: "ease-in-out",
+            fill: "forwards",
+          }
+        );
+      } catch {
+        // ignore
+      }
+    }
 
     // Some browsers won't fire onfinish if the animation is cancelled (e.g., element removed).
     animation.onfinish = cleanupAndResolve;
