@@ -195,15 +195,11 @@ export class AIManager {
       });
     }
 
-    // When both sides are AI, start in paused mode so the user can Resume/Step.
-    if (this.isBothAI()) {
-      this.forcePausedUI();
-    } else {
-      this.refreshUI();
-    }
+    // Always start in paused mode on page load.
+    // User must explicitly click Resume to start AI play.
+    this.forcePausedUI();
 
-    // If the starting side is AI and we're not paused, start immediately.
-    this.kick();
+    // Don't auto-kick on page load - wait for user to Resume.
   }
 
   onHistoryChanged(reason?: HistoryChangeReason): void {
@@ -232,7 +228,9 @@ export class AIManager {
       100,
       3000,
     );
-    const paused = localStorage.getItem(LS_KEYS.paused) === "true";
+    // Default to paused on page load (startup). User must explicitly Resume.
+    const pausedValue = localStorage.getItem(LS_KEYS.paused);
+    const paused = pausedValue === null ? true : pausedValue === "true";
     return { white, black, delayMs: delay, paused };
   }
 
