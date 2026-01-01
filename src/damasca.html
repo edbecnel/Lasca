@@ -860,6 +860,17 @@
         }
       }
 
+      /* TEMP DEBUG: Force compact section spacing on all displays.
+         If you still see no change, the updated CSS is not being applied at runtime. */
+      .sectionHeader {
+        padding: 0 !important;
+        margin: 0 0 2px 0 !important;
+      }
+
+      .sidebarBody {
+        gap: 0 !important;
+      }
+
       /* Support for safe areas (notches, etc.) */
       @supports (padding: max(0px)) {
         body {
