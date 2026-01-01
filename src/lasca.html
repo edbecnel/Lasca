@@ -847,6 +847,19 @@
         }
       }
 
+      /* TEMP DEBUG: Some tablets report >1024px CSS width in portrait.
+         Apply portrait spacing on any touch device in portrait, regardless of width. */
+      @media (orientation: portrait) and (any-pointer: coarse) {
+        .sectionHeader {
+          padding: 3px 0;
+          margin: 0 0 5px 0;
+        }
+
+        .sidebarBody {
+          gap: 4px;
+        }
+      }
+
       /* Support for safe areas (notches, etc.) */
       @supports (padding: max(0px)) {
         body {
