@@ -2,9 +2,27 @@
 
 A browser-based implementation of Lasca (also known as Laska), the strategic board game invented by World Chess Champion Emanuel Lasker in 1911.
 
-## About Lasca
+## About
 
-Lasca is a two-player checkers variant played on a 7×7 board with unique stacking mechanics. When a piece captures an opponent's piece, it forms a stack (called a "column") with the captured piece underneath. The top piece controls the stack, and captured pieces can be liberated when their stack is captured.
+This project implements three checkers variants:
+
+### Lasca (7×7 and 8×8)
+
+Lasca is a two-player checkers variant with unique stacking mechanics. When a piece captures an opponent's piece, it forms a stack (called a "column") with the captured piece underneath. The top piece controls the stack, and captured pieces can be liberated when their stack is captured.
+
+- Play on classic 7×7 board or 8×8 Damasca variant
+- Soldiers move forward; Officers move diagonally any direction
+- Captured pieces form stacks rather than leaving the board
+
+### Dama Classic (8×8)
+
+Traditional checkers/draughts with two rule variants:
+
+- **Standard**: Captured pieces removed immediately during multi-capture sequences
+- **International**: Captured pieces remain on board until sequence completes
+- Men move forward diagonally; Kings have "flying" movement (any distance diagonally)
+- Save files are compatible between Standard and International variants
+- Mandatory capture with maximum-capture rule (must take the longest capture sequence)
 
 ## Features
 
