@@ -508,14 +508,13 @@
         Use capability-based media queries (pointer: coarse) instead of width alone.
         This avoids desktop/laptop browsers triggering the stacked layout due to OS scaling/zoom.
       */
-      @media (max-width: 1024px) and (pointer: coarse) {
-        /* Tablets and smaller: Stack vertically */
+      /* Tablets and smaller in LANDSCAPE: Stack vertically with standard spacing */
+      @media (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
         #appRoot {
           flex-direction: column;
-          height: 100dvh; /* Use dynamic viewport height to account for mobile browser bars */
+          height: 100dvh;
         }
 
-        /* Keep both panels stacked at the top; board below */
         #leftSidebar {
           order: 1;
         }
@@ -542,7 +541,7 @@
         }
 
         .sidebarTab {
-          display: none; /* Hide by default on mobile; show only when collapsed */
+          display: none;
         }
 
         .sidebar.collapsed .sidebarTab {
@@ -550,7 +549,6 @@
           width: 100%;
         }
 
-        /* Make collapse buttons in header more prominent for touch */
         .sidebarHeader .panelBtn {
           min-width: 32px;
           min-height: 32px;
@@ -558,7 +556,6 @@
           font-size: 14px;
         }
 
-        /* Larger touch targets for collapsible section headers */
         .sectionHeader {
           padding: 8px 0;
           margin: 0 0 12px 0;
@@ -570,18 +567,15 @@
           font-size: 16px;
         }
 
-        /* Hide gutters on mobile */
         .gutter {
           display: none;
         }
 
-        /* Center area adjustments */
         #centerArea {
           flex: 1 1 auto;
           min-width: 0;
           min-height: 300px;
           padding: 10px;
-          /* Add extra padding at bottom to account for Android navigation bar */
           padding-bottom: max(10px, env(safe-area-inset-bottom));
         }
 
@@ -590,32 +584,139 @@
           max-width: 100%;
         }
 
-        /* Sidebar body gets scrollable on mobile */
         .sidebarBody {
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
         }
 
-        /* Adjust panel sections for mobile */
         .panelSection {
           padding: 12px;
         }
 
-        /* Make buttons larger for touch */
         .panelBtn {
           padding: 10px 14px;
           font-size: 13px;
           min-height: 40px;
         }
 
-        /* Checkboxes larger for touch */
         input[type="checkbox"] {
           width: 20px !important;
           height: 20px !important;
         }
 
-        /* Theme dropdown button larger */
+        .themeDropdownBtn {
+          padding: 12px 14px;
+          font-size: 13px;
+          min-height: 44px;
+        }
+
+        .themeOption {
+          padding: 12px 14px;
+          font-size: 13px;
+          min-height: 44px;
+        }
+      }
+
+      /* Tablets and smaller in PORTRAIT: Stack vertically with REDUCED spacing for vertical space */
+      @media (max-width: 1024px) and (orientation: portrait) and (pointer: coarse) {
+        #appRoot {
+          flex-direction: column;
+          height: 100dvh;
+        }
+
+        #leftSidebar {
+          order: 1;
+        }
+
+        #rightSidebar {
+          order: 2;
+        }
+
+        #centerArea {
+          order: 3;
+        }
+
+        .sidebar {
+          width: 100% !important;
+          height: auto;
+          max-height: 40vh;
+          border-radius: 0;
+        }
+
+        .sidebar.collapsed {
+          width: 100% !important;
+          height: 44px;
+          max-height: 44px;
+        }
+
+        .sidebarTab {
+          display: none;
+        }
+
+        .sidebar.collapsed .sidebarTab {
+          display: flex;
+          width: 100%;
+        }
+
+        .sidebarHeader .panelBtn {
+          min-width: 32px;
+          min-height: 32px;
+          padding: 8px 12px;
+          font-size: 14px;
+        }
+
+        /* REDUCED spacing for portrait */
+        .sectionHeader {
+          padding: 6px 0;
+          margin: 0 0 10px 0;
+        }
+
+        .collapseBtn {
+          width: 32px;
+          height: 32px;
+          font-size: 16px;
+        }
+
+        .gutter {
+          display: none;
+        }
+
+        #centerArea {
+          flex: 1 1 auto;
+          min-width: 0;
+          min-height: 300px;
+          padding: 10px;
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        svg#lascaBoard {
+          max-height: calc(100dvh - 200px);
+          max-width: 100%;
+        }
+
+        .sidebarBody {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          gap: 8px;
+        }
+
+        .panelSection {
+          padding: 12px;
+        }
+
+        .panelBtn {
+          padding: 10px 14px;
+          font-size: 13px;
+          min-height: 40px;
+        }
+
+        input[type="checkbox"] {
+          width: 20px !important;
+          height: 20px !important;
+        }
+
         .themeDropdownBtn {
           padding: 12px 14px;
           font-size: 13px;
@@ -723,18 +824,6 @@
 
         svg#lascaBoard {
           max-height: calc(100dvh - 120px);
-        }
-      }
-
-      /* Tablets in portrait: reduced spacing for more vertical room */
-      @media (min-width: 769px) and (orientation: portrait) and (pointer: coarse) {
-        .sectionHeader {
-          padding: 6px 0;
-          margin: 0 0 10px 0;
-        }
-
-        .sidebarBody {
-          gap: 8px;
         }
       }
 
