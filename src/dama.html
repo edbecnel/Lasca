@@ -358,6 +358,7 @@
         justify-content: center;
         padding: 10px;
         overflow: auto;
+        position: relative;
       }
 
       #boardWrap {
@@ -375,6 +376,46 @@
         max-height: 100%;
         display: block;
         color: var(--panel-text);
+        transition: transform 0.3s ease;
+      }
+
+      /* Board height adjustment for Android tablets */
+      #centerArea.reduced-height svg#lascaBoard {
+        transform: scale(0.92) translateY(-32px);
+        transform-origin: center center;
+      }
+
+      #boardHeightToggle {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 48px;
+        height: 48px;
+        border-radius: 24px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 20px;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      #boardHeightToggle:hover {
+        background: rgba(74, 158, 255, 0.8);
+        border-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.05);
+      }
+
+      /* Show on touch devices (likely tablets/phones) */
+      @media (pointer: coarse) {
+        #boardHeightToggle {
+          display: flex;
+        }
       }
 
       /* ===== Inspector (kept, but now inside right sidebar) ===== */
@@ -1061,6 +1102,14 @@
 
       <!-- CENTER (BOARD) -->
       <main id="centerArea" aria-label="Board area">
+        <button
+          id="boardHeightToggle"
+          type="button"
+          title="Adjust board height for bottom navigation bar"
+          aria-label="Toggle board height adjustment"
+        >
+          ↕️
+        </button>
         <div id="boardWrap">
           <!-- Board SVG is loaded from ./assets/lasca_board.svg at runtime -->
         </div>

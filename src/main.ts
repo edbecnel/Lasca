@@ -360,6 +360,50 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Board height adjustment toggle (for Android tablets with bottom nav bar)
+  const boardHeightToggle = document.getElementById('boardHeightToggle') as HTMLButtonElement | null;
+  const centerArea = document.getElementById('centerArea') as HTMLElement | null;
+  
+  if (boardHeightToggle && centerArea) {
+    const STORAGE_KEY = 'lasca.boardHeightReduced';
+    
+    // Restore saved state
+    const savedReduced = localStorage.getItem(STORAGE_KEY) === 'true';
+    if (savedReduced) {
+      centerArea.classList.add('reduced-height');
+      boardHeightToggle.textContent = '⬆️';
+      boardHeightToggle.title = 'Restore full board height';
+    }
+    
+    boardHeightToggle.addEventListener('click', () => {
+      const isReduced = centerArea.classList.toggle('reduced-height');
+      
+      // Update button appearance
+      if (isReduced) {
+        boardHeightToggle.textContent = '⬆️';
+        boardHeightToggle.title = 'Restore full board height';
+      } else {
+        boardHeightToggle.textContent = '↕️';
+        boardHeightToggle.title = 'Adjust board height for bottom navigation bar';
+      }
+      
+      // Save state
+      localStorage.setItem(STORAGE_KEY, isReduced.toString());
+    });
+
+    // Dev helper: expose to console for testing on desktop
+    (window as any).toggleBoardHeightButtonVisibility = () => {
+      const currentDisplay = window.getComputedStyle(boardHeightToggle).display;
+      if (currentDisplay === 'none') {
+        boardHeightToggle.style.display = 'flex';
+        console.log('Board height button is now visible');
+      } else {
+        boardHeightToggle.style.display = '';
+        console.log('Board height button visibility reset to CSS default');
+      }
+    };
+  }
+
   // Dev-only: expose rerender/random that also sync controller state
   // Note: boardDebug is disabled since we now have the move hints feature
   if (import.meta.env && import.meta.env.DEV) {
