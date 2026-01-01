@@ -45,13 +45,9 @@ export function applyMoveDama(
     nextBoard.set(move.to, moving);
     nextBoard.delete(move.from);
 
-    // Promote immediately if the landing square is on the promotion row.
-    // Whether a capture chain continues after promotion is controlled by RULES.stopCaptureOnPromotion
-    // (handled by the controller), but the piece should visually be an Officer right away.
-    const tempState = { ...state, board: nextBoard };
-    const didPromote = promoteIfNeeded(tempState, move.to);
-
-    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", didPromote };
+    // Promotion is handled at the end of the capture sequence (controller/finalizeDamaCaptureChain)
+    // so that if further legal jumps exist, the piece continues as a Soldier until the chain ends.
+    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle" };
   }
 
   // Quiet move
