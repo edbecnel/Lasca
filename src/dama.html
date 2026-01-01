@@ -666,12 +666,6 @@
           font-size: 14px;
         }
 
-        /* TEMP TEST: extra-reduced spacing for portrait */
-        .sectionHeader {
-          padding: 3px 0;
-          margin: 0 0 5px 0;
-        }
-
         .collapseBtn {
           width: 32px;
           height: 32px;
@@ -699,7 +693,6 @@
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
-          gap: 4px;
         }
 
         .panelSection {
@@ -756,12 +749,6 @@
 
         .sidebarBody {
           padding: 8px;
-          gap: 8px;
-        }
-
-        /* Even larger touch targets on phones */
-        .sectionHeader {
-          padding: 10px 0;
         }
 
         .collapseBtn {
@@ -796,13 +783,6 @@
 
         .sidebarBody {
           padding: 8px;
-          gap: 6px;
-        }
-
-        /* TEMP TEST: extra-reduced spacing for better vertical space */
-        .sectionHeader {
-          padding: 3px 0;
-          margin: 0 0 4px 0;
         }
 
         .collapseBtn {
@@ -827,21 +807,7 @@
         }
       }
 
-      /* TEMP DEBUG: Some tablets report >1024px CSS width in portrait.
-         Apply portrait spacing on any touch device in portrait, regardless of width. */
-      @media (orientation: portrait) and (any-pointer: coarse) {
-        .sectionHeader {
-          padding: 3px 0;
-          margin: 0 0 5px 0;
-        }
-
-        .sidebarBody {
-          gap: 4px;
-        }
-      }
-
-      /* TEMP DEBUG: Force compact section spacing on all displays.
-         If you still see no change, the updated CSS is not being applied at runtime. */
+      /* Reduce panel section header height and inter-section spacing (global). */
       .sectionHeader {
         padding: 0 !important;
         margin: 0 0 2px 0 !important;
