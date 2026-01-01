@@ -45,9 +45,13 @@ export function applyMoveDama(
     nextBoard.set(move.to, moving);
     nextBoard.delete(move.from);
 
-    // No mid-turn promotion for Dama capture chains; controller/AI handle
-    // end-of-sequence promotion after the chain is complete.
-    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle" };
+    // Promote immediately if the landing square is on the promotion row.
+    // Whether a capture chain continues after promotion is controlled by RULES.stopCaptureOnPromotion
+    // (handled by the controller), but the piece should visually be an Officer right away.
+    const tempState = { ...state, board: nextBoard };
+    const didPromote = promoteIfNeeded(tempState, move.to);
+
+    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", didPromote };
   }
 
   // Quiet move

@@ -39,6 +39,24 @@ describe("applyMoveDama", () => {
     expect(next.board.get("r7c1")?.[0]).toEqual({ owner: "B", rank: "O" });
   });
 
+  it("capture promotes immediately on landing (B1)", () => {
+    // B1 is r7c1 for an 8×8 board (see nodeIdToA1 mapping).
+    const s = mkDamaState(
+      [
+        ["r5c3", [{ owner: "B", rank: "S" }]],
+        ["r6c2", [{ owner: "W", rank: "S" }]],
+      ],
+      "B"
+    );
+
+    const next = applyMove(s, { kind: "capture", from: "r5c3", over: "r6c2", to: "r7c1" });
+
+    // Dama capture chains keep the same side to move; controller switches at turn boundary.
+    expect(next.toMove).toBe("B");
+    expect(Boolean((next as any).didPromote)).toBe(true);
+    expect(next.board.get("r7c1")?.[0]).toEqual({ owner: "B", rank: "O" });
+  });
+
   it("end_of_sequence: jumped piece removed only after chain finalizes", () => {
     const s: GameState = {
       board: new Map([
