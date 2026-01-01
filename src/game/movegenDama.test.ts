@@ -70,6 +70,25 @@ describe("movegen Dama (Phase 4)", () => {
     expect(moves.every((m) => m.kind === "capture")).toBe(true);
   });
 
+  it("kings have flying quiet moves (multiple squares)", () => {
+    const s = mkDamaState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
+    const moves = generateLegalMoves(s);
+
+    // With no captures available, a king should be able to slide any distance diagonally.
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        { kind: "move", from: "r3c3", to: "r2c2" },
+        { kind: "move", from: "r3c3", to: "r1c1" },
+        { kind: "move", from: "r3c3", to: "r0c0" },
+        { kind: "move", from: "r3c3", to: "r4c4" },
+        { kind: "move", from: "r3c3", to: "r5c5" },
+        { kind: "move", from: "r3c3", to: "r6c6" },
+        { kind: "move", from: "r3c3", to: "r7c7" },
+      ])
+    );
+    expect(moves.every((m) => m.kind === "move")).toBe(true);
+  });
+
   it("enforces maximum-capture line (filters first steps)", () => {
     // From r2c2 (Black man), there are two captures available:
     // - r2c2 x r3c3 -> r4c4 then x r5c5 -> r6c6 (2 captures)

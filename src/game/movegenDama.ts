@@ -279,20 +279,30 @@ export function generateLegalMovesDama(
       continue;
     }
 
-    // Kings: quiet move one step diagonally any direction.
-    const deltas = [
+    // Kings: flying quiet moves (slide diagonally any distance until blocked).
+    const dirs = [
       { dr: -1, dc: -1 },
       { dr: -1, dc: +1 },
       { dr: +1, dc: -1 },
       { dr: +1, dc: +1 },
     ];
-    for (const { dr, dc } of deltas) {
-      const nr = r + dr;
-      const nc = c + dc;
-      if (!inBounds(nr, nc, boardSize) || !isPlayable(nr, nc, boardSize)) continue;
-      const toId = makeNodeId(nr, nc);
-      if (!isEmptyAt(state, toId)) continue;
-      out.push({ kind: "move", from: fromId, to: toId });
+    for (const { dr, dc } of dirs) {
+      let rr = r + dr;
+      let cc = c + dc;
+
+      while (inBounds(rr, cc, boardSize)) {
+        if (!isPlayable(rr, cc, boardSize)) {
+          rr += dr;
+          cc += dc;
+          continue;
+        }
+
+        const toId = makeNodeId(rr, cc);
+        if (!isEmptyAt(state, toId)) break;
+        out.push({ kind: "move", from: fromId, to: toId });
+        rr += dr;
+        cc += dc;
+      }
     }
   }
 

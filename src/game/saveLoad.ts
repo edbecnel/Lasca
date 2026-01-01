@@ -74,6 +74,45 @@ function coerceMeta(raw: unknown): GameMeta | null {
   return { variantId, rulesetId, boardSize };
 }
 
+function normalizeMetaFromVariantId(meta: GameMeta): GameMeta {
+  const v = getVariantById(meta.variantId);
+  if (v.rulesetId === "dama") {
+    return {
+      variantId: v.variantId,
+      rulesetId: v.rulesetId,
+      boardSize: v.boardSize,
+      damaCaptureRemoval: v.damaCaptureRemoval ?? "immediate",
+    };
+  }
+  return { variantId: v.variantId, rulesetId: v.rulesetId, boardSize: v.boardSize };
+}
+
+function isDamaClassicInteroperableVariant(variantId: VariantId): boolean {
+  return (
+    variantId === "dama_8_classic_standard" ||
+    variantId === "dama_8_classic_international" ||
+    // Back-compat: old alias that maps to standard.
+    variantId === "dama_8_classic"
+  );
+}
+
+function isCompatibleLoadVariant(saved: GameMeta, expected: GameMeta): boolean {
+  if (saved.rulesetId !== expected.rulesetId) return false;
+  if (saved.boardSize !== expected.boardSize) return false;
+
+  // Allow Dama Classic Standard/International to load each other.
+  if (
+    saved.rulesetId === "dama" &&
+    isDamaClassicInteroperableVariant(saved.variantId) &&
+    isDamaClassicInteroperableVariant(expected.variantId)
+  ) {
+    return true;
+  }
+
+  // Default: strict.
+  return saved.variantId === expected.variantId;
+}
+
 function getMetaForState(state: GameState): GameMeta {
   const m = coerceMeta(state.meta);
   return m ?? defaultMeta();
@@ -141,7 +180,7 @@ export function deserializeSaveData(
   state: GameState;
   history?: { states: GameState[]; notation: string[]; currentIndex: number };
 } {
-  const expectedMeta = expected ? (coerceMeta(expected) ?? defaultMeta()) : null;
+  const expectedMeta = expected ? normalizeMetaFromVariantId(coerceMeta(expected) ?? defaultMeta()) : null;
 
   // v3: metadata wrapper (preferred)
   if ((data as any)?.saveVersion === 3) {
@@ -168,14 +207,17 @@ export function deserializeSaveData(
 
     if (
       expectedMeta &&
-      (meta.variantId !== expectedMeta.variantId ||
-        meta.rulesetId !== expectedMeta.rulesetId ||
-        meta.boardSize !== expectedMeta.boardSize)
+      !isCompatibleLoadVariant(meta, expectedMeta)
     ) {
       throw new Error(
         `Save variant mismatch. This file is for ${formatVariantForMessage(meta.variantId)}, but this page is ${formatVariantForMessage(expectedMeta.variantId)}.`
       );
     }
+
+    // If the current page provided an expected meta, prefer it going forward.
+    // This lets Dama Standard/International saves be interoperable while ensuring
+    // that the game continues (and re-saves) as the currently running variant.
+    if (expectedMeta) meta = expectedMeta;
 
     const current = deserializeGameState(v3.current as SerializedGameState);
     const state: GameState = { ...current, meta };

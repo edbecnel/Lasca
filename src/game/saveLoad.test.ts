@@ -138,4 +138,39 @@ describe("saveLoad", () => {
     expect(loaded.state.board.get("r3c3")).toEqual([{ owner: "B", rank: "O" }]);
     expect(loaded.state.meta).toBeDefined();
   });
+
+  it("should allow Dama Classic Standard <-> International saves to load each other (rewrites meta to current)", () => {
+    const mkDamaState = (variantId: any, damaCaptureRemoval: any): GameState => ({
+      board: new Map([["r3c3", [{ owner: "B", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+      meta: { variantId, rulesetId: "dama", boardSize: 8, damaCaptureRemoval },
+    });
+
+    const standard = mkDamaState("dama_8_classic_standard", "immediate");
+    const international = mkDamaState("dama_8_classic_international", "end_of_sequence");
+
+    const saveStandard = serializeSaveData(standard);
+    const saveInternational = serializeSaveData(international);
+
+    // Load Standard save while running International.
+    const loadedAsInternational = deserializeSaveData(saveStandard as any, {
+      variantId: "dama_8_classic_international",
+      rulesetId: "dama",
+      boardSize: 8,
+    } as any);
+    expect(loadedAsInternational.state.meta?.variantId).toBe("dama_8_classic_international");
+    expect(loadedAsInternational.state.meta?.rulesetId).toBe("dama");
+    expect(loadedAsInternational.state.meta?.boardSize).toBe(8);
+    expect((loadedAsInternational.state.meta as any)?.damaCaptureRemoval).toBe("end_of_sequence");
+
+    // Load International save while running Standard.
+    const loadedAsStandard = deserializeSaveData(saveInternational as any, {
+      variantId: "dama_8_classic_standard",
+      rulesetId: "dama",
+      boardSize: 8,
+    } as any);
+    expect(loadedAsStandard.state.meta?.variantId).toBe("dama_8_classic_standard");
+    expect((loadedAsStandard.state.meta as any)?.damaCaptureRemoval).toBe("immediate");
+  });
 });
