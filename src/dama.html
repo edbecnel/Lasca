@@ -684,8 +684,9 @@
         }
       }
 
-      /* Portrait orientation: reduce section header height and spacing for better vertical screen real estate */
-      @media (orientation: portrait) and (pointer: coarse) {
+      /* Portrait tablets: reduce section header height and spacing for better vertical screen real estate */
+      /* Must come after phone queries to properly override */
+      @media (min-width: 769px) and (orientation: portrait) and (pointer: coarse) {
         .sectionHeader {
           padding: 6px 0;
           margin: 0 0 10px 0;
@@ -696,8 +697,13 @@
         }
       }
 
-      /* Portrait phones: even more compact */
+      /* Portrait phones: reduce spacing even more to maximize vertical space */
       @media (max-width: 768px) and (orientation: portrait) and (pointer: coarse) {
+        .sectionHeader {
+          padding: 6px 0;
+          margin: 0 0 8px 0;
+        }
+
         .sidebarBody {
           gap: 6px;
         }
