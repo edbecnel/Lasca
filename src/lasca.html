@@ -649,7 +649,8 @@
         }
       }
 
-      @media (max-width: 768px) and (pointer: coarse) {
+      /* Phones in landscape: standard spacing */
+      @media (max-width: 768px) and (orientation: landscape) and (pointer: coarse) {
         /* Phones: Even more compact */
         .sidebar {
           max-height: 35vh;
@@ -689,6 +690,47 @@
         }
       }
 
+      /* Phones in portrait: reduced spacing for more vertical room */
+      @media (max-width: 768px) and (orientation: portrait) and (pointer: coarse) {
+        .sidebar {
+          max-height: 35vh;
+        }
+
+        #centerArea {
+          padding: 8px;
+          padding-bottom: max(8px, env(safe-area-inset-bottom));
+        }
+
+        svg#lascaBoard {
+          max-height: calc(100dvh - 150px);
+        }
+
+        .panelSection {
+          padding: 10px;
+        }
+
+        .sidebarHeader {
+          padding: 8px 10px;
+        }
+
+        .sidebarBody {
+          padding: 8px;
+          gap: 6px;
+        }
+
+        /* Reduced spacing for better vertical space */
+        .sectionHeader {
+          padding: 6px 0;
+          margin: 0 0 8px 0;
+        }
+
+        .collapseBtn {
+          width: 36px;
+          height: 36px;
+          font-size: 18px;
+        }
+      }
+
       /* Landscape phones and small tablets */
       @media (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
         .sidebar {
@@ -704,8 +746,7 @@
         }
       }
 
-      /* Portrait tablets: reduce section header height and spacing for better vertical screen real estate */
-      /* Must come after phone queries to properly override */
+      /* Tablets in portrait: reduced spacing for more vertical room */
       @media (min-width: 769px) and (orientation: portrait) and (pointer: coarse) {
         .sectionHeader {
           padding: 6px 0;
@@ -714,18 +755,6 @@
 
         .sidebarBody {
           gap: 8px;
-        }
-      }
-
-      /* Portrait phones: reduce spacing even more to maximize vertical space */
-      @media (max-width: 768px) and (orientation: portrait) and (pointer: coarse) {
-        .sectionHeader {
-          padding: 6px 0;
-          margin: 0 0 8px 0;
-        }
-
-        .sidebarBody {
-          gap: 6px;
         }
       }
 
