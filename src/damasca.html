@@ -432,7 +432,7 @@
       }
 
       /* Show on touch devices (likely tablets/phones) */
-      @media (pointer: coarse) {
+      @media (any-pointer: coarse) {
         #boardHeightToggle {
           display: flex;
         }
@@ -525,11 +525,11 @@
 
       /* ===== Mobile & Tablet Styles ===== */
       /*
-        Use capability-based media queries (pointer: coarse) instead of width alone.
+        Use capability-based media queries (any-pointer: coarse) instead of width alone.
         This avoids desktop/laptop browsers triggering the stacked layout due to OS scaling/zoom.
       */
       /* Tablets and smaller in LANDSCAPE: Stack vertically with standard spacing */
-      @media (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
+      @media (max-width: 1024px) and (orientation: landscape) and (any-pointer: coarse) {
         #appRoot {
           flex-direction: column;
           height: 100dvh;
@@ -639,7 +639,7 @@
       }
 
       /* Tablets and smaller in PORTRAIT: Stack vertically with REDUCED spacing for vertical space */
-      @media (max-width: 1024px) and (orientation: portrait) and (pointer: coarse) {
+      @media (max-width: 1024px) and (orientation: portrait) and (any-pointer: coarse) {
         #appRoot {
           flex-direction: column;
           height: 100dvh;
@@ -751,7 +751,7 @@
       }
 
       /* Phones in landscape: standard spacing */
-      @media (max-width: 768px) and (orientation: landscape) and (pointer: coarse) {
+      @media (max-width: 768px) and (orientation: landscape) and (any-pointer: coarse) {
         /* Phones: Even more compact */
         .sidebar {
           max-height: 35vh;
@@ -792,7 +792,7 @@
       }
 
       /* Phones in portrait: reduced spacing for more vertical room */
-      @media (max-width: 768px) and (orientation: portrait) and (pointer: coarse) {
+      @media (max-width: 768px) and (orientation: portrait) and (any-pointer: coarse) {
         .sidebar {
           max-height: 35vh;
         }
@@ -833,7 +833,7 @@
       }
 
       /* Landscape phones and small tablets */
-      @media (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
+      @media (max-width: 1024px) and (orientation: landscape) and (any-pointer: coarse) {
         .sidebar {
           max-height: 50vh;
         }
