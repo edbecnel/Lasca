@@ -264,8 +264,8 @@ window.addEventListener("DOMContentLoaded", async () => {
                 ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
                 : "";
               const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
-              const currentAttr = entry.isCurrent ? " data-is-current=\\\"1\\\"" : "";
-              return `<div data-history-index=\\\"${entry.index}\\\"${currentAttr} style=\\\"${style}\\\">Start</div>`;
+              const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+              return `<div data-history-index="${entry.index}"${currentAttr} style="${style}">Start</div>`;
             }
 
             // For moves: toMove indicates who's about to move, so invert to get who just moved
@@ -286,8 +286,8 @@ window.addEventListener("DOMContentLoaded", async () => {
               ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
               : "";
             const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
-            const currentAttr = entry.isCurrent ? " data-is-current=\\\"1\\\"" : "";
-            return `<div data-history-index=\\\"${entry.index}\\\"${currentAttr} style=\\\"${style}\\\">${label}</div>`;
+            const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+            return `<div data-history-index="${entry.index}"${currentAttr} style="${style}">${label}</div>`;
           })
           .join("");
       }
@@ -296,7 +296,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       // Use rAF so layout reflects the updated HTML before scrolling.
       requestAnimationFrame(() => {
         if (reason === "jump" || reason === "undo" || reason === "redo") {
-          const currentEl = moveHistoryEl.querySelector("[data-is-current=\\\"1\\\"]") as HTMLElement | null;
+          const currentEl = moveHistoryEl.querySelector('[data-is-current="1"]') as HTMLElement | null;
           if (currentEl) currentEl.scrollIntoView({ block: "nearest" });
           return;
         }
