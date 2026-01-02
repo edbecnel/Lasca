@@ -421,6 +421,7 @@
         max-width: 100%;
         max-height: 100%;
         display: block;
+        overflow: visible;
         color: var(--panel-text);
         transition: transform 0.3s ease;
       }
@@ -823,7 +824,8 @@
 
         /* Safari: avoid clipping the top border in reduced-height mode. */
         #centerArea.reduced-height svg#lascaBoard {
-          transform: scale(0.88) translateY(-44px);
+          transform: scale(0.88) translateY(-28px);
+          transform-origin: center center;
         }
 
         .panelSection {
