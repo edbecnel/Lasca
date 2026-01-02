@@ -228,9 +228,9 @@ export class AIManager {
       return;
     }
 
-    // Undo/Redo are explicit user navigation: immediately pause AI.
-    // This prevents AI from instantly replaying a just-undone move.
-    if (reason === "undo" || reason === "redo") {
+    // Undo/Redo/Jump are explicit user navigation: immediately pause AI.
+    // This prevents AI from instantly replaying a navigated position.
+    if (reason === "undo" || reason === "redo" || reason === "jump") {
       this.forcePausedUI();
       return;
     }

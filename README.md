@@ -99,7 +99,11 @@ If you want help using the Start Page itself (launcher UI), see [Start Page Help
 
 #### Move History Display
 
-The Move History section (in the Info panel, below the Lasca Stack Inspector) shows each move in algebraic notation and auto-scrolls so the latest move stays visible:
+The Move History section (in the Info panel, below the Lasca Stack Inspector) shows each move in algebraic notation.
+
+- Click any entry (including "Start") to jump to that point in the game.
+- When you Undo/Redo or jump, the list scrolls to keep the current entry visible.
+- When you play moves normally, it auto-scrolls so the latest move stays visible.
 
 - **Quiet moves**: `1. ⚪ r4c2 → r3c3` (start → destination)
 - **Captures**: `1. ⚫ r2c4 × r3c3` (using × symbol)

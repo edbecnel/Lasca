@@ -16,7 +16,7 @@ import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/dam
 import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 
-export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame" | "gameOver";
+export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -270,6 +270,39 @@ export class GameController {
       this.checkAndHandleCurrentPlayerLost();
       this.fireHistoryChange("redo");
     }
+  }
+
+  jumpToHistory(index: number): void {
+    const target = this.history.jumpTo(index);
+    if (!target) return;
+
+    // Allow jumping out of terminal states.
+    this.isGameOver = false;
+
+    // Cancel any transient UI timers.
+    if (this.bannerTimer) {
+      window.clearTimeout(this.bannerTimer);
+      this.bannerTimer = null;
+    }
+    if (this.remainderTimer) {
+      window.clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
+
+    this.state = target;
+    this.lockedCaptureFrom = null;
+    this.lockedCaptureDir = null;
+    this.jumpedSquares.clear();
+    this.currentTurnNodes = [];
+    this.currentTurnHasCapture = false;
+    this.clearSelection();
+    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    const allLegal = generateLegalMoves(this.state);
+    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.updatePanel();
+    this.recomputeRepetitionCounts();
+    this.checkAndHandleCurrentPlayerLost();
+    this.fireHistoryChange("jump");
   }
 
   canUndo(): boolean {

@@ -76,6 +76,17 @@ export class HistoryManager {
   }
 
   /**
+   * Jump directly to a specific history index.
+   * Returns the target state, or null if the index is out of bounds.
+   */
+  jumpTo(index: number): GameState | null {
+    if (!Number.isInteger(index)) return null;
+    if (index < 0 || index >= this.history.length) return null;
+    this.currentIndex = index;
+    return this.cloneState(this.history[this.currentIndex]);
+  }
+
+  /**
    * Check if we can undo.
    */
   canUndo(): boolean {
@@ -149,6 +160,7 @@ export class HistoryManager {
       toMove: state.toMove,
       phase: state.phase,
       meta: state.meta ? { ...state.meta } : undefined,
+      captureChain: state.captureChain ? { ...state.captureChain } : undefined,
     };
   }
 }

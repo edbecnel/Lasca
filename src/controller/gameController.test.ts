@@ -153,4 +153,48 @@ describe("GameController input lock preserves capture chain", () => {
     const legal = controller.getLegalMovesForTurn();
     expect(legal).toEqual([]);
   });
+
+  it("jumpToHistory restores snapshot and clears capture-chain constraints", () => {
+    const history = new HistoryManager();
+
+    const s0: GameState = {
+      board: new Map([
+        ["r1c1", [{ owner: "W", rank: "O" }]],
+        ["r2c2", [{ owner: "B", rank: "O" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+    };
+
+    const s1: GameState = {
+      board: new Map([
+        ["r1c1", [{ owner: "W", rank: "O" }]],
+        ["r3c3", [{ owner: "B", rank: "O" }]],
+      ]),
+      toMove: "B",
+      phase: "idle",
+    };
+
+    history.push(s0);
+    history.push(s1);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s1, history);
+    controller.setState(s1);
+
+    (controller as any).lockedCaptureFrom = "r5c5";
+    (controller as any).lockedCaptureDir = { dr: 1, dc: 1 };
+    (controller as any).jumpedSquares.add("r4c4");
+
+    controller.jumpToHistory(0);
+
+    const after = controller.getState();
+    expect(after.toMove).toBe("W");
+    expect(after.board.has("r2c2")).toBe(true);
+    expect(after.board.has("r3c3")).toBe(false);
+
+    const constraints = controller.getCaptureChainConstraints();
+    expect(constraints.lockedCaptureFrom).toBe(null);
+    expect(constraints.lockedCaptureDir).toBe(null);
+    expect(constraints.jumpedSquares).toEqual([]);
+  });
 });

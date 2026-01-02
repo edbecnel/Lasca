@@ -248,7 +248,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
   const moveHistoryEl = document.getElementById("moveHistory") as HTMLElement | null;
 
-  const updateHistoryUI = () => {
+  const updateHistoryUI = (reason?: import("./controller/gameController.ts").HistoryChangeReason) => {
     if (undoBtn) undoBtn.disabled = !controller.canUndo();
     if (redoBtn) redoBtn.disabled = !controller.canRedo();
 
@@ -260,10 +260,12 @@ window.addEventListener("DOMContentLoaded", async () => {
         moveHistoryEl.innerHTML = historyData
           .map((entry, idx) => {
             if (idx === 0) {
-              const style = entry.isCurrent
+              const baseStyle = entry.isCurrent
                 ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
                 : "";
-              return `<div style=\"${style}\">Start</div>`;
+              const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
+              const currentAttr = entry.isCurrent ? " data-is-current=\\\"1\\\"" : "";
+              return `<div data-history-index=\\\"${entry.index}\\\"${currentAttr} style=\\\"${style}\\\">Start</div>`;
             }
 
             // For moves: toMove indicates who's about to move, so invert to get who just moved
@@ -280,10 +282,12 @@ window.addEventListener("DOMContentLoaded", async () => {
             if (entry.notation) {
               label += ` ${entry.notation}`;
             }
-            const style = entry.isCurrent
+            const baseStyle = entry.isCurrent
               ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
               : "";
-            return `<div style=\"${style}\">${label}</div>`;
+            const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
+            const currentAttr = entry.isCurrent ? " data-is-current=\\\"1\\\"" : "";
+            return `<div data-history-index=\\\"${entry.index}\\\"${currentAttr} style=\\\"${style}\\\">${label}</div>`;
           })
           .join("");
       }
@@ -291,10 +295,26 @@ window.addEventListener("DOMContentLoaded", async () => {
       // Keep the latest move visible.
       // Use rAF so layout reflects the updated HTML before scrolling.
       requestAnimationFrame(() => {
+        if (reason === "jump" || reason === "undo" || reason === "redo") {
+          const currentEl = moveHistoryEl.querySelector("[data-is-current=\\\"1\\\"]") as HTMLElement | null;
+          if (currentEl) currentEl.scrollIntoView({ block: "nearest" });
+          return;
+        }
         moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
       });
     }
   };
+
+  if (moveHistoryEl) {
+    moveHistoryEl.addEventListener("click", (ev) => {
+      const target = ev.target as HTMLElement;
+      const entryEl = target.closest("[data-history-index]") as HTMLElement | null;
+      if (!entryEl) return;
+      const index = Number(entryEl.dataset.historyIndex);
+      if (!Number.isFinite(index)) return;
+      controller.jumpToHistory(index);
+    });
+  }
 
   if (undoBtn) {
     undoBtn.addEventListener("click", () => {
