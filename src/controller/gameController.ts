@@ -3,7 +3,6 @@ import type { Move } from "../game/moveTypes.ts";
 import type { createStackInspector } from "../ui/stackInspector";
 import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets, drawHighlightRing } from "../render/overlays.ts";
 import { generateLegalMoves } from "../game/movegen.ts";
-import { applyMove } from "../game/applyMove.ts";
 import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
 import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
@@ -12,9 +11,10 @@ import { hashGameState } from "../game/hashState.ts";
 import { animateStack } from "../render/animateMove.ts";
 import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
-import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
-import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
+import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
+import type { GameDriver } from "../driver/gameDriver.ts";
+import { LocalDriver } from "../driver/localDriver.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -37,6 +37,7 @@ export class GameController {
   private bannerTimer: number | null = null;
   private remainderTimer: number | null = null;
   private history: HistoryManager;
+  private driver: GameDriver;
   private historyListeners: Array<(reason: HistoryChangeReason) => void> = [];
   private inputEnabled: boolean = true;
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
@@ -77,13 +78,21 @@ export class GameController {
     return { dr, dc };
   }
 
-  constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
+  constructor(
+    svg: SVGSVGElement,
+    piecesLayer: SVGGElement,
+    inspector: ReturnType<typeof createStackInspector> | null,
+    state: GameState,
+    history: HistoryManager,
+    driver?: GameDriver
+  ) {
     this.svg = svg;
     this.piecesLayer = piecesLayer;
     this.inspector = inspector;
     this.overlayLayer = ensureOverlayLayer(svg);
     this.state = state;
     this.history = history;
+    this.driver = driver ?? new LocalDriver(state, history);
   }
 
   bind(): void {
@@ -208,7 +217,7 @@ export class GameController {
   }
 
   undo(): void {
-    const prevState = this.history.undo();
+    const prevState = this.driver.undo();
     if (prevState) {
       // Allow undoing out of terminal states.
       this.isGameOver = false;
@@ -241,7 +250,7 @@ export class GameController {
   }
 
   redo(): void {
-    const nextState = this.history.redo();
+    const nextState = this.driver.redo();
     if (nextState) {
       // Redo should also work after undoing out of a terminal state.
       this.isGameOver = false;
@@ -273,7 +282,7 @@ export class GameController {
   }
 
   jumpToHistory(index: number): void {
-    const target = this.history.jumpTo(index);
+    const target = this.driver.jumpToHistory(index);
     if (!target) return;
 
     // Allow jumping out of terminal states.
@@ -306,19 +315,19 @@ export class GameController {
   }
 
   canUndo(): boolean {
-    return this.history.canUndo();
+    return this.driver.canUndo();
   }
 
   canRedo(): boolean {
-    return this.history.canRedo();
+    return this.driver.canRedo();
   }
 
   getHistory(): ReturnType<HistoryManager["getHistory"]> {
-    return this.history.getHistory();
+    return this.driver.getHistory();
   }
 
   exportMoveHistory(): string {
-    const historyData = this.history.getHistory();
+    const historyData = this.driver.getHistory();
     const moves = historyData
       .filter((entry, idx) => idx > 0 && entry.notation) // Skip "Start" and entries without notation
       .map((entry, idx) => {
@@ -342,6 +351,7 @@ export class GameController {
 
   setState(next: GameState): void {
     this.state = next;
+    this.driver.setState(next);
     
     // When loading a game, check if the current player has already lost
     const currentPlayerResult = checkCurrentPlayerLost(this.state);
@@ -383,11 +393,12 @@ export class GameController {
 
   newGame(initialState: GameState): void {
     // Clear history and start fresh
-    this.history.clear();
-    this.history.push(initialState);
+    this.driver.clearHistory();
+    this.driver.pushHistory(initialState);
     
     // Reset game state
     this.state = initialState;
+    this.driver.setState(initialState);
     this.isGameOver = false;
     this.clearSelection();
 
@@ -410,18 +421,19 @@ export class GameController {
     historyData?: { states: GameState[]; notation: string[]; currentIndex: number }
   ): void {
     if (historyData && historyData.states && historyData.states.length > 0) {
-      this.history.replaceAll(historyData.states, historyData.notation, historyData.currentIndex);
+      this.driver.replaceHistory(historyData);
     } else {
       // Reset history and start fresh with loaded state
-      this.history.clear();
-      this.history.push(loadedState);
+      this.driver.clearHistory();
+      this.driver.pushHistory(loadedState);
     }
     
     // Reset game state to idle phase; prefer aligning to the restored history's current state.
-    const currentFromHistory = this.history.getCurrent();
+    const currentFromHistory = this.driver.getHistoryCurrent();
     const baseState = currentFromHistory ?? loadedState;
     this.isGameOver = false;
     this.state = { ...baseState, phase: "idle" };
+    this.driver.setState(this.state);
     
     // Clear any selection, overlays, and capture state
     this.clearSelection();
@@ -540,7 +552,7 @@ export class GameController {
     this.repetitionCounts.clear();
     if (!RULES.drawByThreefold) return;
 
-    const snap = this.history.exportSnapshots();
+    const snap = this.driver.exportHistorySnapshots();
     const states = snap.states;
     const end = snap.currentIndex;
     for (let i = 0; i <= end && i < states.length; i++) {
@@ -656,7 +668,7 @@ export class GameController {
       this.currentTurnHasCapture = true;
     }
     
-    const next = applyMove(this.state, move);
+    const next = await this.driver.submitMove(move);
     if (import.meta.env && import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.log("[controller] apply", move);
@@ -713,10 +725,19 @@ export class GameController {
         if (isDama) {
           // Dama promotes only at the end of the sequence; if we ever get here,
           // still finalize the chain correctly.
-          this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+          this.state = this.driver.finalizeCaptureChain({
+            rulesetId: "dama",
+            state: this.state,
+            landing: move.to,
+            jumpedSquares: this.jumpedSquares,
+          });
         } else if (isDamasca) {
           // Damasca should not promote mid-chain, but finalize defensively.
-          this.state = finalizeDamascaCaptureChain(this.state, move.to);
+          this.state = this.driver.finalizeCaptureChain({
+            rulesetId: "damasca",
+            state: this.state,
+            landing: move.to,
+          });
         }
         // Switch turn now
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
@@ -738,7 +759,7 @@ export class GameController {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
         const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-        this.history.push(this.state, notation);
+        this.driver.pushHistory(this.state, notation);
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
         this.fireHistoryChange("move");
@@ -783,9 +804,18 @@ export class GameController {
       
       // No more captures, switch turn and end
       if (isDama) {
-        this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+        this.state = this.driver.finalizeCaptureChain({
+          rulesetId: "dama",
+          state: this.state,
+          landing: move.to,
+          jumpedSquares: this.jumpedSquares,
+        });
       } else if (isDamasca) {
-        this.state = finalizeDamascaCaptureChain(this.state, move.to);
+        this.state = this.driver.finalizeCaptureChain({
+          rulesetId: "damasca",
+          state: this.state,
+          landing: move.to,
+        });
       }
       this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
 
@@ -807,7 +837,7 @@ export class GameController {
       const separator = this.currentTurnHasCapture ? " × " : " → ";
       const boardSize = this.state.meta?.boardSize ?? 7;
       const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-      this.history.push(this.state, notation);
+      this.driver.pushHistory(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");
@@ -844,7 +874,7 @@ export class GameController {
       const separator = this.currentTurnHasCapture ? " × " : " → ";
       const boardSize = this.state.meta?.boardSize ?? 7;
       const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-      this.history.push(this.state, notation);
+      this.driver.pushHistory(this.state, notation);
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");
