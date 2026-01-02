@@ -231,6 +231,31 @@
         overflow-y: auto;
       }
 
+      /* Mobile portrait: allow the whole Info panel to scroll, and cap Move History height.
+         Otherwise Move History can consume all space and make other sections hard to reach. */
+      @media (max-width: 600px) and (orientation: portrait) {
+        #rightSidebar .sidebarBody {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        #rightSidebar .panelSection[data-section="moveHistory"] {
+          flex: 0 0 auto;
+        }
+
+        #rightSidebar
+          .panelSection[data-section="moveHistory"]
+          .sectionContent {
+          flex: 0 0 auto;
+        }
+
+        #rightSidebar #moveHistory {
+          flex: 0 0 auto;
+          max-height: 35vh;
+        }
+      }
+
       .panelSection {
         border: 1px solid rgba(255, 255, 255, 0.08);
         background: rgba(0, 0, 0, 0.18);
