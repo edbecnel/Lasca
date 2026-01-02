@@ -820,6 +820,11 @@
           max-height: calc(100dvh - 150px);
         }
 
+        /* Safari: avoid clipping the top border in reduced-height mode. */
+        #centerArea.reduced-height svg#lascaBoard {
+          transform: scale(0.88) translateY(-49px);
+        }
+
         .panelSection {
           padding: 10px;
         }
@@ -834,11 +839,22 @@
           overflow-anchor: none;
         }
 
+        /* Keep the AI speed row within the section boundary (grid uses justify-items:start). */
+        label[for="aiDelay"] + div {
+          width: 100%;
+          min-width: 0;
+        }
+
         /* AI speed slider: let the range input shrink so Reset + "ms" label fit. */
         #aiDelay {
           flex: 1 1 0 !important;
           width: auto !important;
           min-width: 60px;
+        }
+
+        #aiDelayReset,
+        #aiDelayLabel {
+          flex: 0 0 auto;
         }
 
         #aiDelayLabel {

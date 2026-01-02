@@ -371,6 +371,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     const STORAGE_KEY = 'lasca.boardHeightReduced';
     const POS_KEY = 'lasca.boardHeightTogglePos';
 
+    const isToggleVisible = () => window.getComputedStyle(boardHeightToggle).display !== 'none';
+
     const drag = installHoldDrag(boardHeightToggle, {
       storageKey: POS_KEY,
       holdDelayMs: 250,
@@ -378,10 +380,14 @@ window.addEventListener("DOMContentLoaded", async () => {
     
     // Restore saved state
     const savedReduced = localStorage.getItem(STORAGE_KEY) === 'true';
-    if (savedReduced) {
+    if (isToggleVisible() && savedReduced) {
       centerArea.classList.add('reduced-height');
       boardHeightToggle.textContent = '⬆️';
       boardHeightToggle.title = 'Restore full board height';
+    } else {
+      centerArea.classList.remove('reduced-height');
+      boardHeightToggle.textContent = '↕️';
+      boardHeightToggle.title = 'Adjust board height for bottom navigation bar';
     }
     
     boardHeightToggle.addEventListener('click', (e) => {
@@ -414,6 +420,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       } else {
         boardHeightToggle.style.display = '';
         console.log('Board height button visibility reset to CSS default');
+      }
+
+      if (window.getComputedStyle(boardHeightToggle).display === 'none') {
+        centerArea.classList.remove('reduced-height');
       }
     };
   }
