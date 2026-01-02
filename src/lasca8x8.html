@@ -13,25 +13,6 @@
     />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Lasca 8×8 Online!</title>
-    <script>
-      // Backward-compatibility: damasca.html was renamed to lasca8x8.html.
-      // Keep old links working.
-      try {
-        const path =
-          window.location && window.location.pathname
-            ? window.location.pathname
-            : "";
-        if (path.endsWith("/damasca.html") || path.endsWith("damasca.html")) {
-          window.location.replace(
-            `./lasca8x8.html${window.location.search || ""}${
-              window.location.hash || ""
-            }`
-          );
-        }
-      } catch {
-        // Ignore and continue loading.
-      }
-    </script>
     <!-- Explicit favicon to avoid /favicon.ico 404 during dev -->
     <link
       rel="icon"

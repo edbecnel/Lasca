@@ -10,7 +10,7 @@ This project implements three checkers variants:
 
 Lasca is a two-player checkers variant with unique stacking mechanics. When a piece captures an opponent's piece, it forms a stack (called a "column") with the captured piece underneath. The top piece controls the stack, and captured pieces can be liberated when their stack is captured.
 
-- Play on classic 7×7 board or 8×8 Damasca variant
+- Play on classic 7×7 board or Lasca 8×8 variant
 - Soldiers move forward; Officers move diagonally any direction
 - Captured pieces form stacks rather than leaving the board
 
@@ -23,6 +23,15 @@ Traditional checkers/draughts with two rule variants:
 - Men move forward diagonally; Kings have "flying" movement (any distance diagonally)
 - Save files are compatible between Standard and International variants
 - Mandatory capture with maximum-capture rule (must take the longest capture sequence)
+
+### Damasca (8×8)
+
+Hybrid ruleset:
+
+- Dama-style movement (including flying Officers)
+- Lasca-style stacking captures (jump takes top piece only and adds it to the bottom of the capturing stack)
+- Mandatory capture + multi-capture + maximum-capture priority
+- Promotion at end-of-turn only
 
 ## Features
 
