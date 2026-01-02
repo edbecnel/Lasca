@@ -21,7 +21,7 @@ import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 
-const ACTIVE_VARIANT_ID: VariantId = "hybrid_8_damasca";
+const ACTIVE_VARIANT_ID: VariantId = "damasca_8";
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",

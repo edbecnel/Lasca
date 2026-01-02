@@ -3,12 +3,12 @@ import type { Move } from "./moveTypes.ts";
 import { promoteIfNeeded } from "./promote.ts";
 
 /**
- * Hybrid (Damasca) uses Lasca-style stacking capture transfer with Dama-style movement.
+ * Damasca uses Lasca-style stacking capture transfer with Dama-style movement.
  * - Quiet moves switch the turn and may promote (end-of-turn).
  * - Captures do NOT switch the turn (controller/AI handles multi-capture chains).
  * - Captures do NOT promote mid-chain; promotion is applied when the chain finalizes.
  */
-export function applyMoveHybrid(
+export function applyMoveDamasca(
   state: GameState,
   move: Move
 ): GameState & { didPromote?: boolean } {
@@ -17,20 +17,20 @@ export function applyMoveHybrid(
 
     const moving = nextBoard.get(move.from);
     if (!moving || moving.length === 0) {
-      throw new Error(`applyMoveHybrid: no moving stack at ${move.from}`);
+      throw new Error(`applyMoveDamasca: no moving stack at ${move.from}`);
     }
 
     const enemy = nextBoard.get(move.over);
     if (!enemy || enemy.length === 0) {
-      throw new Error(`applyMoveHybrid: no enemy stack to capture at ${move.over}`);
+      throw new Error(`applyMoveDamasca: no enemy stack to capture at ${move.over}`);
     }
 
     const dest = nextBoard.get(move.to);
     if (dest && dest.length > 0) {
-      throw new Error(`applyMoveHybrid: landing square ${move.to} is not empty`);
+      throw new Error(`applyMoveDamasca: landing square ${move.to} is not empty`);
     }
 
-    // Hybrid stacking capture: capture only the top piece of the jumped stack
+    // Damasca stacking capture: capture only the top piece of the jumped stack
     // and insert it at the bottom of the capturing stack.
     const captured = enemy.pop()!;
     if (enemy.length === 0) nextBoard.delete(move.over);
@@ -51,7 +51,7 @@ export function applyMoveHybrid(
 
   const dest = nextBoard.get(move.to);
   if (dest && dest.length > 0) {
-    throw new Error(`applyMoveHybrid: landing square ${move.to} is not empty`);
+    throw new Error(`applyMoveDamasca: landing square ${move.to} is not empty`);
   }
 
   nextBoard.set(move.to, fromStack);

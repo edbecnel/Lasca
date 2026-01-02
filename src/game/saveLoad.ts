@@ -36,7 +36,7 @@ interface SerializedSaveFileV3 {
 type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
 
 function isRulesetId(raw: unknown): raw is RulesetId {
-  return raw === "lasca" || raw === "dama" || raw === "hybrid";
+  return raw === "lasca" || raw === "dama" || raw === "damasca";
 }
 
 function isBoardSize(raw: unknown): raw is 7 | 8 {

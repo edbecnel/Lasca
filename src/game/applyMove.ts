@@ -2,7 +2,7 @@ import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 import { applyMoveLasca } from "./applyMoveLasca.ts";
 import { applyMoveDama } from "./applyMoveDama.ts";
-import { applyMoveHybrid } from "./applyMoveHybrid.ts";
+import { applyMoveDamasca } from "./applyMoveDamasca.ts";
 
 function getRulesetId(state: GameState): string {
   return state.meta?.rulesetId ?? "lasca";
@@ -14,6 +14,6 @@ export function applyMove(
 ): GameState & { didPromote?: boolean } {
   const rulesetId = getRulesetId(state);
   if (rulesetId === "dama") return applyMoveDama(state, move);
-  if (rulesetId === "hybrid") return applyMoveHybrid(state, move);
+  if (rulesetId === "damasca") return applyMoveDamasca(state, move);
   return applyMoveLasca(state, move);
 }

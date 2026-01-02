@@ -6,7 +6,7 @@ import damascaBoardSvgUrl from "../assets/damasca_board.svg?url";
 const RULESET_LABEL: Record<RulesetId, string> = {
   lasca: "Lasca",
   dama: "Dama",
-  hybrid: "Hybrid",
+  damasca: "Damasca",
 };
 
 export const VARIANTS: readonly VariantSpec[] = [
@@ -61,15 +61,15 @@ export const VARIANTS: readonly VariantSpec[] = [
     available: true,
   },
   {
-    variantId: "hybrid_8_damasca",
+    variantId: "damasca_8",
     displayName: "Damasca",
     subtitle: "Dama movement + Lasca stacking captures. Mandatory capture. Max-capture rule. Officers fly.",
-    rulesetId: "hybrid",
+    rulesetId: "damasca",
     boardSize: 8,
     piecesPerSide: 12,
     svgAsset: damascaBoardSvgUrl,
-    entryUrl: "./hybrid.html",
-    defaultSaveName: "hybrid_8_damasca-save.json",
+    entryUrl: "./damasca.html",
+    defaultSaveName: "damasca_8-save.json",
     available: true,
   },
 ] as const;

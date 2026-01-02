@@ -2,11 +2,11 @@ import type { GameState, NodeId } from "./state.ts";
 import { promoteIfNeeded } from "./promote.ts";
 
 /**
- * Finalize a Hybrid (Damasca) capture chain.
- * Hybrid captures remove jumped pieces immediately, so the only end-of-chain
+ * Finalize a Damasca capture chain.
+ * Damasca captures remove jumped pieces immediately, so the only end-of-chain
  * work is applying end-of-turn promotion on the last landing square.
  */
-export function finalizeHybridCaptureChain(
+export function finalizeDamascaCaptureChain(
   state: GameState,
   lastLanding: NodeId
 ): GameState & { didPromote?: boolean } {

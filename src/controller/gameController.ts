@@ -13,7 +13,7 @@ import { animateStack } from "../render/animateMove.ts";
 import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
-import { finalizeHybridCaptureChain } from "../game/hybridCaptureChain.ts";
+import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame" | "gameOver";
@@ -167,7 +167,7 @@ export class GameController {
   getLegalMovesForTurn(): Move[] {
     const rulesetId = this.state.meta?.rulesetId ?? "lasca";
     const captureRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(this.state) : null;
-    const chainRules = rulesetId === "dama" || rulesetId === "hybrid";
+    const chainRules = rulesetId === "dama" || rulesetId === "damasca";
     const constraints = this.lockedCaptureFrom
       ? {
           forcedFrom: this.lockedCaptureFrom,
@@ -651,7 +651,7 @@ export class GameController {
 
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
       const isDama = rulesetId === "dama";
-      const isHybrid = rulesetId === "hybrid";
+      const isDamasca = rulesetId === "damasca";
       const damaCaptureRemoval = isDama ? getDamaCaptureRemovalMode(this.state) : null;
       
       // Check if promotion happened
@@ -660,7 +660,7 @@ export class GameController {
       // Check if there are more captures available from the destination
       const allCaptures = generateLegalMoves(this.state, {
         forcedFrom: move.to,
-        ...((isDama || isHybrid)
+        ...((isDama || isDamasca)
           ? { excludedJumpSquares: this.jumpedSquares, lastCaptureDir: lastDir }
           : {}),
       }).filter((m) => m.kind === "capture");
@@ -672,9 +672,9 @@ export class GameController {
           // Dama promotes only at the end of the sequence; if we ever get here,
           // still finalize the chain correctly.
           this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
-        } else if (isHybrid) {
-          // Hybrid should not promote mid-chain, but finalize defensively.
-          this.state = finalizeHybridCaptureChain(this.state, move.to);
+        } else if (isDamasca) {
+          // Damasca should not promote mid-chain, but finalize defensively.
+          this.state = finalizeDamascaCaptureChain(this.state, move.to);
         }
         // Switch turn now
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
@@ -683,7 +683,7 @@ export class GameController {
         // We already rendered after applyMove, so re-render now to reflect finalization.
         if (
           (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
-          (isHybrid && Boolean((this.state as any).didPromote))
+          (isDamasca && Boolean((this.state as any).didPromote))
         ) {
           renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
         }
@@ -742,8 +742,8 @@ export class GameController {
       // No more captures, switch turn and end
       if (isDama) {
         this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
-      } else if (isHybrid) {
-        this.state = finalizeHybridCaptureChain(this.state, move.to);
+      } else if (isDamasca) {
+        this.state = finalizeDamascaCaptureChain(this.state, move.to);
       }
       this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
 
@@ -751,7 +751,7 @@ export class GameController {
       // Re-render so the promotion is visible before the opponent starts their turn.
       if (
         (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
-        (isHybrid && Boolean((this.state as any).didPromote))
+        (isDamasca && Boolean((this.state as any).didPromote))
       ) {
         renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       }

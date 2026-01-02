@@ -6,7 +6,7 @@ import { applyMove } from "../game/applyMove.ts";
 import { RULES } from "../game/ruleset.ts";
 import { evaluateState } from "./evaluate.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
-import { finalizeHybridCaptureChain } from "../game/hybridCaptureChain.ts";
+import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 
 type CaptureDir = { dr: number; dc: number };
@@ -58,7 +58,7 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
   const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
-  const chainRules = rulesetId === "dama" || rulesetId === "hybrid";
+  const chainRules = rulesetId === "dama" || rulesetId === "damasca";
   const constraints = ctx.lockedFrom
     ? {
         forcedFrom: ctx.lockedFrom,
@@ -131,8 +131,8 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   if (didPromote && RULES.stopCaptureOnPromotion) {
     if (isDama) {
       nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
-    } else if (rulesetId === "hybrid") {
-      nextCtx.state = finalizeHybridCaptureChain(nextCtx.state, move.to);
+    } else if (rulesetId === "damasca") {
+      nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
     }
     nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
     nextCtx.lockedFrom = null;
@@ -144,7 +144,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Check for more captures from the landing square.
   const allNext = generateLegalMoves(nextCtx.state, {
     forcedFrom: move.to,
-    ...((isDama || rulesetId === "hybrid")
+    ...((isDama || rulesetId === "damasca")
       ? { excludedJumpSquares: nextCtx.excludedJumpSquares, lastCaptureDir: captureDir(move.from, move.to) }
       : {}),
   });
@@ -159,8 +159,8 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Chain ends: switch turn.
   if (isDama) {
     nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
-  } else if (rulesetId === "hybrid") {
-    nextCtx.state = finalizeHybridCaptureChain(nextCtx.state, move.to);
+  } else if (rulesetId === "damasca") {
+    nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
   }
   nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
   nextCtx.lockedFrom = null;

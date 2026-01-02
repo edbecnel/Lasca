@@ -3,7 +3,7 @@ import { generateLegalMoves } from "./movegen.ts";
 import type { GameState } from "./state.ts";
 import type { Stack } from "../types";
 
-function mkHybridState(
+function mkDamascaState(
   boardEntries: Array<[string, Stack]>,
   toMove: "B" | "W" = "B"
 ): GameState {
@@ -12,16 +12,16 @@ function mkHybridState(
     toMove,
     phase: "idle",
     meta: {
-      variantId: "hybrid_8_damasca",
-      rulesetId: "hybrid",
+      variantId: "damasca_8",
+      rulesetId: "damasca",
       boardSize: 8,
     },
   };
 }
 
-describe("movegen Hybrid (Phase 2)", () => {
+describe("movegen Damasca", () => {
   it("mandatory capture: if any capture exists, only captures are returned", () => {
-    const s = mkHybridState(
+    const s = mkDamascaState(
       [
         ["r2c2", [{ owner: "B", rank: "S" }]],
         ["r3c3", [{ owner: "W", rank: "S" }]],
@@ -37,7 +37,7 @@ describe("movegen Hybrid (Phase 2)", () => {
   });
 
   it("soldiers can capture backwards", () => {
-    const s = mkHybridState(
+    const s = mkDamascaState(
       [
         ["r3c3", [{ owner: "B", rank: "S" }]],
         ["r2c2", [{ owner: "W", rank: "S" }]],
@@ -54,7 +54,7 @@ describe("movegen Hybrid (Phase 2)", () => {
   });
 
   it("officers have flying quiet moves", () => {
-    const s = mkHybridState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
+    const s = mkDamascaState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
     const moves = generateLegalMoves(s);
 
     expect(moves.every((m) => m.kind === "move")).toBe(true);
@@ -72,7 +72,7 @@ describe("movegen Hybrid (Phase 2)", () => {
   });
 
   it("officers have flying captures (multiple landing squares)", () => {
-    const s = mkHybridState(
+    const s = mkDamascaState(
       [
         ["r3c3", [{ owner: "B", rank: "O" }]],
         ["r4c4", [{ owner: "W", rank: "S" }]],
@@ -94,7 +94,7 @@ describe("movegen Hybrid (Phase 2)", () => {
   it("officers must zigzag in multi-capture (cannot continue on the same or opposite diagonal)", () => {
     // Forced continuation from r3c3 after a prior capture along (+1,+1).
     // Captures along (+1,+1) or (-1,-1) should be disallowed.
-    const s = mkHybridState(
+    const s = mkDamascaState(
       [
         ["r3c3", [{ owner: "B", rank: "O" }]],
         ["r4c4", [{ owner: "W", rank: "S" }]],
@@ -114,8 +114,8 @@ describe("movegen Hybrid (Phase 2)", () => {
   });
 
   it("enforces maximum-capture line (filters first steps)", () => {
-    // Same structure as Dama test, but with hybrid ruleset.
-    const s = mkHybridState(
+    // Same structure as Dama test, but with Damasca ruleset.
+    const s = mkDamascaState(
       [
         ["r2c2", [{ owner: "B", rank: "S" }]],
         ["r3c3", [{ owner: "W", rank: "S" }]],
@@ -131,7 +131,7 @@ describe("movegen Hybrid (Phase 2)", () => {
 
   it("excludedJumpSquares prevents re-jumping a previously jumped square", () => {
     // Geometry would allow a recapture-back over the same square; it must be excluded.
-    const afterFirst = mkHybridState(
+    const afterFirst = mkDamascaState(
       [
         ["r4c4", [{ owner: "B", rank: "S" }]],
         ["r3c3", [{ owner: "W", rank: "S" }]],

@@ -43,13 +43,13 @@ function applyCaptureForSearch(state: GameState, move: CaptureMove): GameState {
   const nextBoard = cloneBoard(state.board);
 
   const moving = nextBoard.get(move.from);
-  if (!moving || moving.length === 0) throw new Error(`movegenHybrid: no moving stack at ${move.from}`);
+  if (!moving || moving.length === 0) throw new Error(`movegenDamasca: no moving stack at ${move.from}`);
 
   const jumped = nextBoard.get(move.over);
-  if (!jumped || jumped.length === 0) throw new Error(`movegenHybrid: no jumped stack at ${move.over}`);
+  if (!jumped || jumped.length === 0) throw new Error(`movegenDamasca: no jumped stack at ${move.over}`);
 
   if (!isEmptyAt({ ...state, board: nextBoard }, move.to)) {
-    throw new Error(`movegenHybrid: landing square ${move.to} is not empty`);
+    throw new Error(`movegenDamasca: landing square ${move.to} is not empty`);
   }
 
   // Remove only the TOP piece of jumped stack and insert it at the BOTTOM of mover.
@@ -258,11 +258,11 @@ function generateSelectableCaptureMoves(state: GameState, constraints?: MovegenC
   return scored.filter((x) => x.score === globalBest).map((x) => x.move);
 }
 
-export function generateCaptureMovesHybrid(state: GameState, constraints?: MovegenConstraints): CaptureMove[] {
+export function generateCaptureMovesDamasca(state: GameState, constraints?: MovegenConstraints): CaptureMove[] {
   return generateSelectableCaptureMoves(state, constraints);
 }
 
-export function generateLegalMovesHybrid(state: GameState, constraints?: MovegenConstraints): Move[] {
+export function generateLegalMovesDamasca(state: GameState, constraints?: MovegenConstraints): Move[] {
   const captures = generateSelectableCaptureMoves(state, constraints);
   if (captures.length > 0) return captures;
 
