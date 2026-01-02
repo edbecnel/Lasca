@@ -53,7 +53,13 @@ function readDelayMs(key: string, fallback: number): number {
   const raw = localStorage.getItem(key);
   const n = raw == null ? NaN : Number(raw);
   if (!Number.isFinite(n)) return fallback;
-  return clamp(Math.round(n), 100, 3000);
+  return clamp(Math.round(n), 0, 3000);
+}
+
+function parseDelayMs(raw: string, fallback: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return clamp(Math.round(n), 0, 3000);
 }
 
 
@@ -122,7 +128,7 @@ window.addEventListener("DOMContentLoaded", () => {
   elAiDelayLabel.textContent = `${delay} ms`;
 
   const syncDelayLabel = () => {
-    const v = clamp(parseInt(elAiDelay.value || "500", 10) || 500, 100, 3000);
+    const v = parseDelayMs(elAiDelay.value || "500", 500);
     elAiDelayLabel.textContent = `${v} ms`;
   };
 
@@ -162,7 +168,7 @@ window.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(LS_KEYS.aiWhite, elAiWhite.value);
     localStorage.setItem(LS_KEYS.aiBlack, elAiBlack.value);
 
-    const delayMs = clamp(parseInt(elAiDelay.value || "500", 10) || 500, 100, 3000);
+    const delayMs = parseDelayMs(elAiDelay.value || "500", 500);
     localStorage.setItem(LS_KEYS.aiDelayMs, String(delayMs));
 
     // Startup should not force paused; let AIManager decide (it auto-pauses when both sides are AI).

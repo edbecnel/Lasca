@@ -19,6 +19,12 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
+function parseDelayMs(raw: string, fallback: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return clamp(Math.round(n), 0, 3000);
+}
+
 function parseDifficulty(v: string | null): AIDifficulty {
   if (v === "easy" || v === "medium" || v === "advanced" || v === "human") return v;
   return "human";
@@ -158,7 +164,7 @@ export class AIManager {
     if (this.elDelay) {
       this.elDelay.value = String(this.settings.delayMs);
       this.elDelay.addEventListener("input", () => {
-        const v = clamp(parseInt(this.elDelay!.value || String(DEFAULT_DELAY_MS), 10) || DEFAULT_DELAY_MS, 100, 3000);
+        const v = parseDelayMs(this.elDelay!.value || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
         this.settings.delayMs = v;
         localStorage.setItem(LS_KEYS.delay, String(v));
         this.refreshUI();
@@ -167,7 +173,7 @@ export class AIManager {
 
     if (this.elDelayReset) {
       this.elDelayReset.addEventListener("click", () => {
-        const v = clamp(DEFAULT_DELAY_MS, 100, 3000);
+        const v = clamp(DEFAULT_DELAY_MS, 0, 3000);
         this.settings.delayMs = v;
         if (this.elDelay) this.elDelay.value = String(v);
         localStorage.setItem(LS_KEYS.delay, String(v));
@@ -223,11 +229,7 @@ export class AIManager {
   private loadSettings(): AISettings {
     const white = parseDifficulty(localStorage.getItem(LS_KEYS.white));
     const black = parseDifficulty(localStorage.getItem(LS_KEYS.black));
-    const delay = clamp(
-      parseInt(localStorage.getItem(LS_KEYS.delay) || String(DEFAULT_DELAY_MS), 10) || DEFAULT_DELAY_MS,
-      100,
-      3000,
-    );
+    const delay = parseDelayMs(localStorage.getItem(LS_KEYS.delay) || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
     // Default to paused on page load (startup). User must explicitly Resume.
     const pausedValue = localStorage.getItem(LS_KEYS.paused);
     const paused = pausedValue === null ? true : pausedValue === "true";
