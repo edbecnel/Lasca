@@ -20,6 +20,7 @@ import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
+import { createDriver } from "./driver/createDriver.ts";
 
 const ACTIVE_VARIANT_ID: VariantId = "damasca_8";
 
@@ -113,7 +114,13 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // PR 4+5: interaction — controller binds selection and applies quiet moves
   ensureOverlayLayer(svg);
-  const controller = new GameController(svg, piecesLayer, inspector, state, history);
+  const driver = createDriver({
+    state,
+    history,
+    search: window.location.search,
+    envMode: import.meta.env.VITE_PLAY_MODE,
+  });
+  const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
 
   // Apply startup preferences (if present) without changing defaults.

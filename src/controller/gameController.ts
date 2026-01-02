@@ -13,6 +13,7 @@ import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
+import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
 
@@ -23,6 +24,7 @@ export class GameController {
   private piecesLayer: SVGGElement;
   private inspector: ReturnType<typeof createStackInspector> | null;
   private overlayLayer: SVGGElement;
+  private previewLayer: SVGGElement;
   private state: GameState;
   private selected: string | null = null;
   private currentTargets: string[] = [];
@@ -58,6 +60,25 @@ export class GameController {
     }
   }
 
+  /**
+   * Single render pipeline for authoritative state updates.
+   *
+   * Ordering contract:
+   * 1) render board + pieces
+   * 2) draw previews last
+   * 3) safety belt: re-append preview-related layers so they stay on top
+   */
+  private renderAuthoritative(): void {
+    // 1) board/pieces
+    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+
+    // 2) previews (currently none; kept for move/stack preview rendering)
+    // 3) keep preview layers on top (board coords / other layers might be appended later)
+    const countsLayer = ensureStackCountsLayer(this.svg);
+    this.svg.appendChild(countsLayer);
+    this.svg.appendChild(this.previewLayer);
+  }
+
   private clearSelectionForInputLock(): void {
     // Clear only the *interactive* selection/targets.
     // Do NOT clear capture-chain constraints like `lockedCaptureFrom`/`jumpedSquares`,
@@ -66,6 +87,7 @@ export class GameController {
     this.currentTargets = [];
     this.currentMoves = [];
     clearOverlays(this.overlayLayer);
+    clearPreviewLayer(this.previewLayer);
     this.drawPendingDamaCapturedMarks();
     this.updatePanel();
   }
@@ -90,6 +112,7 @@ export class GameController {
     this.piecesLayer = piecesLayer;
     this.inspector = inspector;
     this.overlayLayer = ensureOverlayLayer(svg);
+    this.previewLayer = ensurePreviewLayer(svg);
     this.state = state;
     this.history = history;
     this.driver = driver ?? new LocalDriver(state, history);
@@ -239,7 +262,7 @@ export class GameController {
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.clearSelection();
-      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      this.renderAuthoritative();
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
@@ -271,7 +294,7 @@ export class GameController {
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.clearSelection();
-      renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+      this.renderAuthoritative();
       const allLegal = generateLegalMoves(this.state);
       this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
       this.updatePanel();
@@ -305,7 +328,7 @@ export class GameController {
     this.currentTurnNodes = [];
     this.currentTurnHasCapture = false;
     this.clearSelection();
-    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    this.renderAuthoritative();
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.updatePanel();
@@ -405,7 +428,7 @@ export class GameController {
     this.recomputeRepetitionCounts();
     
     // Re-render the board
-    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    this.renderAuthoritative();
     
     // Check for mandatory captures at game start
     const allLegal = generateLegalMoves(this.state);
@@ -439,7 +462,7 @@ export class GameController {
     this.clearSelection();
     
     // Re-render the board
-    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    this.renderAuthoritative();
     
     // Recompute mandatory captures
     const allLegal = generateLegalMoves(this.state);
@@ -630,6 +653,7 @@ export class GameController {
     this.lockedCaptureDir = null;
     this.jumpedSquares.clear();
     clearOverlays(this.overlayLayer);
+    clearPreviewLayer(this.previewLayer);
     this.updatePanel();
   }
 
@@ -668,7 +692,16 @@ export class GameController {
       this.currentTurnHasCapture = true;
     }
     
-    const next = await this.driver.submitMove(move);
+    let next: GameState & { didPromote?: boolean };
+    try {
+      next = await this.driver.submitMove(move);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[controller] driver submitMove failed", err);
+      const msg = err instanceof Error ? err.message : "Move failed";
+      this.showBanner(msg, 2500);
+      return;
+    }
     if (import.meta.env && import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.log("[controller] apply", move);
@@ -686,7 +719,7 @@ export class GameController {
     }
     
     // Now render the new state after animation
-    renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+    this.renderAuthoritative();
     
     // Clear overlays immediately after move is rendered
     // Also cancel any pending remainder hint timers
@@ -748,7 +781,7 @@ export class GameController {
           (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
           (isDamasca && Boolean((this.state as any).didPromote))
         ) {
-          renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+          this.renderAuthoritative();
         }
 
         this.lockedCaptureFrom = null;
@@ -825,7 +858,7 @@ export class GameController {
         (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
         (isDamasca && Boolean((this.state as any).didPromote))
       ) {
-        renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+        this.renderAuthoritative();
       }
 
       this.lockedCaptureFrom = null;
