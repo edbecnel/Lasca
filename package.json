@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
+    "online:server": "cross-env PORT=8788 npm --prefix server run start",
+    "online:client": "cross-env VITE_SERVER_URL=http://localhost:8788 vite",
+    "online:dev": "concurrently -k -n server,client \"npm run online:server\" \"npm run online:client\"",
     "build": "vite build",
     "watch": "vite build --watch",
     "preview": "vite preview --port 8080",
@@ -15,6 +18,8 @@
     "smoke:offline": "vitest run src/smoke/offlineSmoke.test.ts"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
+    "concurrently": "^9.2.0",
     "gh-pages": "^6.3.0",
     "jsdom": "^22.1.0",
     "typescript": "^5.6.0",

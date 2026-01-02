@@ -16,6 +16,7 @@ import { parseNodeId } from "../game/coords.ts";
 import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
+import { RemoteDriver } from "../driver/remoteDriver.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -45,6 +46,46 @@ export class GameController {
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
   private repetitionCounts: Map<string, number> = new Map();
+  private onlinePollTimer: number | null = null;
+
+  private isLocalPlayersTurn(): boolean {
+    if (!(this.driver instanceof RemoteDriver)) return true;
+    const color = this.driver.getPlayerColor();
+    if (!color) return true;
+    return this.state.toMove === color;
+  }
+
+  private startOnlinePolling(): void {
+    if (!(this.driver instanceof RemoteDriver)) return;
+    if (this.onlinePollTimer) return;
+
+    // Simple polling keeps both tabs in sync without websockets.
+    this.onlinePollTimer = window.setInterval(async () => {
+      if (this.isGameOver) return;
+      try {
+        const updated = await this.driver.fetchLatest();
+        if (!updated) return;
+
+        this.state = this.driver.getState();
+        // Any opponent update invalidates local in-progress UI selection/chain.
+        this.lockedCaptureFrom = null;
+        this.lockedCaptureDir = null;
+        this.jumpedSquares.clear();
+        this.currentTurnNodes = [];
+        this.currentTurnHasCapture = false;
+        this.clearSelection();
+        this.renderAuthoritative();
+
+        const allLegal = generateLegalMoves(this.state);
+        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        this.recomputeRepetitionCounts();
+        this.checkAndHandleCurrentPlayerLost();
+        this.updatePanel();
+      } catch {
+        // Ignore transient network errors; server is best-effort.
+      }
+    }, 750);
+  }
 
   private drawPendingDamaCapturedMarks(): void {
     const rulesetId = this.state.meta?.rulesetId ?? "lasca";
@@ -125,6 +166,8 @@ export class GameController {
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.recomputeRepetitionCounts();
     this.updatePanel();
+
+    this.startOnlinePolling();
   }
 
   setMoveHints(enabled: boolean): void {
@@ -485,6 +528,10 @@ export class GameController {
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
     if (elMsg && !this.isGameOver) {
+      if (!this.isLocalPlayersTurn()) {
+        elMsg.textContent = "Waiting for opponent";
+        return;
+      }
       if (this.selected) {
         if (this.currentTargets.length > 0) {
           if (this.lockedCaptureFrom) {
@@ -758,22 +805,52 @@ export class GameController {
         if (isDama) {
           // Dama promotes only at the end of the sequence; if we ever get here,
           // still finalize the chain correctly.
-          this.state = this.driver.finalizeCaptureChain({
-            rulesetId: "dama",
-            state: this.state,
-            landing: move.to,
-            jumpedSquares: this.jumpedSquares,
-          });
+          if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+            this.state = await this.driver.finalizeCaptureChainRemote({
+              rulesetId: "dama",
+              state: this.state,
+              landing: move.to,
+              jumpedSquares: this.jumpedSquares,
+            });
+          } else {
+            this.state = this.driver.finalizeCaptureChain({
+              rulesetId: "dama",
+              state: this.state,
+              landing: move.to,
+              jumpedSquares: this.jumpedSquares,
+            });
+          }
         } else if (isDamasca) {
           // Damasca should not promote mid-chain, but finalize defensively.
-          this.state = this.driver.finalizeCaptureChain({
-            rulesetId: "damasca",
-            state: this.state,
-            landing: move.to,
-          });
+          if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+            this.state = await this.driver.finalizeCaptureChainRemote({
+              rulesetId: "damasca",
+              state: this.state,
+              landing: move.to,
+            });
+          } else {
+            this.state = this.driver.finalizeCaptureChain({
+              rulesetId: "damasca",
+              state: this.state,
+              landing: move.to,
+            });
+          }
         }
         // Switch turn now
-        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+          const separator = this.currentTurnHasCapture ? " × " : " → ";
+          const boardSize = this.state.meta?.boardSize ?? 7;
+          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+          try {
+            this.state = await this.driver.endTurnRemote(notation);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "End turn failed";
+            this.showBanner(msg, 2500);
+            return;
+          }
+        } else {
+          this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+        }
 
         // In Dama, finalization may remove jumped pieces and/or promote.
         // We already rendered after applyMove, so re-render now to reflect finalization.
@@ -789,10 +866,12 @@ export class GameController {
         this.clearSelection();
         
         // Record state in history at turn boundary
-        const separator = this.currentTurnHasCapture ? " × " : " → ";
-        const boardSize = this.state.meta?.boardSize ?? 7;
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-        this.driver.pushHistory(this.state, notation);
+        if (!(this.driver.mode === "online" && this.driver instanceof RemoteDriver)) {
+          const separator = this.currentTurnHasCapture ? " × " : " → ";
+          const boardSize = this.state.meta?.boardSize ?? 7;
+          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+          this.driver.pushHistory(this.state, notation);
+        }
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
         this.fireHistoryChange("move");
@@ -837,20 +916,50 @@ export class GameController {
       
       // No more captures, switch turn and end
       if (isDama) {
-        this.state = this.driver.finalizeCaptureChain({
-          rulesetId: "dama",
-          state: this.state,
-          landing: move.to,
-          jumpedSquares: this.jumpedSquares,
-        });
+        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+          this.state = await this.driver.finalizeCaptureChainRemote({
+            rulesetId: "dama",
+            state: this.state,
+            landing: move.to,
+            jumpedSquares: this.jumpedSquares,
+          });
+        } else {
+          this.state = this.driver.finalizeCaptureChain({
+            rulesetId: "dama",
+            state: this.state,
+            landing: move.to,
+            jumpedSquares: this.jumpedSquares,
+          });
+        }
       } else if (isDamasca) {
-        this.state = this.driver.finalizeCaptureChain({
-          rulesetId: "damasca",
-          state: this.state,
-          landing: move.to,
-        });
+        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+          this.state = await this.driver.finalizeCaptureChainRemote({
+            rulesetId: "damasca",
+            state: this.state,
+            landing: move.to,
+          });
+        } else {
+          this.state = this.driver.finalizeCaptureChain({
+            rulesetId: "damasca",
+            state: this.state,
+            landing: move.to,
+          });
+        }
       }
-      this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+      if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const boardSize = this.state.meta?.boardSize ?? 7;
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        try {
+          this.state = await this.driver.endTurnRemote(notation);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "End turn failed";
+          this.showBanner(msg, 2500);
+          return;
+        }
+      } else {
+        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+      }
 
       // Dama may promote during finalization even in immediate-removal mode.
       // Re-render so the promotion is visible before the opponent starts their turn.
@@ -867,10 +976,12 @@ export class GameController {
       this.clearSelection();
       
       // Record state in history at turn boundary
-      const separator = this.currentTurnHasCapture ? " × " : " → ";
-      const boardSize = this.state.meta?.boardSize ?? 7;
-      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-      this.driver.pushHistory(this.state, notation);
+      if (!(this.driver.mode === "online" && this.driver instanceof RemoteDriver)) {
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const boardSize = this.state.meta?.boardSize ?? 7;
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        this.driver.pushHistory(this.state, notation);
+      }
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");
@@ -947,6 +1058,12 @@ export class GameController {
 
     // Ignore human input when AI has locked input
     if (!this.inputEnabled) {
+      return;
+    }
+
+    // In online mode, ignore input when it's not your turn.
+    if (!this.isLocalPlayersTurn()) {
+      this.clearSelection();
       return;
     }
 

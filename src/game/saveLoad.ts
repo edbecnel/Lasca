@@ -4,26 +4,26 @@ import type { HistoryManager } from "./historyManager.ts";
 import type { DamaCaptureRemoval, GameMeta, RulesetId, VariantId } from "../variants/variantTypes";
 import { DEFAULT_VARIANT_ID, getVariantById, isVariantId } from "../variants/variantRegistry";
 
-interface SerializedGameState {
+export interface SerializedGameState {
   board: [string, Stack][];
   toMove: "B" | "W";
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
 }
 
-interface SerializedHistory {
+export interface SerializedHistory {
   states: SerializedGameState[];
   notation: string[];
   currentIndex: number;
 }
 
-interface SerializedSaveFileV2 {
+export interface SerializedSaveFileV2 {
   version: 2;
   current: SerializedGameState;
   history: SerializedHistory;
 }
 
-interface SerializedSaveFileV3 {
+export interface SerializedSaveFileV3 {
   saveVersion: 3;
   variantId: VariantId;
   rulesetId: RulesetId;
@@ -33,7 +33,7 @@ interface SerializedSaveFileV3 {
   history?: SerializedHistory;
 }
 
-type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
+export type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
 
 function isRulesetId(raw: unknown): raw is RulesetId {
   return raw === "lasca" || raw === "dama" || raw === "damasca";

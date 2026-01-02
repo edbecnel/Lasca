@@ -20,7 +20,7 @@ import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
 import { ACTIVE_VARIANT_ID } from "./variants/activeVariant";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
-import { createDriver } from "./driver/createDriver.ts";
+import { createDriverAsync } from "./driver/createDriver.ts";
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
@@ -112,11 +112,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // PR 4+5: interaction — controller binds selection and applies quiet moves
   ensureOverlayLayer(svg);
-  const driver = createDriver({
+  const driver = await createDriverAsync({
     state,
     history,
     search: window.location.search,
     envMode: import.meta.env.VITE_PLAY_MODE,
+    envServerUrl: import.meta.env.VITE_SERVER_URL,
   });
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
