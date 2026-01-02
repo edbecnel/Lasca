@@ -36,7 +36,7 @@ export const VARIANTS: readonly VariantSpec[] = [
   },
   {
     variantId: "dama_8_classic_standard",
-    displayName: "Dama Classic (Standard)",
+    displayName: "Dama",
     subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: Immediate",
     rulesetId: "dama",
     boardSize: 8,
@@ -49,7 +49,7 @@ export const VARIANTS: readonly VariantSpec[] = [
   },
   {
     variantId: "dama_8_classic_international",
-    displayName: "Dama Classic (International)",
+    displayName: "Dama (International)",
     subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: End-of-sequence",
     rulesetId: "dama",
     boardSize: 8,
