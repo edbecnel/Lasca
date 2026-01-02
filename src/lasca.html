@@ -170,6 +170,27 @@
         background: var(--themeMenuSelectedBg);
         border-color: var(--themeMenuBorder);
       }
+
+      /* Keep the AI speed row within the section boundary (even on desktop when sidebars are narrow). */
+      label[for="aiDelay"] + div {
+        width: 100%;
+        min-width: 0;
+      }
+
+      #aiDelay {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        min-width: 0;
+      }
+
+      #aiDelayReset,
+      #aiDelayLabel {
+        flex: 0 0 auto;
+      }
+
+      #aiDelayLabel {
+        white-space: nowrap;
+      }
       .panelSelect:disabled {
         opacity: 0.4;
         cursor: not-allowed;
