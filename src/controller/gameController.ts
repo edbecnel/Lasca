@@ -167,11 +167,19 @@ export class GameController {
   getLegalMovesForTurn(): Move[] {
     const rulesetId = this.state.meta?.rulesetId ?? "lasca";
     const captureRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(this.state) : null;
-    const chainRules = rulesetId === "dama" || rulesetId === "damasca";
+    // All rulesets with multi-capture chains must prevent re-jumping the same square.
+    const chainRules = rulesetId === "lasca" || rulesetId === "dama" || rulesetId === "damasca";
+    // Only Dama/Damasca have capture-direction constraints (Officer zigzag).
+    const chainHasDir = rulesetId === "dama" || rulesetId === "damasca";
     const constraints = this.lockedCaptureFrom
       ? {
           forcedFrom: this.lockedCaptureFrom,
-          ...(chainRules ? { excludedJumpSquares: this.jumpedSquares, lastCaptureDir: this.lockedCaptureDir ?? undefined } : {}),
+          ...(chainRules
+            ? {
+                excludedJumpSquares: this.jumpedSquares,
+                ...(chainHasDir ? { lastCaptureDir: this.lockedCaptureDir ?? undefined } : {}),
+              }
+            : {}),
         }
       : undefined;
     const allLegal = generateLegalMoves(this.state, constraints);
@@ -652,6 +660,7 @@ export class GameController {
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
       const isDama = rulesetId === "dama";
       const isDamasca = rulesetId === "damasca";
+      const isLasca = rulesetId === "lasca";
       const damaCaptureRemoval = isDama ? getDamaCaptureRemovalMode(this.state) : null;
       
       // Check if promotion happened
@@ -660,8 +669,8 @@ export class GameController {
       // Check if there are more captures available from the destination
       const allCaptures = generateLegalMoves(this.state, {
         forcedFrom: move.to,
-        ...((isDama || isDamasca)
-          ? { excludedJumpSquares: this.jumpedSquares, lastCaptureDir: lastDir }
+        ...((isLasca || isDama || isDamasca)
+          ? { excludedJumpSquares: this.jumpedSquares, ...(isDama || isDamasca ? { lastCaptureDir: lastDir } : {}) }
           : {}),
       }).filter((m) => m.kind === "capture");
       const moreCapturesFromDest = allCaptures;

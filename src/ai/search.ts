@@ -64,12 +64,16 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
   const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
-  const chainRules = rulesetId === "dama" || rulesetId === "damasca";
+  const chainRules = rulesetId === "lasca" || rulesetId === "dama" || rulesetId === "damasca";
+  const chainHasDir = rulesetId === "dama" || rulesetId === "damasca";
   const constraints = ctx.lockedFrom
     ? {
         forcedFrom: ctx.lockedFrom,
         ...(chainRules
-          ? { excludedJumpSquares: ctx.excludedJumpSquares, lastCaptureDir: ctx.lockedDir ?? undefined }
+          ? {
+              excludedJumpSquares: ctx.excludedJumpSquares,
+              ...(chainHasDir ? { lastCaptureDir: ctx.lockedDir ?? undefined } : {}),
+            }
           : {}),
       }
     : undefined;
@@ -130,6 +134,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   const rulesetId = nextCtx.state.meta?.rulesetId ?? "lasca";
   const isDama = rulesetId === "dama";
   const damaRemoval = isDama ? getDamaCaptureRemovalMode(nextCtx.state) : null;
+  const isLasca = rulesetId === "lasca";
 
   const didPromote = Boolean((nextState as any).didPromote);
 
@@ -150,8 +155,11 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Check for more captures from the landing square.
   const allNext = generateLegalMoves(nextCtx.state, {
     forcedFrom: move.to,
-    ...((isDama || rulesetId === "damasca")
-      ? { excludedJumpSquares: nextCtx.excludedJumpSquares, lastCaptureDir: captureDir(move.from, move.to) }
+    ...((isLasca || isDama || rulesetId === "damasca")
+      ? {
+          excludedJumpSquares: nextCtx.excludedJumpSquares,
+          ...(isDama || rulesetId === "damasca" ? { lastCaptureDir: captureDir(move.from, move.to) } : {}),
+        }
       : {}),
   });
   const moreFromDest = allNext.filter((m) => m.kind === "capture");

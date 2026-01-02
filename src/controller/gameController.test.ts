@@ -123,4 +123,34 @@ describe("GameController input lock preserves capture chain", () => {
     expect(constraints.lockedCaptureFrom).toBe("r4c4");
     expect(constraints.jumpedSquares).toEqual(["r3c3"]);
   });
+
+  it("Lasca: does not allow re-jumping the same square during a capture chain", () => {
+    const history = new HistoryManager();
+    const s: GameState = {
+      // Position represents a post-capture continuation where the only possible
+      // follow-up capture would be re-jumping the same square back.
+      board: new Map([
+        ["r5c3", [{ owner: "B", rank: "O" }]],
+        ["r4c2", [{ owner: "W", rank: "S" }]],
+      ]),
+      toMove: "B",
+      phase: "idle",
+      meta: {
+        variantId: "lasca_8_dama_board" as any,
+        rulesetId: "lasca" as any,
+        boardSize: 8 as any,
+      },
+    };
+    history.push(s);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+    controller.setState(s);
+    (controller as any).lockedCaptureFrom = "r5c3";
+    (controller as any).jumpedSquares.add("r4c2");
+
+    // Without anti-loop constraints, Lasca would allow: r5c3 x r4c2 -> r3c1.
+    // With anti-loop, no further capture is legal.
+    const legal = controller.getLegalMovesForTurn();
+    expect(legal).toEqual([]);
+  });
 });
