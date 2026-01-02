@@ -39,6 +39,21 @@ function isRulesetId(raw: unknown): raw is RulesetId {
   return raw === "lasca" || raw === "dama" || raw === "damasca";
 }
 
+function isLegacyHybridRulesetId(raw: unknown): boolean {
+  return raw === "hybrid";
+}
+
+function isLegacyHybridVariantId(raw: unknown): boolean {
+  return raw === "hybrid_8_damasca";
+}
+
+function legacyHybridMessage(): string {
+  return (
+    "This save file uses legacy 'hybrid' IDs. " +
+    "Update it to 'rulesetId: damasca' and 'variantId: damasca_8' (including current.meta) and try again."
+  );
+}
+
 function isBoardSize(raw: unknown): raw is 7 | 8 {
   return raw === 7 || raw === 8;
 }
@@ -185,6 +200,12 @@ export function deserializeSaveData(
   // v3: metadata wrapper (preferred)
   if ((data as any)?.saveVersion === 3) {
     const v3 = data as any;
+
+    // Explicit legacy detection (we do not support back-compat mapping).
+    if (isLegacyHybridRulesetId(v3.rulesetId) || isLegacyHybridVariantId(v3.variantId)) {
+      throw new Error(legacyHybridMessage());
+    }
+
     if (!isVariantId(String(v3.variantId)) || !isRulesetId(v3.rulesetId) || !isBoardSize(v3.boardSize)) {
       throw new Error("Invalid save file: missing or invalid variant metadata");
     }
@@ -240,6 +261,14 @@ export function deserializeSaveData(
   // v2: history wrapper without metadata
   if (typeof (data as any)?.version === "number") {
     const v2 = data as SerializedSaveFileV2;
+
+    // Some older v2 files may contain meta; if it has legacy hybrid IDs, fail clearly.
+    const v2Ruleset = (v2.current as any)?.meta?.rulesetId;
+    const v2Variant = (v2.current as any)?.meta?.variantId;
+    if (isLegacyHybridRulesetId(v2Ruleset) || isLegacyHybridVariantId(v2Variant)) {
+      throw new Error(legacyHybridMessage());
+    }
+
     if (v2.version !== 2 || !v2.current || !v2.history) {
       const state = deserializeGameState(v2.current ?? (data as any));
       const meta = defaultMeta();
@@ -284,6 +313,12 @@ export function deserializeSaveData(
 
   // v1: state-only
   {
+    const v1Ruleset = (data as any)?.meta?.rulesetId;
+    const v1Variant = (data as any)?.meta?.variantId;
+    if (isLegacyHybridRulesetId(v1Ruleset) || isLegacyHybridVariantId(v1Variant)) {
+      throw new Error(legacyHybridMessage());
+    }
+
     const state = deserializeGameState(data as SerializedGameState);
     const meta = coerceMeta((data as any)?.meta) ?? defaultMeta();
     if (

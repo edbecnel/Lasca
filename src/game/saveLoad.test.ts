@@ -173,4 +173,21 @@ describe("saveLoad", () => {
     expect(loadedAsStandard.state.meta?.variantId).toBe("dama_8_classic_standard");
     expect((loadedAsStandard.state.meta as any)?.damaCaptureRemoval).toBe("immediate");
   });
+
+  it("rejects legacy hybrid ids with a clear message", () => {
+    const legacy: any = {
+      saveVersion: 3,
+      variantId: "hybrid_8_damasca",
+      rulesetId: "hybrid",
+      boardSize: 8,
+      current: {
+        board: [["r3c3", [{ owner: "B", rank: "S" }]]],
+        toMove: "B",
+        phase: "idle",
+        meta: { variantId: "hybrid_8_damasca", rulesetId: "hybrid", boardSize: 8 },
+      },
+    };
+
+    expect(() => deserializeSaveData(legacy)).toThrow(/legacy 'hybrid' IDs/i);
+  });
 });
