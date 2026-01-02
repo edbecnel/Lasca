@@ -11,7 +11,8 @@
     "preview": "vite preview --port 8080",
     "deploy": "npm run build && gh-pages -d dist",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke:offline": "vitest run src/smoke/offlineSmoke.test.ts"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0",
