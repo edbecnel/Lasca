@@ -13,6 +13,7 @@ self.onmessage = (ev: MessageEvent<AIWorkerRequest>) => {
   const ctx = {
     state,
     lockedFrom: msg.lockedFrom,
+    lockedDir: msg.lockedDir,
     excludedJumpSquares: new Set<string>(msg.excludedJumpSquares || []),
   };
 

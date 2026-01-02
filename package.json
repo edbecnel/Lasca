@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm start",
+    "dev": "vite",
     "start": "vite",
     "build": "vite build",
     "watch": "vite build --watch",

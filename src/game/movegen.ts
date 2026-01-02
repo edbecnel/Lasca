@@ -7,6 +7,11 @@ import { generateCaptureMovesHybrid, generateLegalMovesHybrid } from "./movegenH
 export type MovegenConstraints = {
   forcedFrom?: NodeId;
   excludedJumpSquares?: Set<NodeId>;
+  /**
+   * Direction of the previous capture step in a capture chain.
+   * Used by rulesets that restrict follow-up captures (e.g., Officers must zigzag).
+   */
+  lastCaptureDir?: { dr: number; dc: number };
 };
 
 function getRulesetId(state: GameState): string {

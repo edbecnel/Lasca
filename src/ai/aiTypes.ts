@@ -26,6 +26,7 @@ export type AIWorkerRequest = {
   difficulty: Exclude<AIDifficulty, "human">;
   state: SerializedGameState;
   lockedFrom: string | null;
+  lockedDir: { dr: number; dc: number } | null;
   excludedJumpSquares: string[];
   // Search tuning
   maxDepth?: number;

@@ -13,6 +13,8 @@ import { animateStack } from "../render/animateMove.ts";
 import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
+import { finalizeHybridCaptureChain } from "../game/hybridCaptureChain.ts";
+import { parseNodeId } from "../game/coords.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame";
 
@@ -27,6 +29,7 @@ export class GameController {
   private currentMoves: Move[] = [];
   private mandatoryCapture: boolean = false;
   private lockedCaptureFrom: string | null = null;
+  private lockedCaptureDir: { dr: number; dc: number } | null = null;
   private jumpedSquares: Set<string> = new Set();
   private isGameOver: boolean = false;
   private moveHintsEnabled: boolean = false;
@@ -64,6 +67,14 @@ export class GameController {
     clearOverlays(this.overlayLayer);
     this.drawPendingDamaCapturedMarks();
     this.updatePanel();
+  }
+
+  private captureDir(fromId: string, toId: string): { dr: number; dc: number } {
+    const a = parseNodeId(fromId);
+    const b = parseNodeId(toId);
+    const dr = Math.sign(b.r - a.r);
+    const dc = Math.sign(b.c - a.c);
+    return { dr, dc };
   }
 
   constructor(svg: SVGSVGElement, piecesLayer: SVGGElement, inspector: ReturnType<typeof createStackInspector> | null, state: GameState, history: HistoryManager) {
@@ -139,9 +150,14 @@ export class GameController {
     }
   }
 
-  getCaptureChainConstraints(): { lockedCaptureFrom: string | null; jumpedSquares: string[] } {
+  getCaptureChainConstraints(): {
+    lockedCaptureFrom: string | null;
+    lockedCaptureDir: { dr: number; dc: number } | null;
+    jumpedSquares: string[];
+  } {
     return {
       lockedCaptureFrom: this.lockedCaptureFrom,
+      lockedCaptureDir: this.lockedCaptureDir,
       jumpedSquares: Array.from(this.jumpedSquares),
     };
   }
@@ -149,10 +165,11 @@ export class GameController {
   getLegalMovesForTurn(): Move[] {
     const rulesetId = this.state.meta?.rulesetId ?? "lasca";
     const captureRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(this.state) : null;
+    const chainRules = rulesetId === "dama" || rulesetId === "hybrid";
     const constraints = this.lockedCaptureFrom
       ? {
           forcedFrom: this.lockedCaptureFrom,
-          ...(rulesetId === "dama" ? { excludedJumpSquares: this.jumpedSquares } : {}),
+          ...(chainRules ? { excludedJumpSquares: this.jumpedSquares, lastCaptureDir: this.lockedCaptureDir ?? undefined } : {}),
         }
       : undefined;
     const allLegal = generateLegalMoves(this.state, constraints);
@@ -198,6 +215,7 @@ export class GameController {
 
       this.state = prevState;
       this.lockedCaptureFrom = null;
+      this.lockedCaptureDir = null;
       this.jumpedSquares.clear();
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
@@ -229,6 +247,7 @@ export class GameController {
 
       this.state = nextState;
       this.lockedCaptureFrom = null;
+      this.lockedCaptureDir = null;
       this.jumpedSquares.clear();
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
@@ -553,6 +572,7 @@ export class GameController {
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.lockedCaptureFrom = null;
+    this.lockedCaptureDir = null;
     this.jumpedSquares.clear();
     clearOverlays(this.overlayLayer);
     this.updatePanel();
@@ -625,8 +645,11 @@ export class GameController {
       // Track the jumped-over square to prevent re-jumping it
       this.jumpedSquares.add(move.over);
 
+      const lastDir = this.captureDir(move.from, move.to);
+
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
       const isDama = rulesetId === "dama";
+      const isHybrid = rulesetId === "hybrid";
       const damaCaptureRemoval = isDama ? getDamaCaptureRemovalMode(this.state) : null;
       
       // Check if promotion happened
@@ -635,7 +658,9 @@ export class GameController {
       // Check if there are more captures available from the destination
       const allCaptures = generateLegalMoves(this.state, {
         forcedFrom: move.to,
-        ...(isDama ? { excludedJumpSquares: this.jumpedSquares } : {}),
+        ...((isDama || isHybrid)
+          ? { excludedJumpSquares: this.jumpedSquares, lastCaptureDir: lastDir }
+          : {}),
       }).filter((m) => m.kind === "capture");
       const moreCapturesFromDest = allCaptures;
       
@@ -645,13 +670,19 @@ export class GameController {
           // Dama promotes only at the end of the sequence; if we ever get here,
           // still finalize the chain correctly.
           this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+        } else if (isHybrid) {
+          // Hybrid should not promote mid-chain, but finalize defensively.
+          this.state = finalizeHybridCaptureChain(this.state, move.to);
         }
         // Switch turn now
         this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
 
         // In Dama, finalization may remove jumped pieces and/or promote.
         // We already rendered after applyMove, so re-render now to reflect finalization.
-        if (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) {
+        if (
+          (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
+          (isHybrid && Boolean((this.state as any).didPromote))
+        ) {
           renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
         }
 
@@ -696,6 +727,7 @@ export class GameController {
       // If more captures available from destination, chain the capture
       if (moreCapturesFromDest.length > 0) {
         this.lockedCaptureFrom = move.to;
+        this.lockedCaptureDir = lastDir;
         this.selected = move.to;
         this.showSelection(move.to);
         this.showBanner("Continue capture");
@@ -706,16 +738,22 @@ export class GameController {
       // No more captures, switch turn and end
       if (isDama) {
         this.state = finalizeDamaCaptureChain(this.state, move.to, this.jumpedSquares);
+      } else if (isHybrid) {
+        this.state = finalizeHybridCaptureChain(this.state, move.to);
       }
       this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
 
       // Dama may promote during finalization even in immediate-removal mode.
       // Re-render so the promotion is visible before the opponent starts their turn.
-      if (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) {
+      if (
+        (isDama && (damaCaptureRemoval === "end_of_sequence" || Boolean((this.state as any).didPromote))) ||
+        (isHybrid && Boolean((this.state as any).didPromote))
+      ) {
         renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
       }
 
       this.lockedCaptureFrom = null;
+      this.lockedCaptureDir = null;
       this.jumpedSquares.clear();
       this.clearSelection();
       

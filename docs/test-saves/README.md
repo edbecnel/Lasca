@@ -1,0 +1,43 @@
+# Test Save Files
+
+These JSON saves are designed to be loaded in the **Damasca** page (the Hybrid ruleset): `hybrid.html`.
+
+## How to load
+
+- Open the Damasca page.
+- Use the **Upload/Load** control (JSON file upload) and select one of the files below.
+
+## Scenarios
+
+### `damasca-zigzag-multicapture.json`
+
+Purpose: verify **multi-capture continuation** and the **Officer zigzag restriction**.
+
+Expected:
+
+1. It is **Black to move**.
+2. Make the first capture with the Black Officer:
+   - `r2c2` over `r3c3` to `r4c4`
+3. The game should force you to continue capturing.
+4. From `r4c4`, you should **only** be offered the zigzag continuation:
+   - Allowed: over `r5c3` to `r6c2` (direction changes)
+   - Disallowed (should NOT appear): over `r5c5` to `r6c6` (same diagonal direction as the previous capture)
+
+Notes:
+
+- There is also a White piece at **B7** (`r1c1`), so the starting position has a second possible capture line,
+  but it is shorter; the **max-capture** rule should force the `r2c2 → r4c4` line.
+
+### `damasca-no-rejump-square.json`
+
+Purpose: verify **anti-loop**: you cannot jump the **same jumped square** twice in one capture chain.
+
+Expected:
+
+1. It is **Black to move**.
+2. Make the capture with the Black Soldier:
+   - `r2c2` over `r3c3` to `r4c4`
+3. After landing on `r4c4`, note there is still a White piece remaining on `r3c3`.
+4. A backward recapture over `r3c3` back to `r2c2` would normally be possible, but it must be **disallowed** because `r3c3` was already jumped this turn.
+
+If you want a save that also tests **max-capture choice** (two different capture lines with different totals), say so and I’ll add one.

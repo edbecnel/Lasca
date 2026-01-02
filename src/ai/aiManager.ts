@@ -394,6 +394,7 @@ export class AIManager {
         difficulty: difficulty,
         state: serialized,
         lockedFrom: constraints.lockedCaptureFrom,
+        lockedDir: constraints.lockedCaptureDir,
         excludedJumpSquares: constraints.jumpedSquares,
       });
 

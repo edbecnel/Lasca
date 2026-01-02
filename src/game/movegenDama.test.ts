@@ -70,6 +70,37 @@ describe("movegen Dama (Phase 4)", () => {
     expect(moves.every((m) => m.kind === "capture")).toBe(true);
   });
 
+  it("kings must zigzag in multi-capture (cannot continue on the same diagonal)", () => {
+    // After a capture along a diagonal, the next capture (if any) must be on a different diagonal.
+    // Setup: black king can capture r2c2 to r3c3, then would normally be able to capture r4c4
+    // by continuing along the same diagonal. That continuation must be illegal.
+    const s = mkDamaState(
+      [
+        ["r1c1", [{ owner: "B", rank: "O" }]],
+        ["r2c2", [{ owner: "W", rank: "S" }]],
+        ["r4c4", [{ owner: "W", rank: "S" }]],
+      ],
+      "B"
+    );
+
+    // First capture is available.
+    const first = generateLegalMoves(s);
+    expect(first).toEqual(
+      expect.arrayContaining([
+        { kind: "capture", from: "r1c1", over: "r2c2", to: "r3c3" },
+      ])
+    );
+
+    // Now in a capture chain from r3c3. Disallow continuing on the same diagonal (+1,+1) or reversing (-1,-1).
+    const cont = generateLegalMoves(s, {
+      forcedFrom: "r3c3",
+      excludedJumpSquares: new Set(["r2c2"]),
+      lastCaptureDir: { dr: 1, dc: 1 },
+    }).filter((m: any) => m.kind === "capture");
+
+    expect(cont.some((m: any) => m.over === "r4c4")).toBe(false);
+  });
+
   it("kings have flying quiet moves (multiple squares)", () => {
     const s = mkDamaState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
     const moves = generateLegalMoves(s);

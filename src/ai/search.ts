@@ -6,10 +6,21 @@ import { applyMove } from "../game/applyMove.ts";
 import { RULES } from "../game/ruleset.ts";
 import { evaluateState } from "./evaluate.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
+import { finalizeHybridCaptureChain } from "../game/hybridCaptureChain.ts";
+import { parseNodeId } from "../game/coords.ts";
+
+type CaptureDir = { dr: number; dc: number };
+
+function captureDir(fromId: string, toId: string): CaptureDir {
+  const a = parseNodeId(fromId);
+  const b = parseNodeId(toId);
+  return { dr: Math.sign(b.r - a.r), dc: Math.sign(b.c - a.c) };
+}
 
 export type SearchContext = {
   state: GameState;
   lockedFrom: string | null;
+  lockedDir: CaptureDir | null;
   excludedJumpSquares: Set<string>;
 };
 
@@ -47,10 +58,13 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
   const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
+  const chainRules = rulesetId === "dama" || rulesetId === "hybrid";
   const constraints = ctx.lockedFrom
     ? {
         forcedFrom: ctx.lockedFrom,
-        ...(rulesetId === "dama" ? { excludedJumpSquares: ctx.excludedJumpSquares } : {}),
+        ...(chainRules
+          ? { excludedJumpSquares: ctx.excludedJumpSquares, lastCaptureDir: ctx.lockedDir ?? undefined }
+          : {}),
       }
     : undefined;
   const all = generateLegalMoves(ctx.state, constraints);
@@ -85,6 +99,7 @@ function cloneCtx(ctx: SearchContext): SearchContext {
   return {
     state: ctx.state,
     lockedFrom: ctx.lockedFrom,
+    lockedDir: ctx.lockedDir,
     excludedJumpSquares: new Set(ctx.excludedJumpSquares),
   };
 }
@@ -96,6 +111,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
     const nextState = applyMove(cloneStateForSearch(nextCtx.state), move);
     nextCtx.state = nextState;
     nextCtx.lockedFrom = null;
+    nextCtx.lockedDir = null;
     nextCtx.excludedJumpSquares.clear();
     return nextCtx;
   }
@@ -115,9 +131,12 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   if (didPromote && RULES.stopCaptureOnPromotion) {
     if (isDama) {
       nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
+    } else if (rulesetId === "hybrid") {
+      nextCtx.state = finalizeHybridCaptureChain(nextCtx.state, move.to);
     }
     nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
     nextCtx.lockedFrom = null;
+    nextCtx.lockedDir = null;
     nextCtx.excludedJumpSquares.clear();
     return nextCtx;
   }
@@ -125,21 +144,27 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Check for more captures from the landing square.
   const allNext = generateLegalMoves(nextCtx.state, {
     forcedFrom: move.to,
-    ...(isDama ? { excludedJumpSquares: nextCtx.excludedJumpSquares } : {}),
+    ...((isDama || rulesetId === "hybrid")
+      ? { excludedJumpSquares: nextCtx.excludedJumpSquares, lastCaptureDir: captureDir(move.from, move.to) }
+      : {}),
   });
   const moreFromDest = allNext.filter((m) => m.kind === "capture");
 
   if (moreFromDest.length > 0) {
     nextCtx.lockedFrom = move.to;
+    nextCtx.lockedDir = captureDir(move.from, move.to);
     return nextCtx;
   }
 
   // Chain ends: switch turn.
   if (isDama) {
     nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
+  } else if (rulesetId === "hybrid") {
+    nextCtx.state = finalizeHybridCaptureChain(nextCtx.state, move.to);
   }
   nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
   nextCtx.lockedFrom = null;
+  nextCtx.lockedDir = null;
   nextCtx.excludedJumpSquares.clear();
   return nextCtx;
 }

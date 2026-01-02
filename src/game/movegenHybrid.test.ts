@@ -91,6 +91,28 @@ describe("movegen Hybrid (Phase 2)", () => {
     );
   });
 
+  it("officers must zigzag in multi-capture (cannot continue on the same or opposite diagonal)", () => {
+    // Forced continuation from r3c3 after a prior capture along (+1,+1).
+    // Captures along (+1,+1) or (-1,-1) should be disallowed.
+    const s = mkHybridState(
+      [
+        ["r3c3", [{ owner: "B", rank: "O" }]],
+        ["r4c4", [{ owner: "W", rank: "S" }]],
+        ["r2c2", [{ owner: "W", rank: "S" }]],
+      ],
+      "B"
+    );
+
+    const moves = generateLegalMoves(s, {
+      forcedFrom: "r3c3",
+      excludedJumpSquares: new Set(),
+      lastCaptureDir: { dr: 1, dc: 1 },
+    }).filter((m) => m.kind === "capture");
+
+    expect(moves.some((m: any) => m.over === "r4c4")).toBe(false);
+    expect(moves.some((m: any) => m.over === "r2c2")).toBe(false);
+  });
+
   it("enforces maximum-capture line (filters first steps)", () => {
     // Same structure as Dama test, but with hybrid ruleset.
     const s = mkHybridState(

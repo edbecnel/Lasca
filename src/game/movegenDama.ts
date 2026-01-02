@@ -7,6 +7,20 @@ import { getDamaCaptureRemovalMode } from "./damaCaptureChain.ts";
 
 type StackLike = Array<{ owner: "B" | "W"; rank: "S" | "O" }>;
 
+type CaptureDir = { dr: number; dc: number };
+
+function sign(n: number): number {
+  if (n > 0) return 1;
+  if (n < 0) return -1;
+  return 0;
+}
+
+function captureDir(fromId: NodeId, toId: NodeId): CaptureDir {
+  const a = parseNodeId(fromId);
+  const b = parseNodeId(toId);
+  return { dr: sign(b.r - a.r), dc: sign(b.c - a.c) };
+}
+
 function isEmptyAt(state: GameState, id: NodeId): boolean {
   const stack = state.board.get(id);
   return !stack || stack.length === 0;
@@ -60,7 +74,8 @@ function applyCaptureForSearch(state: GameState, move: CaptureMove): GameState {
 function generateRawCaptureMovesFrom(
   state: GameState,
   fromId: NodeId,
-  excludedJumpSquares?: Set<NodeId>
+  excludedJumpSquares?: Set<NodeId>,
+  lastCaptureDir?: CaptureDir
 ): CaptureMove[] {
   const top = topAt(state, fromId);
   if (!top || top.owner !== state.toMove) return [];
@@ -112,6 +127,16 @@ function generateRawCaptureMovesFrom(
   ];
 
   for (const { dr, dc } of dirs) {
+    // Zigzag rule (Dama + Damasca): during a capture chain, an Officer may not
+    // continue capturing along the same line (same direction) or reverse (opposite direction).
+    if (
+      lastCaptureDir &&
+      ((dr === lastCaptureDir.dr && dc === lastCaptureDir.dc) ||
+        (dr === -lastCaptureDir.dr && dc === -lastCaptureDir.dc))
+    ) {
+      continue;
+    }
+
     let rr = r + dr;
     let cc = c + dc;
     let seenEnemy: { id: NodeId; r: number; c: number } | null = null;
@@ -167,13 +192,16 @@ function bestRemainingCapturesFrom(
   state: GameState,
   fromId: NodeId,
   excludedJumpSquares: Set<NodeId>,
-  memo: Map<string, number>
+  memo: Map<string, number>,
+  lastDir: CaptureDir | null
 ): number {
-  const key = `${hashGameState(state)}|from:${fromId}|ex:${Array.from(excludedJumpSquares).sort().join(",")}`;
+  const key = `${hashGameState(state)}|from:${fromId}|ex:${Array.from(excludedJumpSquares).sort().join(",")}|dir:${
+    lastDir ? `${lastDir.dr},${lastDir.dc}` : "none"
+  }`;
   const cached = memo.get(key);
   if (cached !== undefined) return cached;
 
-  const nextCaps = generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares);
+  const nextCaps = generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastDir ?? undefined);
   if (nextCaps.length === 0) {
     memo.set(key, 0);
     return 0;
@@ -184,7 +212,7 @@ function bestRemainingCapturesFrom(
     const nextExcluded = new Set(excludedJumpSquares);
     nextExcluded.add(m.over);
     const nextState = applyCaptureForSearch(state, m);
-    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo);
+    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to));
     if (score > best) best = score;
   }
 
@@ -198,6 +226,7 @@ function generateSelectableCaptureMoves(
 ): CaptureMove[] {
   const forcedFrom = constraints?.forcedFrom;
   const excludedJumpSquares = constraints?.excludedJumpSquares ?? new Set<NodeId>();
+  const lastCaptureDir = constraints?.lastCaptureDir as CaptureDir | undefined;
 
   const memo = new Map<string, number>();
 
@@ -213,7 +242,7 @@ function generateSelectableCaptureMoves(
   for (const fromId of origins) {
     const top = topAt(state, fromId);
     if (!top || top.owner !== state.toMove) continue;
-    candidates.push(...generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares));
+    candidates.push(...generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastCaptureDir));
   }
 
   if (candidates.length === 0) return [];
@@ -226,7 +255,7 @@ function generateSelectableCaptureMoves(
     const nextExcluded = new Set(excludedJumpSquares);
     nextExcluded.add(m.over);
     const nextState = applyCaptureForSearch(state, m);
-    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo);
+    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to));
     scored.push({ move: m, score });
     if (score > globalBest) globalBest = score;
   }
