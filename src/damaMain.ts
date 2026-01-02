@@ -14,6 +14,7 @@ import { RULES } from "./game/ruleset.ts";
 import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
+import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, isVariantId, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 
@@ -363,6 +364,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (boardHeightToggle && centerArea) {
     const STORAGE_KEY = "lasca.boardHeightReduced";
+    const POS_KEY = "lasca.boardHeightTogglePos";
+
+    const drag = installHoldDrag(boardHeightToggle, {
+      storageKey: POS_KEY,
+      holdDelayMs: 250,
+    });
 
     // Restore saved state
     const savedReduced = localStorage.getItem(STORAGE_KEY) === "true";
@@ -372,7 +379,12 @@ window.addEventListener("DOMContentLoaded", async () => {
       boardHeightToggle.title = "Restore full board height";
     }
 
-    boardHeightToggle.addEventListener("click", () => {
+    boardHeightToggle.addEventListener("click", (e) => {
+      if (drag.wasDraggedRecently()) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       const isReduced = centerArea.classList.toggle("reduced-height");
 
       // Update button appearance

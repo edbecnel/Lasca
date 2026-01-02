@@ -43,6 +43,7 @@ Traditional checkers/draughts with two rule variants:
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
+- 📱 Mobile board-height adjust button (tap to toggle; touch-hold + drag to move)
 
 ## How to Play
 

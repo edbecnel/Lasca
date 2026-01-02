@@ -409,13 +409,13 @@
         position: absolute;
         bottom: 110px;
         right: 16px;
-        width: 48px;
-        height: 48px;
-        border-radius: 24px;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
         background: rgba(0, 0, 0, 0.7);
         border: 1px solid rgba(255, 255, 255, 0.2);
         color: rgba(255, 255, 255, 0.9);
-        font-size: 20px;
+        font-size: 15px;
         cursor: pointer;
         display: none;
         align-items: center;
@@ -423,6 +423,8 @@
         z-index: 100;
         transition: all 0.2s ease;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        touch-action: none;
+        user-select: none;
       }
 
       #boardHeightToggle:hover {
