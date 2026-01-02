@@ -16,7 +16,7 @@ import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/dam
 import { finalizeHybridCaptureChain } from "../game/hybridCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 
-export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame";
+export type HistoryChangeReason = "move" | "undo" | "redo" | "newGame" | "loadGame" | "gameOver";
 
 export class GameController {
   private svg: SVGSVGElement;
@@ -118,10 +118,12 @@ export class GameController {
   private checkAndHandleCurrentPlayerLost(): boolean {
     const result = checkCurrentPlayerLost(this.state);
     if (result.winner) {
+      if (this.isGameOver) return true;
       this.isGameOver = true;
       this.clearSelection();
       this.showBanner(result.reason || "Game Over", 0);
       this.updatePanel();
+      this.fireHistoryChange("gameOver");
       return true;
     }
     return false;
@@ -704,6 +706,7 @@ export class GameController {
           this.isGameOver = true;
           this.clearSelection();
           this.showBanner("Draw by threefold repetition", 0);
+          this.fireHistoryChange("gameOver");
           return;
         }
         
@@ -716,6 +719,7 @@ export class GameController {
         if (gameResult.winner) {
           this.isGameOver = true;
           this.showBanner(gameResult.reason || "Game Over", 0);
+          this.fireHistoryChange("gameOver");
           return;
         }
         
@@ -771,6 +775,7 @@ export class GameController {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
+        this.fireHistoryChange("gameOver");
         return;
       }
       
@@ -783,6 +788,7 @@ export class GameController {
       if (gameResult.winner) {
         this.isGameOver = true;
         this.showBanner(gameResult.reason || "Game Over", 0);
+        this.fireHistoryChange("gameOver");
         return;
       }
       
@@ -806,6 +812,7 @@ export class GameController {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
+        this.fireHistoryChange("gameOver");
         return;
       }
       
@@ -818,6 +825,7 @@ export class GameController {
       if (gameResult.winner) {
         this.isGameOver = true;
         this.showBanner(gameResult.reason || "Game Over", 0);
+        this.fireHistoryChange("gameOver");
         return;
       }
       

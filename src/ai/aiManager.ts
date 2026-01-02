@@ -209,6 +209,25 @@ export class AIManager {
   }
 
   onHistoryChanged(reason?: HistoryChangeReason): void {
+    // Loading a save should always pause AI.
+    // Otherwise, a running AI can immediately start playing from the loaded position.
+    if (reason === "loadGame") {
+      if (this.busy || this.activeRequestId !== null) {
+        this.onWorkerFailed();
+      }
+      this.forcePausedUI();
+      return;
+    }
+
+    // When the game ends, always pause AI.
+    if (reason === "gameOver") {
+      if (this.busy || this.activeRequestId !== null) {
+        this.onWorkerFailed();
+      }
+      this.forcePausedUI();
+      return;
+    }
+
     // Undo/Redo are explicit user navigation: immediately pause AI.
     // This prevents AI from instantly replaying a just-undone move.
     if (reason === "undo" || reason === "redo") {
