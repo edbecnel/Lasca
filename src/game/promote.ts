@@ -38,3 +38,19 @@ export function promoteIfNeeded(state: GameState, nodeId: string): boolean {
 
   return false;
 }
+
+/**
+ * Promote the top piece at the given node if it is a Soldier owned by the side to move.
+ * Used for rulesets where promotion can be "earned" earlier in a capture sequence.
+ */
+export function promoteTopSoldierIfOwnedByToMove(state: GameState, nodeId: string): boolean {
+  const stack = state.board.get(nodeId);
+  if (!stack || stack.length === 0) return false;
+
+  const top = stack[stack.length - 1];
+  if (top.owner !== state.toMove) return false;
+  if (top.rank !== "S") return false;
+
+  top.rank = "O";
+  return true;
+}

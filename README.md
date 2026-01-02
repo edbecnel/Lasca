@@ -14,7 +14,7 @@ Lasca is a two-player checkers variant with unique stacking mechanics. When a pi
 - Soldiers move forward; Officers move diagonally any direction
 - Captured pieces form stacks rather than leaving the board
 
-### Dama Classic (8×8)
+### Dama (8×8)
 
 Traditional checkers/draughts with two rule variants:
 
@@ -26,12 +26,12 @@ Traditional checkers/draughts with two rule variants:
 
 ### Damasca (8×8)
 
-Hybrid ruleset:
+Damasca combines Dama-style movement with Lasca-style stacking captures:
 
 - Dama-style movement (including flying Officers)
 - Lasca-style stacking captures (jump takes top piece only and adds it to the bottom of the capturing stack)
 - Mandatory capture + multi-capture + maximum-capture priority
-- Promotion at end-of-turn only
+- Promotion is applied at end of turn / end of capture chain (no mid-chain king powers)
 
 ## Features
 
@@ -68,8 +68,8 @@ Alternatively, you can open `src/lasca.html` directly to jump straight into the 
 ### Basic Rules
 
 - **Movement**: Soldiers move forward diagonally one square. Officers move diagonally in any direction.
-- **Captures**: Pieces jump over enemy pieces diagonally, landing two squares away. Captured pieces go under the capturing piece.
-- **Promotion**: Soldiers reaching the opposite end promote to Officers (marked with a star).
+- **Captures**: Pieces jump over enemy pieces diagonally, landing two squares away. (In Lasca/Damasca, captured pieces stack under the capturer; in Dama, captured pieces are removed.)
+- **Promotion**: Soldiers promote to Officers at the end of the turn. During capture chains, the piece continues as a Soldier; if it reaches the far edge at any point in the chain, it promotes when the chain ends.
 - **Multi-captures**: If more captures are available, you must continue capturing.
 - **Mandatory Capture**: If captures are available, you must capture.
 - **Anti-loop Rule**: During multi-capture, you cannot jump over the same square twice.

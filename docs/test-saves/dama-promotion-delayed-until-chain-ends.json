@@ -1,0 +1,23 @@
+{
+  "saveVersion": 3,
+  "variantId": "dama_8_classic_standard",
+  "rulesetId": "dama",
+  "boardSize": 8,
+  "damaCaptureRemoval": "immediate",
+  "current": {
+    "board": [
+      ["r3c1", [{ "owner": "B", "rank": "S" }]],
+      ["r4c2", [{ "owner": "W", "rank": "S" }]],
+      ["r6c4", [{ "owner": "W", "rank": "S" }]],
+      ["r6c6", [{ "owner": "W", "rank": "S" }]]
+    ],
+    "toMove": "B",
+    "phase": "idle",
+    "meta": {
+      "variantId": "dama_8_classic_standard",
+      "rulesetId": "dama",
+      "boardSize": 8,
+      "damaCaptureRemoval": "immediate"
+    }
+  }
+}

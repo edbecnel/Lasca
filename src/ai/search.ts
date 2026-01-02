@@ -44,7 +44,13 @@ function cloneStateForSearch(state: GameState): GameState {
   }
   // Preserve meta so movegen/applyMove/eval follow the correct ruleset.
   // Without this, Dama positions get treated like Lasca during search.
-  return { board, toMove: state.toMove, phase: state.phase, meta: state.meta ? { ...state.meta } : undefined };
+  return {
+    board,
+    toMove: state.toMove,
+    phase: state.phase,
+    meta: state.meta ? { ...state.meta } : undefined,
+    captureChain: state.captureChain ? { ...state.captureChain } : undefined,
+  };
 }
 
 function hasControlledStacks(state: GameState, p: Player): boolean {

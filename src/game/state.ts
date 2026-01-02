@@ -13,6 +13,15 @@ export interface GameState {
   toMove: Player;
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
+
+  /**
+   * Ephemeral (not serialized): used by some rulesets to track multi-capture chain state.
+   * Currently used by Damasca to remember if a soldier has reached the promotion row
+   * at any point during a capture chain (promotion is applied at chain end).
+   */
+  captureChain?: {
+    promotionEarned?: boolean;
+  };
 }
 
 export function createInitialGameStateForVariant(variantId: VariantId): GameState {

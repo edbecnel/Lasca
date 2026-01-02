@@ -1,7 +1,7 @@
 {
   "saveVersion": 3,
-  "variantId": "hybrid_8_damasca",
-  "rulesetId": "hybrid",
+  "variantId": "damasca_8",
+  "rulesetId": "damasca",
   "boardSize": 8,
   "current": {
     "board": [
@@ -10,6 +10,6 @@
     ],
     "toMove": "B",
     "phase": "idle",
-    "meta": { "variantId": "hybrid_8_damasca", "rulesetId": "hybrid", "boardSize": 8 }
+    "meta": { "variantId": "damasca_8", "rulesetId": "damasca", "boardSize": 8 }
   }
 }

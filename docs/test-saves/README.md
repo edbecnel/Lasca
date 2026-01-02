@@ -1,6 +1,22 @@
 # Test Save Files
 
-These JSON saves are designed to be loaded in the **Damasca** page (the Hybrid ruleset): `hybrid.html`.
+These JSON saves are designed to be loaded in the **Damasca** page: `damasca.html`.
+
+## damasca-promotion-delayed-until-chain-ends.json
+
+Demonstrates that a soldier does **not** promote until the capture chain ends.
+
+- Side to move: **Black**
+- Expected: Black has a forced 3-step capture chain `B5 -> D3 -> F1 -> H3`.
+- During the chain, the moving piece remains a **soldier** after landing on the last rank (`F1`); it promotes only after the chain finishes.
+
+## dama-promotion-delayed-until-chain-ends.json
+
+Same idea as the Damasca test, but for the **Dama** page (`dama.html`).
+
+- Side to move: **Black**
+- Expected forced chain: `B5 -> D3 -> F1 -> H3`
+- Expected: after landing on `F1` mid-chain, Black still must continue capturing; promotion should occur after the chain ends.
 
 ## How to load
 

@@ -1,6 +1,6 @@
 import type { GameState, NodeId } from "./state.ts";
 import type { DamaCaptureRemoval } from "../variants/variantTypes";
-import { promoteIfNeeded } from "./promote.ts";
+import { promoteIfNeeded, promoteTopSoldierIfOwnedByToMove } from "./promote.ts";
 
 export function getDamaCaptureRemovalMode(state: GameState): DamaCaptureRemoval {
   const rulesetId = state.meta?.rulesetId ?? "lasca";
@@ -26,7 +26,12 @@ export function finalizeDamaCaptureChain(
   }
 
   const tempState: GameState = { ...state, board };
-  const didPromote = promoteIfNeeded(tempState, lastLanding);
 
-  return { ...tempState, didPromote };
+  // If the mover reached the promotion row at any point in the chain, apply promotion
+  // now on the final landing square (even if that square is not on the promotion row).
+  const didPromote = tempState.captureChain?.promotionEarned
+    ? promoteTopSoldierIfOwnedByToMove(tempState, lastLanding)
+    : promoteIfNeeded(tempState, lastLanding);
+
+  return { ...tempState, didPromote, captureChain: undefined };
 }

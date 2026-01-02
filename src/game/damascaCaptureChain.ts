@@ -1,5 +1,5 @@
 import type { GameState, NodeId } from "./state.ts";
-import { promoteIfNeeded } from "./promote.ts";
+import { promoteIfNeeded, promoteTopSoldierIfOwnedByToMove } from "./promote.ts";
 
 /**
  * Finalize a Damasca capture chain.
@@ -11,6 +11,12 @@ export function finalizeDamascaCaptureChain(
   lastLanding: NodeId
 ): GameState & { didPromote?: boolean } {
   const tempState: GameState = { ...state, board: state.board };
-  const didPromote = promoteIfNeeded(tempState, lastLanding);
-  return { ...tempState, didPromote };
+
+  // If the mover reached the promotion row at any point in the chain, apply promotion
+  // now on the final landing square (even if that square is not on the promotion row).
+  const didPromote = tempState.captureChain?.promotionEarned
+    ? promoteTopSoldierIfOwnedByToMove(tempState, lastLanding)
+    : promoteIfNeeded(tempState, lastLanding);
+
+  return { ...tempState, didPromote, captureChain: undefined };
 }

@@ -2,6 +2,7 @@ import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 import { promoteIfNeeded } from "./promote.ts";
 import { getDamaCaptureRemovalMode } from "./damaCaptureChain.ts";
+import { parseNodeId } from "./coords.ts";
 
 /**
  * Dama does not use Lasca columns/stacks.
@@ -45,9 +46,21 @@ export function applyMoveDama(
     nextBoard.set(move.to, moving);
     nextBoard.delete(move.from);
 
+    // Dama: if a Soldier reaches the promotion row at any point during a capture chain,
+    // it becomes eligible to promote once the chain ends (even if it later moves away).
+    const boardSize = state.meta?.boardSize ?? 8;
+    const lastRow = boardSize - 1;
+    const { r } = parseNodeId(move.to);
+    const reachedPromotionRow =
+      (state.toMove === "B" && r === lastRow) || (state.toMove === "W" && r === 0);
+    const promotionEarned = Boolean(state.captureChain?.promotionEarned) || reachedPromotionRow;
+    const captureChain = promotionEarned
+      ? { ...(state.captureChain ?? {}), promotionEarned: true }
+      : state.captureChain;
+
     // Promotion is handled at the end of the capture sequence (controller/finalizeDamaCaptureChain)
     // so that if further legal jumps exist, the piece continues as a Soldier until the chain ends.
-    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle" };
+    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", captureChain };
   }
 
   // Quiet move
@@ -68,5 +81,5 @@ export function applyMoveDama(
   const didPromote = promoteIfNeeded(tempState, move.to);
 
   const nextToMove = state.toMove === "B" ? "W" : "B";
-  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote };
+  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote, captureChain: undefined };
 }

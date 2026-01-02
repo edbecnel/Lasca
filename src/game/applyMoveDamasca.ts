@@ -1,6 +1,7 @@
 import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 import { promoteIfNeeded } from "./promote.ts";
+import { parseNodeId } from "./coords.ts";
 
 /**
  * Damasca uses Lasca-style stacking capture transfer with Dama-style movement.
@@ -40,8 +41,20 @@ export function applyMoveDamasca(
     moving.unshift(captured);
     nextBoard.delete(move.from);
 
+    // Damasca: if a Soldier reaches the promotion row at any point during a capture chain,
+    // it becomes eligible to promote once the chain ends (even if it later moves away).
+    const boardSize = state.meta?.boardSize ?? 7;
+    const lastRow = boardSize - 1;
+    const { r } = parseNodeId(move.to);
+    const reachedPromotionRow =
+      (state.toMove === "B" && r === lastRow) || (state.toMove === "W" && r === 0);
+    const promotionEarned = Boolean(state.captureChain?.promotionEarned) || reachedPromotionRow;
+    const captureChain = promotionEarned
+      ? { ...(state.captureChain ?? {}), promotionEarned: true }
+      : state.captureChain;
+
     // No promotion during capture chains.
-    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle" };
+    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", captureChain };
   }
 
   // Quiet move
@@ -61,5 +74,5 @@ export function applyMoveDamasca(
   const didPromote = promoteIfNeeded(tempState, move.to);
 
   const nextToMove = state.toMove === "B" ? "W" : "B";
-  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote };
+  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote, captureChain: undefined };
 }
