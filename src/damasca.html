@@ -830,6 +830,19 @@
 
         .sidebarBody {
           padding: 8px;
+          overscroll-behavior-y: contain;
+          overflow-anchor: none;
+        }
+
+        /* AI speed slider: let the range input shrink so Reset + "ms" label fit. */
+        #aiDelay {
+          flex: 1 1 0 !important;
+          width: auto !important;
+          min-width: 60px;
+        }
+
+        #aiDelayLabel {
+          white-space: nowrap;
         }
 
         .collapseBtn {

@@ -120,6 +120,19 @@
         white-space: normal;
       }
 
+      /* Small screens: keep the AI speed row from overflowing horizontally. */
+      @media (max-width: 600px) {
+        #launchAiDelay {
+          flex: 1 1 0 !important;
+          width: auto !important;
+          min-width: 60px;
+        }
+
+        #launchAiDelayLabel {
+          white-space: nowrap;
+        }
+      }
+
       .panelSelect:hover {
         background: rgba(255, 255, 255, 0.08);
       }
