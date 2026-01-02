@@ -127,15 +127,9 @@ function generateRawCaptureMovesFrom(
   ];
 
   for (const { dr, dc } of dirs) {
-    // Zigzag rule (Dama + Damasca): during a capture chain, an Officer may not
-    // continue capturing along the same line (same direction) or reverse (opposite direction).
-    if (
-      lastCaptureDir &&
-      ((dr === lastCaptureDir.dr && dc === lastCaptureDir.dc) ||
-        (dr === -lastCaptureDir.dr && dc === -lastCaptureDir.dc))
-    ) {
-      continue;
-    }
+    // Capture-direction rule (Dama + Damasca): during a capture chain, an Officer may
+    // continue in the same direction (0°) or turn left/right (±90°), but may NOT reverse (180°).
+    if (lastCaptureDir && dr === -lastCaptureDir.dr && dc === -lastCaptureDir.dc) continue;
 
     let rr = r + dr;
     let cc = c + dc;

@@ -91,9 +91,9 @@ describe("movegen Damasca", () => {
     );
   });
 
-  it("officers must zigzag in multi-capture (cannot continue on the same or opposite diagonal)", () => {
+  it("officers may continue straight or turn 90°, but may not reverse 180° in multi-capture", () => {
     // Forced continuation from r3c3 after a prior capture along (+1,+1).
-    // Captures along (+1,+1) or (-1,-1) should be disallowed.
+    // Captures along (+1,+1) are allowed; captures along (-1,-1) are disallowed.
     const s = mkDamascaState(
       [
         ["r3c3", [{ owner: "B", rank: "O" }]],
@@ -109,7 +109,7 @@ describe("movegen Damasca", () => {
       lastCaptureDir: { dr: 1, dc: 1 },
     }).filter((m) => m.kind === "capture");
 
-    expect(moves.some((m: any) => m.over === "r4c4")).toBe(false);
+    expect(moves.some((m: any) => m.over === "r4c4")).toBe(true);
     expect(moves.some((m: any) => m.over === "r2c2")).toBe(false);
   });
 
