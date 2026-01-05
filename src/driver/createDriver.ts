@@ -129,12 +129,17 @@ export async function createDriverAsync(args: {
   const mode = selectDriverMode({ search: args.search, envMode: args.envMode });
   if (mode !== "online") return new LocalDriver(args.state, args.history);
 
-  const q = parseOnlineQuery(args.search, args.envServerUrl);
+  const q0 = parseOnlineQuery(args.search, args.envServerUrl);
+  // Guard against accidental reloads / hand-edited URLs:
+  // If a roomId is already present, never create a new room.
+  // (Keeping create=1 while swapping roomId is a common footgun.)
+  const q: OnlineQuery = q0.roomId ? { ...q0, create: false } : q0;
   const driver = new RemoteDriver(args.state);
 
   const wireSnapshot: WireSnapshot = {
     state: serializeWireGameState(args.state),
     history: serializeWireHistory(args.history.exportSnapshots()),
+    stateVersion: 0,
   };
 
   // Create room
@@ -184,6 +189,19 @@ export async function createDriverAsync(args: {
   }
 
   // Reconnect / spectator snapshot (requires roomId+playerId)
+  // If a user only has a roomId, allow read-only viewing by fetching the snapshot.
+  // Input will be disabled if the player color is unknown.
+  if (q.roomId && !q.playerId) {
+    driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
+    const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+    const anySnap: any = snap;
+    await driver.connectFromSnapshot(
+      { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
+      anySnap.snapshot
+    );
+    return driver;
+  }
+
   if (!q.roomId || !q.playerId) {
     throw new Error(
       "Online mode requires query params: ?mode=online&create=1 OR ?mode=online&join=1&roomId=... OR ?mode=online&roomId=...&playerId=..."

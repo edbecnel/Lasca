@@ -21,6 +21,7 @@ import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 import { createDriverAsync } from "./driver/createDriver.ts";
+import { RemoteDriver } from "./driver/remoteDriver.ts";
 
 const ACTIVE_VARIANT_ID: VariantId = "lasca_8_dama_board";
 
@@ -41,6 +42,21 @@ function readOptionalBoolPref(key: string): boolean | null {
 
 function writeBoolPref(key: string, value: boolean): void {
   localStorage.setItem(key, value ? "1" : "0");
+}
+
+function updatePlayerColorBadge(driver: unknown): void {
+  const el = document.getElementById("playerColorBadge") as HTMLElement | null;
+  if (!el) return;
+  if (!(driver instanceof RemoteDriver)) return;
+
+  const color = driver.getPlayerColor();
+  if (color !== "W" && color !== "B") return;
+
+  el.textContent = color === "W" ? "⚪" : "⚫";
+  el.style.display = "inline-flex";
+  const label = color === "W" ? "Playing as White" : "Playing as Black";
+  el.title = label;
+  el.setAttribute("aria-label", label);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -121,6 +137,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     envMode: import.meta.env.VITE_PLAY_MODE,
     envServerUrl: import.meta.env.VITE_SERVER_URL,
   });
+
+  updatePlayerColorBadge(driver);
+
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
 

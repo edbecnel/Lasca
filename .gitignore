@@ -1,2 +1,5 @@
 node_modules/
 dist/
+
+# Server persistence data (local-only)
+server/data/

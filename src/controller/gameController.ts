@@ -51,7 +51,7 @@ export class GameController {
   private isLocalPlayersTurn(): boolean {
     if (!(this.driver instanceof RemoteDriver)) return true;
     const color = this.driver.getPlayerColor();
-    if (!color) return true;
+    if (!color) return false;
     return this.state.toMove === color;
   }
 
@@ -81,6 +81,10 @@ export class GameController {
         this.recomputeRepetitionCounts();
         this.checkAndHandleCurrentPlayerLost();
         this.updatePanel();
+
+        // Remote snapshots can advance history/notation; notify listeners so UI updates
+        // (e.g., move list) without requiring local input.
+        this.fireHistoryChange("move");
       } catch {
         // Ignore transient network errors; server is best-effort.
       }
@@ -161,6 +165,15 @@ export class GameController {
 
   bind(): void {
     this.svg.addEventListener("click", (ev) => this.onClick(ev));
+
+    // In online mode, the RemoteDriver may have already applied a server snapshot
+    // during startup (create/join/resume). Sync controller state to the driver so
+    // the board and history panel are consistent immediately.
+    if (this.driver instanceof RemoteDriver) {
+      this.state = this.driver.getState();
+      this.renderAuthoritative();
+    }
+
     // Check for mandatory captures at game start
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";

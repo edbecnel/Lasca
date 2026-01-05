@@ -22,6 +22,7 @@ export type WireHistory = {
 export type WireSnapshot = {
   state: WireGameState;
   history: WireHistory;
+  stateVersion: number;
 };
 
 export function serializeWireGameState(state: any): WireGameState {

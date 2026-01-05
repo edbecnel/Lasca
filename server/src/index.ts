@@ -1,82 +1,12 @@
-import express from "express";
-import cors from "cors";
+import { startLascaServer } from "./app.ts";
 
-import { applyMove } from "../../src/game/applyMove.ts";
-import { finalizeDamaCaptureChain } from "../../src/game/damaCaptureChain.ts";
-import { finalizeDamascaCaptureChain } from "../../src/game/damascaCaptureChain.ts";
-import { HistoryManager } from "../../src/game/historyManager.ts";
-import type { Move } from "../../src/game/moveTypes.ts";
-import type { VariantId } from "../../src/variants/variantTypes.ts";
+/*
+ * Legacy inline Express server (pre Step F persistence) lived in this file.
+ * It has been superseded by the persistence-enabled implementation in server/src/app.ts.
+ * The block below is intentionally kept commented to minimize churn.
+ */
 
-import type {
-  CreateRoomRequest,
-  CreateRoomResponse,
-  JoinRoomRequest,
-  JoinRoomResponse,
-  SubmitMoveRequest,
-  SubmitMoveResponse,
-  FinalizeCaptureChainRequest,
-  FinalizeCaptureChainResponse,
-  EndTurnRequest,
-  EndTurnResponse,
-  GetRoomSnapshotResponse,
-  RoomId,
-  PlayerId,
-  PlayerColor,
-} from "../../src/shared/onlineProtocol.ts";
-
-import {
-  deserializeWireGameState,
-  deserializeWireHistory,
-  serializeWireGameState,
-  serializeWireHistory,
-  type WireSnapshot,
-} from "../../src/shared/wireState.ts";
-
-type Room = {
-  roomId: RoomId;
-  history: HistoryManager;
-  state: any;
-  players: Map<PlayerId, PlayerColor>;
-  colorsTaken: Set<PlayerColor>;
-  variantId: VariantId;
-};
-
-const rooms = new Map<RoomId, Room>();
-
-const randId = () => Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
-
-function nextColor(room: Room): PlayerColor | null {
-  if (!room.colorsTaken.has("W")) return "W";
-  if (!room.colorsTaken.has("B")) return "B";
-  return null;
-}
-
-function requireRoom(roomId: RoomId): Room {
-  const r = rooms.get(roomId);
-  if (!r) throw new Error("Room not found");
-  return r;
-}
-
-function requirePlayer(room: Room, playerId: PlayerId): PlayerColor {
-  const color = room.players.get(playerId);
-  if (!color) throw new Error("Invalid player");
-  return color;
-}
-
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: "1mb" }));
-
-app.use((req, _res, next) => {
-  // eslint-disable-next-line no-console
-  console.log(`[lasca-server] ${req.method} ${req.path}`);
-  next();
-});
-
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
-});
+/*
 
 app.post("/api/create", (req, res) => {
   try {
@@ -279,8 +209,19 @@ app.post("/api/endTurn", (req, res) => {
   }
 });
 
+*/
+
 const port = Number(process.env.PORT ?? 8787);
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[lasca-server] listening on http://localhost:${port}`);
-});
+
+startLascaServer({ port })
+  .then(({ url, gamesDir }) => {
+    // eslint-disable-next-line no-console
+    console.log(`[lasca-server] listening on ${url}`);
+    // eslint-disable-next-line no-console
+    console.log(`[lasca-server] persistence dir: ${gamesDir}`);
+  })
+  .catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("[lasca-server] failed to start", err);
+    process.exitCode = 1;
+  });
