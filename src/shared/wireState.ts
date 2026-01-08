@@ -10,6 +10,11 @@ export type WireGameState = {
   toMove: "B" | "W";
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
+  forcedGameOver?: {
+    winner: "B" | "W";
+    reasonCode: string;
+    message: string;
+  };
   captureChain?: WireCaptureChain;
 };
 
@@ -31,6 +36,7 @@ export function serializeWireGameState(state: any): WireGameState {
     toMove: state.toMove,
     phase: state.phase,
     meta: state.meta,
+    forcedGameOver: state.forcedGameOver,
     captureChain: state.captureChain,
   };
 }
@@ -41,6 +47,7 @@ export function deserializeWireGameState(wire: WireGameState): any {
     toMove: wire.toMove,
     phase: wire.phase,
     meta: wire.meta,
+    forcedGameOver: (wire as any).forcedGameOver,
     captureChain: wire.captureChain,
   };
 }

@@ -104,10 +104,14 @@ describe("server persistence (Step F)", () => {
     expect(canonicalBoard(afterRestart.snapshot.state.board)).toBe(expectedBoard);
 
     const notation = afterRestart.snapshot.history.notation as string[];
-    // index 0 is the initial position; subsequent entries should include our quiet-move notation
-    for (let i = 0; i < expectedNotations.length; i++) {
-      expect(notation[i + 1]).toBe(expectedNotations[i]);
+    // index 0 is the initial position. History may also include additional entries
+    // (e.g., capture-step notation), but it must preserve our chosen quiet-move
+    // notations in order.
+    let j = 0;
+    for (let i = 1; i < notation.length && j < expectedNotations.length; i++) {
+      if (notation[i] === expectedNotations[j]) j++;
     }
+    expect(j).toBe(expectedNotations.length);
 
     await new Promise<void>((resolve) => s2.server.close(() => resolve()));
     await fs.rm(tmpRoot, { recursive: true, force: true });

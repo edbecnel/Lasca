@@ -9,6 +9,10 @@ import { generateLegalMoves } from "./movegen.ts";
  * @returns Object with winner and reason, or nulls if current player can still play
  */
 export function checkCurrentPlayerLost(state: GameState): { winner: Player | null; reason: string | null } {
+  if ((state as any).forcedGameOver?.winner && (state as any).forcedGameOver?.message) {
+    return { winner: (state as any).forcedGameOver.winner, reason: (state as any).forcedGameOver.message };
+  }
+
   const currentPlayer = state.toMove;
   const opponent: Player = currentPlayer === "B" ? "W" : "B";
 
@@ -54,6 +58,10 @@ export function checkCurrentPlayerLost(state: GameState): { winner: Player | nul
  * @returns Object with winner and reason, or nulls if game continues
  */
 export function getWinner(state: GameState): { winner: Player | null; reason: string | null } {
+  if ((state as any).forcedGameOver?.winner && (state as any).forcedGameOver?.message) {
+    return { winner: (state as any).forcedGameOver.winner, reason: (state as any).forcedGameOver.message };
+  }
+
   const currentPlayer = state.toMove;
   const opponent: Player = currentPlayer === "B" ? "W" : "B";
 

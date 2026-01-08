@@ -15,6 +15,16 @@ export interface GameState {
   meta?: GameMeta;
 
   /**
+   * Server-enforced game over (e.g., disconnect timeout).
+   * When present, the game should be treated as finished.
+   */
+  forcedGameOver?: {
+    winner: Player;
+    reasonCode: string;
+    message: string;
+  };
+
+  /**
    * Ephemeral (not serialized): used by some rulesets to track multi-capture chain state.
    * Currently used by Damasca to remember if a soldier has reached the promotion row
    * at any point during a capture chain (promotion is applied at chain end).

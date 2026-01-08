@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { WireSnapshot } from "../../src/shared/wireState.ts";
 import { deserializeWireGameState, deserializeWireHistory } from "../../src/shared/wireState.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
-import type { PlayerColor, PlayerId, RoomId } from "../../src/shared/onlineProtocol.ts";
+import type { ClockState, PlayerColor, PlayerId, RoomId, TimeControl } from "../../src/shared/onlineProtocol.ts";
 
 export const SUPPORTED_RULES_VERSION = "v1" as const;
 
@@ -16,6 +16,12 @@ export type PersistedRoomMeta = {
   stateVersion: number;
   players: Array<[PlayerId, PlayerColor]>;
   colorsTaken: PlayerColor[];
+
+  // Optional extensions (back-compat):
+  presence?: Record<PlayerId, { connected: boolean; lastSeenAt: string }>;
+  disconnectGrace?: Record<PlayerId, { graceUntilIso: string }>; // only when in grace
+  timeControl?: TimeControl;
+  clock?: ClockState;
 };
 
 export type PersistedSnapshotFile = {
@@ -108,7 +114,7 @@ export async function appendEvent(gamesDir: string, roomId: RoomId, ev: Persiste
 export async function writeSnapshotAtomic(gamesDir: string, roomId: RoomId, file: PersistedSnapshotFile): Promise<void> {
   await ensureRoomDir(gamesDir, roomId);
   const p = snapshotPath(gamesDir, roomId);
-  const tmp = `${p}.tmp`;
+  const tmp = `${p}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
   await fs.writeFile(tmp, JSON.stringify(file, null, 2), "utf8");
   await fs.rename(tmp, p);
 }
@@ -226,6 +232,15 @@ export async function tryLoadRoom(gamesDir: string, roomId: RoomId): Promise<Loa
     return null;
   }
 
+  const optionalFromSnapshot: Pick<PersistedRoomMeta, "presence" | "disconnectGrace" | "timeControl" | "clock"> = snapshotFile
+    ? {
+        presence: snapshotFile.meta.presence,
+        disconnectGrace: snapshotFile.meta.disconnectGrace,
+        timeControl: snapshotFile.meta.timeControl,
+        clock: snapshotFile.meta.clock,
+      }
+    : {};
+
   const meta: PersistedRoomMeta = {
     roomId,
     variantId,
@@ -233,6 +248,7 @@ export async function tryLoadRoom(gamesDir: string, roomId: RoomId): Promise<Loa
     stateVersion,
     players: Array.from(players.entries()),
     colorsTaken: Array.from(colorsTaken.values()),
+    ...optionalFromSnapshot,
   };
 
   return {

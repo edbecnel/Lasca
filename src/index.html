@@ -292,6 +292,48 @@
           <div class="hint">Same position 3× = draw</div>
         </section>
 
+        <section class="panelSection" aria-label="Play mode">
+          <h2>Play mode</h2>
+          <div class="row">
+            <label for="launchPlayMode">Mode</label>
+            <select id="launchPlayMode" class="panelSelect">
+              <option value="local">Local (offline)</option>
+              <option value="online">Online (2 players)</option>
+            </select>
+
+            <label for="launchOnlineServerUrl">Server</label>
+            <input
+              id="launchOnlineServerUrl"
+              class="panelSelect"
+              type="text"
+              inputmode="url"
+              autocomplete="off"
+              placeholder="http://localhost:8788"
+            />
+
+            <label for="launchOnlineAction">Online</label>
+            <select id="launchOnlineAction" class="panelSelect">
+              <option value="create">Create room</option>
+              <option value="join">Join room</option>
+            </select>
+
+            <label id="launchOnlineRoomIdLabel" for="launchOnlineRoomId"
+              >Room ID</label
+            >
+            <input
+              id="launchOnlineRoomId"
+              class="panelSelect"
+              type="text"
+              autocomplete="off"
+              placeholder="Paste room ID"
+            />
+          </div>
+          <div class="hint" style="margin-left: 0">
+            Online Create logs a join link in the browser console (F12). Online
+            Join needs a room ID from Player 1.
+          </div>
+        </section>
+
         <section class="panelSection" aria-label="AI">
           <h2>AI</h2>
           <div class="row" style="grid-template-columns: 64px minmax(0, 1fr)">

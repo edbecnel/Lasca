@@ -47,6 +47,54 @@ export class GameController {
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
   private repetitionCounts: Map<string, number> = new Map();
   private onlinePollTimer: number | null = null;
+  private onlineRealtimeEnabled: boolean = false;
+
+  private async copyTextToClipboard(text: string): Promise<boolean> {
+    if (!text) return false;
+
+    // Modern async clipboard API (works on https and usually localhost).
+    try {
+      const anyNav = typeof navigator !== "undefined" ? (navigator as any) : null;
+      const clip = anyNav?.clipboard;
+      if (clip && typeof clip.writeText === "function") {
+        await clip.writeText(text);
+        return true;
+      }
+    } catch {
+      // fall through to legacy fallback
+    }
+
+    // Legacy fallback.
+    if (typeof document === "undefined") return false;
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  private bindRoomIdCopyButton(): void {
+    const btn = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    btn.addEventListener("click", async () => {
+      if (!(this.driver instanceof RemoteDriver)) return;
+      const roomId = this.driver.getRoomId();
+      if (!roomId) return;
+      await this.copyTextToClipboard(roomId);
+    });
+  }
 
   private isLocalPlayersTurn(): boolean {
     if (!(this.driver instanceof RemoteDriver)) return true;
@@ -57,16 +105,45 @@ export class GameController {
 
   private startOnlinePolling(): void {
     if (!(this.driver instanceof RemoteDriver)) return;
-    if (this.onlinePollTimer) return;
+    const remote = this.driver;
+    if (this.onlinePollTimer || this.onlineRealtimeEnabled) return;
+
+    // Prefer realtime server push (SSE). Falls back to polling if unavailable.
+    const startedRealtime = remote.startRealtime(() => {
+      if (this.isGameOver) return;
+
+      this.state = remote.getState();
+      // Any opponent update invalidates local in-progress UI selection/chain.
+      this.lockedCaptureFrom = null;
+      this.lockedCaptureDir = null;
+      this.jumpedSquares.clear();
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
+      this.clearSelection();
+      this.renderAuthoritative();
+
+      const allLegal = generateLegalMoves(this.state);
+      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeRepetitionCounts();
+      this.checkAndHandleCurrentPlayerLost();
+      this.updatePanel();
+
+      this.fireHistoryChange("move");
+    });
+
+    if (startedRealtime) {
+      this.onlineRealtimeEnabled = true;
+      return;
+    }
 
     // Simple polling keeps both tabs in sync without websockets.
     this.onlinePollTimer = window.setInterval(async () => {
       if (this.isGameOver) return;
       try {
-        const updated = await this.driver.fetchLatest();
+        const updated = await remote.fetchLatest();
         if (!updated) return;
 
-        this.state = this.driver.getState();
+        this.state = remote.getState();
         // Any opponent update invalidates local in-progress UI selection/chain.
         this.lockedCaptureFrom = null;
         this.lockedCaptureDir = null;
@@ -179,6 +256,8 @@ export class GameController {
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.recomputeRepetitionCounts();
     this.updatePanel();
+
+    this.bindRoomIdCopyButton();
 
     this.startOnlinePolling();
   }
@@ -538,8 +617,22 @@ export class GameController {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
     const elMsg = document.getElementById("statusMessage");
+    const elRoomId = document.getElementById("infoRoomId");
+    const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
+    if (elRoomId) {
+      if (this.driver instanceof RemoteDriver) {
+        const roomId = this.driver.getRoomId();
+        elRoomId.textContent = roomId ?? "—";
+        if (elCopy) elCopy.disabled = !roomId;
+      } else {
+        elRoomId.textContent = "—";
+        if (elCopy) elCopy.disabled = true;
+      }
+    } else {
+      if (elCopy) elCopy.disabled = true;
+    }
     if (elMsg && !this.isGameOver) {
       if (!this.isLocalPlayersTurn()) {
         elMsg.textContent = "Waiting for opponent";

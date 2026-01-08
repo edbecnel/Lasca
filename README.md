@@ -52,6 +52,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
+- 🌐 Online multiplayer (2 players) via Start Page (Create/Join rooms)
+- 🆔 Room ID shown in-game (Info → Online) with one-click copy
 - 📱 Mobile board-height adjust button (tap to toggle; touch-hold + drag to move)
 
 ## How to Play
@@ -60,8 +62,20 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 
 1. Run the dev server with `npm start` (it opens the Start Page at `src/index.html`)
 2. Choose options (theme, startup toggles, AI), then click **Launch**
-3. White moves first from the bottom of the board
-4. Click a piece to select it, then click a valid destination to move
+
+#### Online multiplayer (Create / Join)
+
+1. Start the online dev server + client with `npm run online:dev`
+
+- Client: `http://localhost:8080/`
+- Server: `http://localhost:8788/`
+
+2. On the Start Page, set **Play mode** to **Online**.
+3. Player 1 chooses **Create** and clicks **Launch**.
+4. In-game, copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
+5. Player 2 goes to the Start Page, chooses **Join**, pastes the Room ID, and clicks **Launch**.
+
+Note: when joining, the Start Page will auto-open the correct variant page for that room. 3. White moves first from the bottom of the board 4. Click a piece to select it, then click a valid destination to move
 
 Alternatively, you can open `src/lasca.html` directly to jump straight into the game.
 
@@ -105,9 +119,9 @@ The Move History section (in the Info panel, below the Lasca Stack Inspector) sh
 - When you Undo/Redo or jump, the list scrolls to keep the current entry visible.
 - When you play moves normally, it auto-scrolls so the latest move stays visible.
 
-- **Quiet moves**: `1. ⚪ r4c2 → r3c3` (start → destination)
-- **Captures**: `1. ⚫ r2c4 × r3c3` (using × symbol)
-- **Multi-captures**: `2. ⚪ r5c5 × r4c4 × r3c3` (showing full path without repeated nodes)
+- **Quiet moves**: `1. ⚪ D3 → E4` (start → destination)
+- **Captures**: `1. ⚫ F6 × E5` (using × symbol)
+- **Multi-captures**: `2. ⚪ D3 × F5 × H7` (full path when available)
 
 Move numbers follow chess convention: each full turn (White + Black) is one move number.
 
@@ -123,12 +137,12 @@ Click "Export Move History" to download a JSON file containing all moves:
     {
       "moveNumber": 1,
       "player": "White",
-      "notation": "r4c2 → r3c3"
+      "notation": "D3 → E4"
     },
     {
       "moveNumber": 1,
       "player": "Black",
-      "notation": "r2c4 × r3c3"
+      "notation": "F6 × E5"
     }
   ]
 }
@@ -157,6 +171,7 @@ npm install
 ### Commands
 
 - `npm start` - Start development server with hot reload
+- `npm run online:dev` - Start online server + client (2-player online play)
 - `npm run build` - Build for production
 - `npm test` - Run test suite
 - `npm run test:watch` - Run tests in watch mode

@@ -26,6 +26,9 @@ import type {
   RoomId,
   PlayerId,
   PlayerColor,
+  PresenceByPlayerId,
+  TimeControl,
+  ClockState,
 } from "../../src/shared/onlineProtocol.ts";
 
 import {
@@ -59,18 +62,79 @@ type Room = {
   stateVersion: number;
   rulesVersion: string;
   lastGameOverVersion: number;
+  presence: Map<PlayerId, { connected: boolean; lastSeenAt: string }>;
+  disconnectGrace: Map<PlayerId, { graceUntilIso: string; graceUntilMs: number; timer: NodeJS.Timeout }>;
+  timeControl: TimeControl;
+  clock: ClockState | null;
+  persistChain: Promise<void>;
 };
 
 type ServerOpts = {
   gamesDir?: string;
   snapshotEvery?: number;
+  disconnectGraceMs?: number;
 };
 
 const randId = () => Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
 
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function ensurePresence(room: Room, playerId: PlayerId): { connected: boolean; lastSeenAt: string } {
+  const existing = room.presence.get(playerId);
+  if (existing) return existing;
+  const created = { connected: false, lastSeenAt: nowIso() };
+  room.presence.set(playerId, created);
+  return created;
+}
+
+function clearGrace(room: Room, playerId: PlayerId): void {
+  const g = room.disconnectGrace.get(playerId);
+  if (!g) return;
+  clearTimeout(g.timer);
+  room.disconnectGrace.delete(playerId);
+}
+
+function setPresence(room: Room, playerId: PlayerId, patch: Partial<{ connected: boolean; lastSeenAt: string }>): void {
+  const p = ensurePresence(room, playerId);
+  if (typeof patch.connected === "boolean") p.connected = patch.connected;
+  if (typeof patch.lastSeenAt === "string") p.lastSeenAt = patch.lastSeenAt;
+}
+
+function presenceForRoom(room: Room): PresenceByPlayerId {
+  const out: PresenceByPlayerId = {};
+  for (const [playerId] of room.players.entries()) {
+    const p = ensurePresence(room, playerId);
+    const g = room.disconnectGrace.get(playerId);
+    out[playerId] = {
+      connected: p.connected,
+      lastSeenAt: p.lastSeenAt,
+      ...(g ? { inGrace: true, graceUntil: g.graceUntilIso } : {}),
+    };
+  }
+  return out;
+}
+
+function isValidTimeControl(raw: any): raw is TimeControl {
+  if (!raw || typeof raw !== "object") return false;
+  if (raw.mode === "none") return true;
+  if (raw.mode === "clock") {
+    const initialMs = Number(raw.initialMs);
+    const inc = raw.incrementMs == null ? 0 : Number(raw.incrementMs);
+    return Number.isFinite(initialMs) && initialMs > 0 && Number.isFinite(inc) && inc >= 0;
+  }
+  return false;
+}
+
 function nextColor(room: Room): PlayerColor | null {
-  if (!room.colorsTaken.has("W")) return "W";
-  if (!room.colorsTaken.has("B")) return "B";
+  // Be defensive: colorsTaken is redundant with players, and can become stale
+  // across persistence/back-compat loads. Derive from players to ensure we never
+  // assign the same color twice.
+  const derived = new Set<PlayerColor>(Array.from(room.players.values()));
+  room.colorsTaken = derived;
+  if (!derived.has("W")) return "W";
+  if (!derived.has("B")) return "B";
   return null;
 }
 
@@ -89,6 +153,15 @@ function snapshotForRoom(room: Room): WireSnapshot {
 }
 
 async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
+  const presenceRecord: Record<PlayerId, { connected: boolean; lastSeenAt: string }> = {};
+  for (const [pid, p] of room.presence.entries()) {
+    presenceRecord[pid] = { connected: p.connected, lastSeenAt: p.lastSeenAt };
+  }
+  const graceRecord: Record<PlayerId, { graceUntilIso: string }> = {};
+  for (const [pid, g] of room.disconnectGrace.entries()) {
+    graceRecord[pid] = { graceUntilIso: g.graceUntilIso };
+  }
+
   const file: PersistedSnapshotFile = {
     meta: {
       roomId: room.roomId,
@@ -97,6 +170,10 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
       stateVersion: room.stateVersion,
       players: Array.from(room.players.entries()),
       colorsTaken: Array.from(room.colorsTaken.values()),
+      presence: presenceRecord,
+      disconnectGrace: graceRecord,
+      timeControl: room.timeControl,
+      clock: room.clock ?? undefined,
     },
     snapshot: snapshotForRoom(room),
   };
@@ -161,11 +238,61 @@ async function maybePersistGameOver(gamesDir: string, room: Room): Promise<void>
   await persistSnapshot(gamesDir, room);
 }
 
-export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; rooms: Map<RoomId, Room>; gamesDir: string } {
+export function createLascaApp(opts: ServerOpts = {}): {
+  app: express.Express;
+  rooms: Map<RoomId, Room>;
+  gamesDir: string;
+  shutdown: () => Promise<void>;
+} {
   const gamesDir = resolveGamesDir(opts.gamesDir);
   const snapshotEvery = Math.max(1, Number(opts.snapshotEvery ?? 20));
+  const disconnectGraceMs = Math.max(0, Number(opts.disconnectGraceMs ?? 120_000));
 
   const rooms = new Map<RoomId, Room>();
+  const streamClients = new Map<RoomId, Set<express.Response>>();
+  let isShuttingDown = false;
+
+  function queuePersist(room: Room): Promise<void> {
+    if (isShuttingDown) return Promise.resolve();
+    room.persistChain = room.persistChain
+      .then(() => persistSnapshot(gamesDir, room))
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[lasca-server] persistSnapshot error", err);
+      });
+    return room.persistChain;
+  }
+
+  function streamWrite(res: express.Response, eventName: string, payload: unknown): void {
+    // SSE format: each message ends with a blank line
+    res.write(`event: ${eventName}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  }
+
+  function broadcastRoomEvent(roomId: RoomId, eventName: string, payload: unknown): void {
+    const clients = streamClients.get(roomId);
+    if (!clients || clients.size === 0) return;
+
+    for (const res of clients) {
+      try {
+        streamWrite(res, eventName, payload);
+      } catch {
+        // Ignore write failures; cleanup happens on close.
+      }
+    }
+  }
+
+  function broadcastRoomSnapshot(room: Room): void {
+    const payload = {
+      roomId: room.roomId,
+      snapshot: snapshotForRoom(room),
+      presence: presenceForRoom(room),
+      timeControl: room.timeControl,
+      clock: room.clock ?? undefined,
+    };
+
+    broadcastRoomEvent(room.roomId, "snapshot", payload);
+  }
 
   async function requireRoom(roomId: RoomId): Promise<Room> {
     const existing = rooms.get(roomId);
@@ -183,6 +310,12 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       throw new Error("Unsupported rules version for replay");
     }
 
+    const loadedPresence = (loaded.meta as any).presence as Record<string, { connected: boolean; lastSeenAt: string }> | undefined;
+    const loadedGrace = (loaded.meta as any).disconnectGrace as Record<string, { graceUntilIso: string }> | undefined;
+    const loadedTimeControlRaw = (loaded.meta as any).timeControl;
+    const loadedTimeControl: TimeControl = isValidTimeControl(loadedTimeControlRaw) ? loadedTimeControlRaw : { mode: "none" };
+    const loadedClock = ((loaded.meta as any).clock as ClockState | undefined) ?? null;
+
     const room: Room = {
       roomId,
       state: loaded.state,
@@ -193,9 +326,191 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       stateVersion: loaded.meta.stateVersion,
       rulesVersion: loaded.meta.rulesVersion,
       lastGameOverVersion: -1,
+      presence: new Map(),
+      disconnectGrace: new Map(),
+      timeControl: loadedTimeControl,
+      clock: loadedTimeControl.mode === "clock" ? loadedClock : null,
+      persistChain: Promise.resolve(),
     };
+
+    // Repair any stale colorsTaken from older snapshots.
+    room.colorsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
+
+    // Restore presence (but server restart means no active connections).
+    for (const [playerId] of room.players.entries()) {
+      const saved = loadedPresence?.[playerId];
+      setPresence(room, playerId, {
+        connected: false,
+        lastSeenAt: typeof saved?.lastSeenAt === "string" ? saved.lastSeenAt : nowIso(),
+      });
+    }
     rooms.set(roomId, room);
+
+    // Restore grace timers.
+    const graceMs = Math.max(0, Number(opts.disconnectGraceMs ?? 120_000));
+    if (loadedGrace && graceMs > 0) {
+      for (const [pid, g] of Object.entries(loadedGrace)) {
+        if (!room.players.has(pid as any)) continue;
+        const graceUntilMs = Date.parse(g.graceUntilIso);
+        if (!Number.isFinite(graceUntilMs)) continue;
+        // Only restore grace if player is disconnected.
+        if (room.presence.get(pid as any)?.connected) continue;
+
+        const delay = Math.max(0, graceUntilMs - Date.now());
+        const timer = setTimeout(() => {
+          const p = room.presence.get(pid as any);
+          if (!p || p.connected) {
+            clearGrace(room, pid as any);
+            return;
+          }
+          clearGrace(room, pid as any);
+          void forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: pid as any });
+        }, delay);
+        room.disconnectGrace.set(pid as any, { graceUntilIso: g.graceUntilIso, graceUntilMs, timer });
+      }
+    }
+
+    // If any grace is active, clocks should start paused.
+    if (room.clock) {
+      room.clock.paused = room.disconnectGrace.size > 0;
+      room.clock.lastTickMs = Date.now();
+    }
+
     return room;
+  }
+
+  function touchClock(room: Room): void {
+    if (!room.clock) return;
+    const now = Date.now();
+    const elapsed = Math.max(0, now - room.clock.lastTickMs);
+    room.clock.lastTickMs = now;
+    if (room.clock.paused) return;
+
+    const active = room.clock.active;
+    const next = Math.max(0, Number(room.clock.remainingMs[active] ?? 0) - elapsed);
+    room.clock.remainingMs[active] = next;
+  }
+
+  function updateClockPause(room: Room): void {
+    if (!room.clock) return;
+    const shouldPause = room.disconnectGrace.size > 0;
+    if (room.clock.paused === shouldPause) return;
+    // Settle time up to the transition point.
+    touchClock(room);
+    room.clock.paused = shouldPause;
+    room.clock.lastTickMs = Date.now();
+  }
+
+  function onTurnSwitch(room: Room, prevToMove: PlayerColor, nextToMove: PlayerColor): void {
+    if (!room.clock) return;
+    if (prevToMove === nextToMove) return;
+    const inc = room.timeControl.mode === "clock" ? Number(room.timeControl.incrementMs ?? 0) : 0;
+    if (inc > 0) {
+      room.clock.remainingMs[prevToMove] = Number(room.clock.remainingMs[prevToMove] ?? 0) + inc;
+    }
+    room.clock.active = nextToMove;
+    room.clock.lastTickMs = Date.now();
+  }
+
+  function isRoomOver(room: Room): boolean {
+    return Boolean((room.state as any)?.forcedGameOver?.winner);
+  }
+
+  async function forceDisconnectTimeout(args: { gamesDir: string; room: Room; disconnectedPlayerId: PlayerId }): Promise<void> {
+    const { room, disconnectedPlayerId } = args;
+    if (isRoomOver(room)) return;
+
+    const disconnectedColor = room.players.get(disconnectedPlayerId);
+    if (!disconnectedColor) return;
+    const winner: PlayerColor = disconnectedColor === "W" ? "B" : "W";
+    const winnerName = winner === "W" ? "White" : "Black";
+
+    room.state = {
+      ...(room.state as any),
+      forcedGameOver: {
+        winner,
+        reasonCode: "DISCONNECT_TIMEOUT",
+        message: `${winnerName} wins — disconnect timeout`,
+      },
+    };
+
+    room.stateVersion += 1;
+    await appendEvent(
+      args.gamesDir,
+      room.roomId,
+      makeGameOverEvent({
+        roomId: room.roomId,
+        stateVersion: room.stateVersion,
+        winner,
+        reason: "DISCONNECT_TIMEOUT",
+      })
+    );
+    await persistSnapshot(args.gamesDir, room);
+    broadcastRoomSnapshot(room);
+  }
+
+  async function maybeForceClockTimeout(room: Room): Promise<void> {
+    if (!room.clock) return;
+    if (isRoomOver(room)) return;
+    if (room.timeControl.mode !== "clock") return;
+
+    const active = room.clock.active;
+    const remaining = Number(room.clock.remainingMs[active] ?? 0);
+    if (remaining > 0) return;
+
+    const winner: PlayerColor = active === "W" ? "B" : "W";
+    const winnerName = winner === "W" ? "White" : "Black";
+
+    room.state = {
+      ...(room.state as any),
+      forcedGameOver: {
+        winner,
+        reasonCode: "TIMEOUT",
+        message: `${winnerName} wins — time out`,
+      },
+    };
+
+    room.stateVersion += 1;
+    await appendEvent(
+      gamesDir,
+      room.roomId,
+      makeGameOverEvent({
+        roomId: room.roomId,
+        stateVersion: room.stateVersion,
+        winner,
+        reason: "TIMEOUT",
+      })
+    );
+    await queuePersist(room);
+    broadcastRoomSnapshot(room);
+  }
+
+  async function startGraceIfNeeded(room: Room, playerId: PlayerId): Promise<void> {
+    if (isShuttingDown) return;
+    if (disconnectGraceMs <= 0) return;
+    if (isRoomOver(room)) return;
+    if (!room.players.has(playerId)) return;
+    if (room.presence.get(playerId)?.connected) return;
+    if (room.disconnectGrace.has(playerId)) return;
+
+    const graceUntilMs = Date.now() + disconnectGraceMs;
+    const graceUntilIso = new Date(graceUntilMs).toISOString();
+    const timer = setTimeout(() => {
+      // If still disconnected when grace expires, end the game.
+      const p = room.presence.get(playerId);
+      if (!p || p.connected) {
+        clearGrace(room, playerId);
+        return;
+      }
+      clearGrace(room, playerId);
+      void forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: playerId });
+    }, disconnectGraceMs);
+
+    room.disconnectGrace.set(playerId, { graceUntilIso, graceUntilMs, timer });
+    updateClockPause(room);
+    // Persist grace start so it survives restart.
+    await queuePersist(room);
+    broadcastRoomSnapshot(room);
   }
 
   const app = express();
@@ -210,6 +525,82 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // Server-Sent Events stream for realtime room snapshots.
+  // Clients should keep this open and will receive `snapshot` events.
+  app.get("/api/stream/:roomId", async (req, res) => {
+    try {
+      const roomId = req.params.roomId as RoomId;
+      const room = await requireRoom(roomId);
+
+      const playerId = typeof req.query.playerId === "string" ? (req.query.playerId as PlayerId) : null;
+      if (playerId && room.players.has(playerId)) {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
+        setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+        clearGrace(room, playerId);
+        updateClockPause(room);
+        await persistSnapshot(gamesDir, room);
+      }
+
+      res.status(200);
+      res.setHeader("content-type", "text/event-stream");
+      res.setHeader("cache-control", "no-cache, no-transform");
+      res.setHeader("connection", "keep-alive");
+      // Best-effort: some proxies buffer without this.
+      res.setHeader("x-accel-buffering", "no");
+      (res as any).flushHeaders?.();
+
+      // Register client before sending initial snapshot so it also gets broadcasts immediately.
+      const set = streamClients.get(roomId) ?? new Set<express.Response>();
+      set.add(res);
+      streamClients.set(roomId, set);
+
+      // Initial snapshot so client can render immediately.
+      streamWrite(res, "snapshot", {
+        roomId,
+        snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
+      });
+
+      // Presence changed; notify other connected clients.
+      if (playerId && room.players.has(playerId)) {
+        broadcastRoomSnapshot(room);
+      }
+
+      // Heartbeat helps keep some intermediaries from closing idle connections.
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(`: keep-alive\n\n`);
+        } catch {
+          // ignore
+        }
+      }, 15_000);
+
+      req.on("close", () => {
+        clearInterval(heartbeat);
+        const clients = streamClients.get(roomId);
+        if (clients) {
+          clients.delete(res);
+          if (clients.size === 0) streamClients.delete(roomId);
+        }
+
+        if (isShuttingDown) return;
+
+        if (playerId && room.players.has(playerId)) {
+          touchClock(room);
+          void maybeForceClockTimeout(room);
+          setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
+          void startGraceIfNeeded(room, playerId);
+        }
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stream failed";
+      res.status(400).json({ error: msg });
+    }
   });
 
   app.post("/api/create", async (req, res) => {
@@ -230,6 +621,8 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       const current = history.getCurrent();
       const aligned = current ?? state;
 
+      const timeControl: TimeControl = isValidTimeControl((body as any).timeControl) ? (body as any).timeControl : { mode: "none" };
+
       const room: Room = {
         roomId,
         state: aligned,
@@ -240,7 +633,21 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
         stateVersion: 0,
         rulesVersion: SUPPORTED_RULES_VERSION,
         lastGameOverVersion: -1,
+        presence: new Map(),
+        disconnectGrace: new Map(),
+        timeControl,
+        clock:
+          timeControl.mode === "clock"
+            ? {
+                remainingMs: { W: timeControl.initialMs, B: timeControl.initialMs },
+                active: (aligned as any).toMove === "B" ? "B" : "W",
+                paused: false,
+                lastTickMs: Date.now(),
+              }
+            : null,
+        persistChain: Promise.resolve(),
       };
+      setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
       rooms.set(roomId, room);
 
       // Persist creation event and initial snapshot.
@@ -259,7 +666,11 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
         playerId,
         color: "W",
         snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
+      broadcastRoomSnapshot(room);
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Create failed";
@@ -275,12 +686,17 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       if (!roomId) throw new Error("Missing roomId");
 
       const room = await requireRoom(roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
       const color = nextColor(room);
       if (!color) throw new Error("Room full");
 
       const playerId: PlayerId = randId();
       room.players.set(playerId, color);
       room.colorsTaken.add(color);
+      setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+      clearGrace(room, playerId);
+      updateClockPause(room);
 
       // Persist join as a snapshot-only update (no gameplay change).
       // This keeps reconnection (roomId+playerId) working across server restarts.
@@ -291,7 +707,11 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
         playerId,
         color,
         snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
+      broadcastRoomSnapshot(room);
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Join failed";
@@ -304,8 +724,15 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
     try {
       const roomId = req.params.roomId as RoomId;
       const room = await requireRoom(roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
+      updateClockPause(room);
+      await room.persistChain;
       const response: GetRoomSnapshotResponse = {
         snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
       res.json(response);
     } catch (err) {
@@ -319,7 +746,12 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
     try {
       const body = req.body as SubmitMoveRequest;
       const room = await requireRoom(body.roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
       const color = requirePlayer(room, body.playerId);
+      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+      if (isRoomOver(room)) throw new Error("Game over");
 
       if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
@@ -328,19 +760,20 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
         throw new Error("Invalid move");
       }
 
-      const prevToMove = (room.state as any).toMove;
+      const prevToMove = (room.state as any).toMove as PlayerColor;
       const next = applyMove(room.state as any, move as any) as any;
       room.state = next;
 
-      // Record history only at turn boundaries (quiet moves typically switch turns).
-      if (next.toMove !== prevToMove) {
-        const boardSize = Number((next as any)?.meta?.boardSize ?? 7);
-        const from = nodeIdToA1(move.from, boardSize);
-        const to = nodeIdToA1(move.to, boardSize);
-        const sep = move.kind === "capture" ? " × " : " → ";
-        const notation = `${from}${sep}${to}`;
-        room.history.push(room.state, notation);
-      }
+      // Record history for every applied move so capture-chain steps are visible in the UI.
+      const boardSize = Number((next as any)?.meta?.boardSize ?? 7);
+      const from = nodeIdToA1(move.from, boardSize);
+      const to = nodeIdToA1(move.to, boardSize);
+      const sep = move.kind === "capture" ? " × " : " → ";
+      const notation = `${from}${sep}${to}`;
+      room.history.push(room.state, notation);
+
+      const nextToMove = (room.state as any).toMove as PlayerColor;
+      onTurnSwitch(room, prevToMove, nextToMove);
 
       room.stateVersion += 1;
       await persistMoveApplied({ gamesDir, room, action: "SUBMIT_MOVE", move, snapshotEvery });
@@ -349,7 +782,11 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       const response: SubmitMoveResponse = {
         snapshot: snapshotForRoom(room),
         didPromote: Boolean(next.didPromote) || undefined,
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
+      broadcastRoomSnapshot(room);
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Move failed";
@@ -364,7 +801,12 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
     try {
       const body = req.body as FinalizeCaptureChainRequest;
       const room = await requireRoom(body.roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
       const color = requirePlayer(room, body.playerId);
+      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+      if (isRoomOver(room)) throw new Error("Game over");
 
       if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
@@ -375,8 +817,12 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
         next = finalizeDamascaCaptureChain(room.state as any, body.landing);
       }
 
+      const prevToMove = (room.state as any).toMove as PlayerColor;
       room.state = next;
       // Turn does not switch here; client will call /api/endTurn when the capture turn ends.
+
+      const nextToMove = (room.state as any).toMove as PlayerColor;
+      onTurnSwitch(room, prevToMove, nextToMove);
 
       room.stateVersion += 1;
       await persistMoveApplied({ gamesDir, room, action: "FINALIZE_CAPTURE_CHAIN", snapshotEvery });
@@ -385,7 +831,11 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
       const response: FinalizeCaptureChainResponse = {
         snapshot: snapshotForRoom(room),
         didPromote: Boolean(next.didPromote) || undefined,
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
+      broadcastRoomSnapshot(room);
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Finalize failed";
@@ -400,18 +850,39 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
     try {
       const body = req.body as EndTurnRequest;
       const room = await requireRoom(body.roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
       const color = requirePlayer(room, body.playerId);
+      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+      if (isRoomOver(room)) throw new Error("Game over");
 
       if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
+      const prevToMove = (room.state as any).toMove as PlayerColor;
       room.state = {
         ...(room.state as any),
         toMove: room.state.toMove === "B" ? "W" : "B",
         phase: "idle",
       };
 
+      const nextToMove = (room.state as any).toMove as PlayerColor;
+      onTurnSwitch(room, prevToMove, nextToMove);
+
+      // END_TURN is not a move by itself. The move/capture steps were already recorded via /api/submitMove.
+      // We still need history's *current* entry to reflect the authoritative state (esp. toMove),
+      // otherwise the UI can highlight the wrong row.
       const notation = typeof (body as any).notation === "string" ? (body as any).notation : undefined;
-      room.history.push(room.state as any, notation);
+      const snap = room.history.exportSnapshots();
+      if (snap.states.length === 0) {
+        room.history.push(room.state as any, notation);
+      } else {
+        snap.states[snap.states.length - 1] = room.state as any;
+        if (typeof notation === "string") {
+          snap.notation[snap.notation.length - 1] = notation;
+        }
+        room.history.replaceAll(snap.states as any, snap.notation, snap.states.length - 1);
+      }
 
       room.stateVersion += 1;
       await persistMoveApplied({ gamesDir, room, action: "END_TURN", snapshotEvery });
@@ -419,7 +890,11 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
 
       const response: EndTurnResponse = {
         snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
       };
+      broadcastRoomSnapshot(room);
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "End turn failed";
@@ -430,20 +905,54 @@ export function createLascaApp(opts: ServerOpts = {}): { app: express.Express; r
     }
   });
 
-  return { app, rooms, gamesDir };
+  async function shutdown(): Promise<void> {
+    isShuttingDown = true;
+
+    // Best-effort cleanup: stop grace timers so they don't fire after teardown.
+    for (const room of rooms.values()) {
+      for (const g of room.disconnectGrace.values()) {
+        clearTimeout(g.timer);
+      }
+      room.disconnectGrace.clear();
+    }
+
+    // Wait for any queued persistence to finish.
+    await Promise.all(Array.from(rooms.values()).map((r) => r.persistChain.catch(() => undefined)));
+  }
+
+  return { app, rooms, gamesDir, shutdown };
 }
 
-export async function startLascaServer(args: { port?: number; gamesDir?: string; snapshotEvery?: number }): Promise<{
+export async function startLascaServer(args: {
+  port?: number;
+  gamesDir?: string;
+  snapshotEvery?: number;
+  disconnectGraceMs?: number;
+}): Promise<{
   app: express.Express;
   server: Server;
   url: string;
   gamesDir: string;
 }> {
-  const { app, gamesDir } = createLascaApp({ gamesDir: args.gamesDir, snapshotEvery: args.snapshotEvery });
+  const { app, gamesDir, shutdown } = createLascaApp({
+    gamesDir: args.gamesDir,
+    snapshotEvery: args.snapshotEvery,
+    disconnectGraceMs: args.disconnectGraceMs,
+  });
   await ensureGamesDir(gamesDir);
 
   const port = Number.isFinite(args.port as any) ? Number(args.port) : 8787;
   const server = app.listen(port);
+
+  // Ensure teardown disables grace/persistence side effects.
+  const originalClose = server.close.bind(server);
+  (server as any).close = (cb?: any) => {
+    void (async () => {
+      await shutdown();
+      originalClose(cb);
+    })();
+    return server;
+  };
 
   await new Promise<void>((resolve) => {
     server.once("listening", () => resolve());

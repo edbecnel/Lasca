@@ -1372,6 +1372,47 @@
         <div class="sidebarBody">
           <div
             class="panelSection"
+            id="onlineInfoPanel"
+            data-section="onlineInfo"
+          >
+            <div class="sectionHeader" data-toggle="onlineInfo">
+              <h3>Online</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                  "
+                >
+                  <div class="k">Room ID</div>
+                  <button
+                    id="copyRoomIdBtn"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Copy"
+                    aria-label="Copy"
+                    aria-pressed="false"
+                  >
+                    ⧉
+                  </button>
+                </div>
+                <div
+                  id="infoRoomId"
+                  style="overflow-wrap: anywhere; word-break: break-word"
+                >
+                  —
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="panelSection"
             id="evaluationPanel"
             data-section="evaluation"
           >
