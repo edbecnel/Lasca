@@ -75,7 +75,18 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 4. In-game, copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
 5. Player 2 goes to the Start Page, chooses **Join**, pastes the Room ID, and clicks **Launch**.
 
-Note: when joining, the Start Page will auto-open the correct variant page for that room. 3. White moves first from the bottom of the board 4. Click a piece to select it, then click a valid destination to move
+Note: when joining, the Start Page will auto-open the correct variant page for that room.
+
+##### Online troubleshooting
+
+- **Ports already in use**: the online client uses `8080` and the online server uses `8788`. If `npm run online:dev` fails to start, stop anything else listening on those ports.
+  - Windows PowerShell example:
+    - `Get-NetTCPConnection -LocalPort 8788,8080 | Select-Object -ExpandProperty OwningProcess -Unique`
+    - `Stop-Process -Id <PID> -Force`
+- **Changes not taking effect**: make sure you restarted the online server (and client) after pulling new code; stale node processes can keep old behavior running.
+- **Room ID copy doesn’t work**: clipboard writes usually require a secure context (HTTPS or `http://localhost`) and may prompt for permission. If the button fails, you can still select/copy the Room ID text manually.
+- **Joined the wrong variant**: always join from the Start Page’s **Online → Join** flow. Opening a variant page directly (e.g. `src/lasca.html`) and then trying to “join” a room from another variant can cause confusing behavior.
+- **Opponent’s moves don’t show up**: refresh the page and confirm both players are pointing at the same **Server URL** on the Start Page. Some networks/extensions can interfere with Server-Sent Events (SSE).
 
 Alternatively, you can open `src/lasca.html` directly to jump straight into the game.
 
