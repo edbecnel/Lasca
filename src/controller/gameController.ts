@@ -619,6 +619,15 @@ export class GameController {
     const elMsg = document.getElementById("statusMessage");
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
+    const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
+    const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
+    const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
+    const isOnline = this.driver instanceof RemoteDriver;
+
+    if (elNewGame) elNewGame.disabled = isOnline;
+    if (elLoadGame) elLoadGame.disabled = isOnline;
+    if (elLoadGameInput) elLoadGameInput.disabled = isOnline;
+
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
     if (elRoomId) {

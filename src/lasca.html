@@ -1392,16 +1392,27 @@
               <span class="collapseBtn">▼</span>
             </div>
             <div class="sectionContent">
-              <div style="display: flex; flex-direction: column; gap: 6px">
+              <div class="kv" style="align-items: center">
+                <div class="k">Room ID</div>
                 <div
                   style="
                     display: flex;
                     align-items: center;
-                    justify-content: space-between;
                     gap: 8px;
+                    min-width: 0;
                   "
                 >
-                  <div class="k">Room ID</div>
+                  <div
+                    id="infoRoomId"
+                    style="
+                      overflow-wrap: anywhere;
+                      word-break: break-word;
+                      min-width: 0;
+                      flex: 1 1 auto;
+                    "
+                  >
+                    —
+                  </div>
                   <button
                     id="copyRoomIdBtn"
                     class="panelBtn iconToggleBtn"
@@ -1412,12 +1423,6 @@
                   >
                     ⧉
                   </button>
-                </div>
-                <div
-                  id="infoRoomId"
-                  style="overflow-wrap: anywhere; word-break: break-word"
-                >
-                  —
                 </div>
               </div>
             </div>
