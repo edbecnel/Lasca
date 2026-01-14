@@ -7,7 +7,7 @@
     "dev": "vite",
     "start": "vite",
     "online:server": "cross-env PORT=8788 npm --prefix server run start",
-    "online:client": "cross-env VITE_SERVER_URL=http://localhost:8788 vite",
+    "online:client": "cross-env VITE_SERVER_URL=http://localhost:8788 VITE_NO_OPEN=1 vite",
     "online:dev": "concurrently -k -n server,client \"npm run online:server\" \"npm run online:client\"",
     "build": "vite build",
     "watch": "vite build --watch",

@@ -19,11 +19,13 @@ import {
 } from "../shared/wireState.ts";
 
 /**
- * RemoteDriver (stub).
+ * RemoteDriver.
  *
- * This is the multiplayer/online path. For now it is intentionally non-functional
- * (no transport yet). The goal is to establish a clean seam without impacting
- * offline/local play.
+ * This is the multiplayer/online path.
+ * Realtime transport preference order:
+ * 1) WebSockets (MP1.5 primary)
+ * 2) SSE (legacy push)
+ * 3) Polling fallback (controller layer)
  */
 type RemoteIds = {
   serverUrl: string;
@@ -41,6 +43,10 @@ export class RemoteDriver implements GameDriver {
   private lastStateHash: string;
   private lastStateVersion: number = -1;
   private eventSource: EventSource | null = null;
+  private ws: WebSocket | null = null;
+  private wsReconnectTimer: number | null = null;
+  private wsReconnectAttempt: number = 0;
+  private transportStatus: "connected" | "reconnecting" = "connected";
   private onRealtimeUpdate: (() => void) | null = null;
   private realtimeListeners = new Map<string, Set<(payload: any) => void>>();
 
@@ -86,6 +92,17 @@ export class RemoteDriver implements GameDriver {
     return `${base}/api/stream/${encodeURIComponent(roomId)}?${qs.toString()}`;
   }
 
+  private toWsUrl(serverUrl: string): string {
+    const base = serverUrl.replace(/\/$/, "");
+    const u = new URL(base);
+    if (u.protocol === "https:") u.protocol = "wss:";
+    else u.protocol = "ws:";
+    // WebSocket server is attached to the same HTTP server.
+    u.pathname = `${u.pathname.replace(/\/$/, "")}/api/ws`;
+    u.search = "";
+    return u.toString();
+  }
+
   /**
    * Subscribe to a realtime SSE event.
    * Returns an unsubscribe function.
@@ -114,12 +131,28 @@ export class RemoteDriver implements GameDriver {
     }
   }
 
+  private setTransportStatus(next: "connected" | "reconnecting"): void {
+    if (this.transportStatus === next) return;
+    this.transportStatus = next;
+    this.emitSseEvent("transport_status", { status: next });
+  }
+
   /**
-   * Starts realtime server push via SSE.
+   * Starts realtime server push.
    * Returns true if started (browser-only), else false.
    */
   startRealtime(onUpdated: () => void): boolean {
     if (typeof window === "undefined") return false;
+
+    // Prefer WebSockets.
+    if (typeof (window as any).WebSocket !== "undefined") {
+      if (this.ws) return true;
+      this.onRealtimeUpdate = onUpdated;
+      this.startWebSocketRealtime();
+      return true;
+    }
+
+    // Fallback: SSE.
     if (typeof (window as any).EventSource === "undefined") return false;
     if (this.eventSource) return true;
 
@@ -164,6 +197,94 @@ export class RemoteDriver implements GameDriver {
     return true;
   }
 
+  private scheduleWsReconnect(): void {
+    if (typeof window === "undefined") return;
+    if (this.wsReconnectTimer != null) return;
+
+    const attempt = this.wsReconnectAttempt;
+    // quick retry ramp: 250ms, 500ms, 1s, 2s, 2s...
+    const delay = Math.min(2000, 250 * Math.pow(2, Math.min(3, attempt)));
+    this.wsReconnectTimer = window.setTimeout(() => {
+      this.wsReconnectTimer = null;
+      this.startWebSocketRealtime();
+    }, delay);
+  }
+
+  private startWebSocketRealtime(): void {
+    if (typeof window === "undefined") return;
+    const ids = this.requireIds();
+
+    // Cleanup any previous socket.
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        // ignore
+      }
+      this.ws = null;
+    }
+
+    const url = this.toWsUrl(ids.serverUrl);
+    const ws = new WebSocket(url);
+    this.ws = ws;
+
+    if (this.wsReconnectAttempt > 0) this.setTransportStatus("reconnecting");
+
+    ws.addEventListener("open", () => {
+      this.wsReconnectAttempt = 0;
+      // JOIN handshake required by server. lastSeenVersion enables resync logic.
+      const join = {
+        type: "JOIN",
+        roomId: ids.roomId,
+        playerId: ids.playerId,
+        lastSeenVersion: this.lastStateVersion,
+      };
+      try {
+        ws.send(JSON.stringify(join));
+      } catch {
+        // ignore
+      }
+    });
+
+    ws.addEventListener("message", (ev) => {
+      try {
+        const msg = JSON.parse(String(ev.data)) as any;
+        const eventName = typeof msg?.event === "string" ? msg.event : null;
+        const payload = msg?.payload;
+
+        if (eventName === "snapshot") {
+          const snap = payload?.snapshot as WireSnapshot | undefined;
+          if (!snap) return;
+          const applied = this.applySnapshot(snap);
+          if (applied.changed) this.onRealtimeUpdate?.();
+          this.emitSseEvent("snapshot", payload);
+          return;
+        }
+
+        // Reserved for MP2+.
+        if (eventName) {
+          this.emitSseEvent(eventName, payload);
+        }
+      } catch {
+        // ignore malformed messages
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      // Reconnect loop.
+      this.wsReconnectAttempt += 1;
+      this.setTransportStatus("reconnecting");
+      this.scheduleWsReconnect();
+    });
+
+    ws.addEventListener("error", () => {
+      // Some browsers only fire close; be defensive.
+      this.wsReconnectAttempt += 1;
+      this.setTransportStatus("reconnecting");
+      this.scheduleWsReconnect();
+    });
+  }
+
   stopRealtime(): void {
     if (this.eventSource) {
       try {
@@ -173,6 +294,24 @@ export class RemoteDriver implements GameDriver {
       }
     }
     this.eventSource = null;
+
+    if (this.wsReconnectTimer != null && typeof window !== "undefined") {
+      window.clearTimeout(this.wsReconnectTimer);
+    }
+    this.wsReconnectTimer = null;
+    this.wsReconnectAttempt = 0;
+
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        // ignore
+      }
+    }
+    this.ws = null;
+
+    this.transportStatus = "connected";
+
     this.onRealtimeUpdate = null;
   }
 
@@ -219,6 +358,7 @@ export class RemoteDriver implements GameDriver {
     this.lastStateVersion = nextVersion;
 
     const changed = nextVersion !== prevVersion || this.lastStateHash !== prevHash;
+    this.setTransportStatus("connected");
     return { next: nextState, changed };
   }
 

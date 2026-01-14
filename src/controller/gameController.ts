@@ -48,6 +48,7 @@ export class GameController {
   private repetitionCounts: Map<string, number> = new Map();
   private onlinePollTimer: number | null = null;
   private onlineRealtimeEnabled: boolean = false;
+  private onlineTransportStatus: "connected" | "reconnecting" = "connected";
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
     if (!text) return false;
@@ -108,7 +109,16 @@ export class GameController {
     const remote = this.driver;
     if (this.onlinePollTimer || this.onlineRealtimeEnabled) return;
 
-    // Prefer realtime server push (SSE). Falls back to polling if unavailable.
+    // Prefer realtime server push (WebSockets; falls back to SSE). Falls back to polling if unavailable.
+    // Transport status events are emitted by the driver (WS primary).
+    remote.onSseEvent("transport_status", (payload) => {
+      if (this.isGameOver) return;
+      const status = payload?.status === "reconnecting" ? "reconnecting" : "connected";
+      if (this.onlineTransportStatus === status) return;
+      this.onlineTransportStatus = status;
+      this.updatePanel();
+    });
+
     const startedRealtime = remote.startRealtime(() => {
       if (this.isGameOver) return;
 
@@ -643,6 +653,10 @@ export class GameController {
       if (elCopy) elCopy.disabled = true;
     }
     if (elMsg && !this.isGameOver) {
+      if (isOnline && this.onlineTransportStatus === "reconnecting") {
+        elMsg.textContent = "Reconnecting…";
+        return;
+      }
       if (!this.isLocalPlayersTurn()) {
         elMsg.textContent = "Waiting for opponent";
         return;
@@ -861,6 +875,43 @@ export class GameController {
       // eslint-disable-next-line no-console
       console.error("[controller] driver submitMove failed", err);
       const msg = err instanceof Error ? err.message : "Move failed";
+
+      // In online mode, a failed submit often means our local view is stale
+      // (opponent moved, grace timeout fired, etc). Resync once so UI doesn't
+      // stay in an inconsistent state (e.g. still showing Select while server is over).
+      if (this.driver instanceof RemoteDriver) {
+        try {
+          await this.driver.fetchLatest();
+          this.state = this.driver.getState();
+          this.lockedCaptureFrom = null;
+          this.lockedCaptureDir = null;
+          this.jumpedSquares.clear();
+          this.currentTurnNodes = [];
+          this.currentTurnHasCapture = false;
+          this.clearSelection();
+          this.renderAuthoritative();
+
+          const allLegal = generateLegalMoves(this.state);
+          this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+          this.recomputeRepetitionCounts();
+
+          // If the resynced state is actually over, lock the UI permanently.
+          if (this.checkAndHandleCurrentPlayerLost()) return;
+        } catch {
+          // ignore resync errors
+        }
+      }
+
+      // If the server says the game is over, keep the UI consistent.
+      if (typeof msg === "string" && msg.toLowerCase().startsWith("game over")) {
+        this.isGameOver = true;
+        this.clearSelection();
+        this.showBanner("Game Over", 0);
+        this.updatePanel();
+        this.fireHistoryChange("gameOver");
+        return;
+      }
+
       this.showBanner(msg, 2500);
       return;
     }

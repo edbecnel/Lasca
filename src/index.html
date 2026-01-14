@@ -315,7 +315,20 @@
             <select id="launchOnlineAction" class="panelSelect">
               <option value="create">Create room</option>
               <option value="join">Join room</option>
+              <option value="rejoin">Rejoin room (this browser)</option>
             </select>
+
+            <label id="launchOnlinePlayerIdLabel" for="launchOnlinePlayerId"
+              >Player ID</label
+            >
+            <input
+              id="launchOnlinePlayerId"
+              class="panelSelect"
+              type="text"
+              autocomplete="off"
+              readonly
+              placeholder="—"
+            />
 
             <label id="launchOnlineRoomIdLabel" for="launchOnlineRoomId"
               >Room ID</label
@@ -330,7 +343,8 @@
           </div>
           <div class="hint" style="margin-left: 0">
             Online Create logs a join link in the browser console (F12). Online
-            Join needs a room ID from Player 1.
+            Join needs a room ID from Player 1. Online Rejoin uses a saved seat
+            from this browser.
           </div>
         </section>
 

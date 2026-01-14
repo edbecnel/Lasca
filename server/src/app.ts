@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
-import type { Server } from "node:http";
+import { createServer, type Server } from "node:http";
+
+import WebSocket, { WebSocketServer, type RawData } from "ws";
 
 import { applyMove } from "../../src/game/applyMove.ts";
 import { finalizeDamaCaptureChain } from "../../src/game/damaCaptureChain.ts";
@@ -242,6 +244,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
   app: express.Express;
   rooms: Map<RoomId, Room>;
   gamesDir: string;
+  attachWebSockets: (server: Server) => void;
   shutdown: () => Promise<void>;
 } {
   const gamesDir = resolveGamesDir(opts.gamesDir);
@@ -250,7 +253,57 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
   const rooms = new Map<RoomId, Room>();
   const streamClients = new Map<RoomId, Set<express.Response>>();
+  const wsClients = new Map<RoomId, Set<WebSocket>>();
+  const streamPlayerClients = new Map<RoomId, Map<PlayerId, Set<express.Response>>>();
+  const wsPlayerClients = new Map<RoomId, Map<PlayerId, Set<WebSocket>>>();
+  let wss: WebSocketServer | null = null;
+  let wsHeartbeat: NodeJS.Timeout | null = null;
   let isShuttingDown = false;
+
+  function addStreamPlayerClient(roomId: RoomId, playerId: PlayerId, res: express.Response): void {
+    const byPlayer = streamPlayerClients.get(roomId) ?? new Map<PlayerId, Set<express.Response>>();
+    const set = byPlayer.get(playerId) ?? new Set<express.Response>();
+    set.add(res);
+    byPlayer.set(playerId, set);
+    streamPlayerClients.set(roomId, byPlayer);
+  }
+
+  function removeStreamPlayerClient(roomId: RoomId, playerId: PlayerId, res: express.Response): void {
+    const byPlayer = streamPlayerClients.get(roomId);
+    if (!byPlayer) return;
+    const set = byPlayer.get(playerId);
+    if (!set) return;
+    set.delete(res);
+    if (set.size === 0) byPlayer.delete(playerId);
+    if (byPlayer.size === 0) streamPlayerClients.delete(roomId);
+  }
+
+  function addWsPlayerClient(roomId: RoomId, playerId: PlayerId, ws: WebSocket): void {
+    const byPlayer = wsPlayerClients.get(roomId) ?? new Map<PlayerId, Set<WebSocket>>();
+    const set = byPlayer.get(playerId) ?? new Set<WebSocket>();
+    set.add(ws);
+    byPlayer.set(playerId, set);
+    wsPlayerClients.set(roomId, byPlayer);
+  }
+
+  function removeWsPlayerClient(roomId: RoomId, playerId: PlayerId, ws: WebSocket): void {
+    const byPlayer = wsPlayerClients.get(roomId);
+    if (!byPlayer) return;
+    const set = byPlayer.get(playerId);
+    if (!set) return;
+    set.delete(ws);
+    if (set.size === 0) byPlayer.delete(playerId);
+    if (byPlayer.size === 0) wsPlayerClients.delete(roomId);
+  }
+
+  function isPlayerConnectedByAnyTransport(roomId: RoomId, playerId: PlayerId): boolean {
+    const wsByPlayer = wsPlayerClients.get(roomId);
+    const wsCount = wsByPlayer?.get(playerId)?.size ?? 0;
+    if (wsCount > 0) return true;
+    const sseByPlayer = streamPlayerClients.get(roomId);
+    const sseCount = sseByPlayer?.get(playerId)?.size ?? 0;
+    return sseCount > 0;
+  }
 
   function queuePersist(room: Room): Promise<void> {
     if (isShuttingDown) return Promise.resolve();
@@ -292,6 +345,176 @@ export function createLascaApp(opts: ServerOpts = {}): {
     };
 
     broadcastRoomEvent(room.roomId, "snapshot", payload);
+
+    const sockets = wsClients.get(room.roomId);
+    if (!sockets || sockets.size === 0) return;
+    const msg = JSON.stringify({ event: "snapshot", payload });
+    for (const ws of sockets) {
+      try {
+        if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      } catch {
+        // ignore; cleanup on close
+      }
+    }
+  }
+
+  function removeWsClient(roomId: RoomId, ws: WebSocket): void {
+    const set = wsClients.get(roomId);
+    if (!set) return;
+    set.delete(ws);
+    if (set.size === 0) wsClients.delete(roomId);
+  }
+
+  function attachWebSockets(server: Server): void {
+    if (wss) return;
+
+    wss = new WebSocketServer({ server, path: "/api/ws" });
+
+    type WsConnState = {
+      roomId: RoomId | null;
+      playerId: PlayerId | null;
+    };
+
+    wss.on("connection", (ws: WebSocket) => {
+      const state: WsConnState = { roomId: null, playerId: null };
+      (ws as any).isAlive = true;
+
+      ws.on("pong", () => {
+        (ws as any).isAlive = true;
+      });
+
+      const joinTimeout = setTimeout(() => {
+        try {
+          if (!state.roomId) ws.close(1008, "JOIN required");
+        } catch {
+          // ignore
+        }
+      }, 5_000);
+
+      ws.on("message", async (raw: RawData) => {
+        try {
+          const text = typeof raw === "string" ? raw : raw.toString("utf8");
+          const msg = JSON.parse(text) as any;
+
+          if (msg?.type !== "JOIN") return;
+          const roomId = typeof msg.roomId === "string" ? (msg.roomId as RoomId) : null;
+          const playerId = typeof msg.playerId === "string" ? (msg.playerId as PlayerId) : null;
+          if (!roomId) throw new Error("Missing roomId");
+
+          // Re-join: move socket between rooms.
+          if (state.roomId && state.roomId !== roomId) {
+            removeWsClient(state.roomId, ws);
+            if (state.playerId) {
+              removeWsPlayerClient(state.roomId, state.playerId, ws);
+            }
+
+            const prevRoom = rooms.get(state.roomId);
+            if (prevRoom && state.playerId && prevRoom.players.has(state.playerId)) {
+              // Only mark disconnected if this was the last connection.
+              if (!isPlayerConnectedByAnyTransport(state.roomId, state.playerId)) {
+                touchClock(prevRoom);
+                void maybeForceClockTimeout(prevRoom);
+                setPresence(prevRoom, state.playerId, { connected: false, lastSeenAt: nowIso() });
+                void startGraceIfNeeded(prevRoom, state.playerId);
+              }
+            }
+          }
+
+          state.roomId = roomId;
+          state.playerId = playerId;
+
+          const room = await requireRoom(roomId);
+
+          // Track room membership
+          const set = wsClients.get(roomId) ?? new Set<WebSocket>();
+          set.add(ws);
+          wsClients.set(roomId, set);
+
+          // Presence/clock behavior mirrors SSE stream behavior.
+          if (playerId && room.players.has(playerId)) {
+            addWsPlayerClient(roomId, playerId, ws);
+            touchClock(room);
+            await maybeForceClockTimeout(room);
+            setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+            clearGrace(room, playerId);
+            updateClockPause(room);
+            await persistSnapshot(gamesDir, room);
+          }
+
+          // Send initial snapshot (authoritative) to this socket.
+          const payload = {
+            roomId,
+            snapshot: snapshotForRoom(room),
+            presence: presenceForRoom(room),
+            timeControl: room.timeControl,
+            clock: room.clock ?? undefined,
+          };
+          ws.send(JSON.stringify({ event: "snapshot", payload }));
+
+          // Notify others that presence changed.
+          if (playerId && room.players.has(playerId)) {
+            broadcastRoomSnapshot(room);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "JOIN failed";
+          try {
+            ws.send(JSON.stringify({ event: "error", payload: { message } }));
+          } catch {
+            // ignore
+          }
+        }
+      });
+
+      ws.on("close", () => {
+        clearTimeout(joinTimeout);
+        const roomId = state.roomId;
+        if (roomId) removeWsClient(roomId, ws);
+        if (isShuttingDown) return;
+
+        const playerId = state.playerId;
+        if (!roomId || !playerId) return;
+        const room = rooms.get(roomId);
+        if (!room) return;
+        if (!room.players.has(playerId)) return;
+
+        removeWsPlayerClient(roomId, playerId, ws);
+
+        // If there is still another live connection for this player (e.g., another tab),
+        // do NOT mark them disconnected or start grace.
+        if (isPlayerConnectedByAnyTransport(roomId, playerId)) return;
+
+        touchClock(room);
+        void maybeForceClockTimeout(room);
+        setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
+        void startGraceIfNeeded(room, playerId);
+      });
+
+      ws.on("error", () => {
+        // ignore; close handler will do cleanup
+      });
+    });
+
+    // Heartbeat to detect dead connections (needed for MP2 presence/grace).
+    wsHeartbeat = setInterval(() => {
+      if (!wss) return;
+      for (const ws of wss.clients) {
+        const alive = Boolean((ws as any).isAlive);
+        if (!alive) {
+          try {
+            ws.terminate();
+          } catch {
+            // ignore
+          }
+          continue;
+        }
+        (ws as any).isAlive = false;
+        try {
+          ws.ping();
+        } catch {
+          // ignore
+        }
+      }
+    }, 15_000);
   }
 
   async function requireRoom(roomId: RoomId): Promise<Room> {
@@ -417,6 +640,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
   }
 
   async function forceDisconnectTimeout(args: { gamesDir: string; room: Room; disconnectedPlayerId: PlayerId }): Promise<void> {
+    if (isShuttingDown) return;
     const { room, disconnectedPlayerId } = args;
     if (isRoomOver(room)) return;
 
@@ -496,6 +720,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
     const graceUntilMs = Date.now() + disconnectGraceMs;
     const graceUntilIso = new Date(graceUntilMs).toISOString();
     const timer = setTimeout(() => {
+      if (isShuttingDown) return;
       // If still disconnected when grace expires, end the game.
       const p = room.presence.get(playerId);
       if (!p || p.connected) {
@@ -557,6 +782,10 @@ export function createLascaApp(opts: ServerOpts = {}): {
       set.add(res);
       streamClients.set(roomId, set);
 
+      if (playerId && room.players.has(playerId)) {
+        addStreamPlayerClient(roomId, playerId, res);
+      }
+
       // Initial snapshot so client can render immediately.
       streamWrite(res, "snapshot", {
         roomId,
@@ -591,6 +820,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
         if (isShuttingDown) return;
 
         if (playerId && room.players.has(playerId)) {
+          removeStreamPlayerClient(roomId, playerId, res);
+
+          // If another connection still exists for this player (e.g., another tab),
+          // do NOT mark disconnected or start grace.
+          if (isPlayerConnectedByAnyTransport(roomId, playerId)) return;
+
           touchClock(room);
           void maybeForceClockTimeout(room);
           setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
@@ -908,6 +1143,20 @@ export function createLascaApp(opts: ServerOpts = {}): {
   async function shutdown(): Promise<void> {
     isShuttingDown = true;
 
+    if (wsHeartbeat) {
+      clearInterval(wsHeartbeat);
+      wsHeartbeat = null;
+    }
+
+    if (wss) {
+      try {
+        wss.close();
+      } catch {
+        // ignore
+      }
+      wss = null;
+    }
+
     // Best-effort cleanup: stop grace timers so they don't fire after teardown.
     for (const room of rooms.values()) {
       for (const g of room.disconnectGrace.values()) {
@@ -920,7 +1169,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
     await Promise.all(Array.from(rooms.values()).map((r) => r.persistChain.catch(() => undefined)));
   }
 
-  return { app, rooms, gamesDir, shutdown };
+  return { app, rooms, gamesDir, attachWebSockets, shutdown };
 }
 
 export async function startLascaServer(args: {
@@ -934,7 +1183,7 @@ export async function startLascaServer(args: {
   url: string;
   gamesDir: string;
 }> {
-  const { app, gamesDir, shutdown } = createLascaApp({
+  const { app, gamesDir, attachWebSockets, shutdown } = createLascaApp({
     gamesDir: args.gamesDir,
     snapshotEvery: args.snapshotEvery,
     disconnectGraceMs: args.disconnectGraceMs,
@@ -942,7 +1191,11 @@ export async function startLascaServer(args: {
   await ensureGamesDir(gamesDir);
 
   const port = Number.isFinite(args.port as any) ? Number(args.port) : 8787;
-  const server = app.listen(port);
+
+  // Use an explicit HTTP server so WebSockets can attach cleanly.
+  const server = createServer(app);
+  attachWebSockets(server);
+  server.listen(port);
 
   // Ensure teardown disables grace/persistence side effects.
   const originalClose = server.close.bind(server);

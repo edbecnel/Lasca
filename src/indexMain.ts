@@ -24,7 +24,97 @@ const LS_KEYS = {
 
 type Difficulty = "human" | "easy" | "medium" | "advanced";
 type PlayMode = "local" | "online";
-type OnlineAction = "create" | "join";
+type OnlineAction = "create" | "join" | "rejoin";
+
+type OnlineResumeRecord = {
+  serverUrl: string;
+  roomId: string;
+  playerId: string;
+  color?: "W" | "B";
+  savedAtMs: number;
+};
+
+function resumeStorageKey(serverUrl: string, roomId: string): string {
+  const s = normalizeServerUrl(serverUrl);
+  const r = (roomId || "").trim();
+  return `lasca.online.resume.${encodeURIComponent(s)}.${encodeURIComponent(r)}`;
+}
+
+function findAnyResumeRecordsForRoomId(roomId: string): OnlineResumeRecord[] {
+  const r = (roomId || "").trim();
+  if (!r) return [];
+
+  const out: OnlineResumeRecord[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("lasca.online.resume.")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      const rec = JSON.parse(raw) as any;
+      if (!rec || typeof rec !== "object") continue;
+
+      const recRoom = (typeof rec.roomId === "string" ? rec.roomId : "").trim();
+      if (recRoom !== r) continue;
+
+      const recServer = normalizeServerUrl(typeof rec.serverUrl === "string" ? rec.serverUrl : "");
+      if (!recServer) continue;
+
+      if (typeof rec.playerId !== "string" || !rec.playerId) continue;
+      const color = rec.color === "W" || rec.color === "B" ? rec.color : undefined;
+      const savedAtMs = Number.isFinite(rec.savedAtMs) ? Number(rec.savedAtMs) : 0;
+      out.push({ serverUrl: recServer, roomId: r, playerId: rec.playerId, ...(color ? { color } : {}), savedAtMs });
+    }
+  } catch {
+    // ignore
+  }
+  return out;
+}
+
+function resolveOnlineResumeRecord(serverUrl: string, roomId: string): OnlineResumeRecord | null {
+  const direct = readOnlineResumeRecord(serverUrl, roomId);
+  if (direct) return direct;
+  const matches = findAnyResumeRecordsForRoomId(roomId);
+  if (matches.length === 1) return matches[0];
+  return null;
+}
+
+function readOnlineResumeRecord(serverUrl: string, roomId: string): OnlineResumeRecord | null {
+  try {
+    const s = normalizeServerUrl(serverUrl);
+    const r = (roomId || "").trim();
+
+    // Try preferred key first, then legacy key patterns.
+    const keysToTry = [
+      resumeStorageKey(s, r),
+      `lasca.online.resume.${encodeURIComponent(serverUrl)}.${encodeURIComponent(r)}`,
+      `lasca.online.resume.${encodeURIComponent(serverUrl)}.${encodeURIComponent(roomId)}`,
+      `lasca.online.resume.${encodeURIComponent(`${s}/`)}.${encodeURIComponent(r)}`,
+    ];
+
+    for (const key of keysToTry) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const rec = JSON.parse(raw) as any;
+      if (!rec || typeof rec !== "object") continue;
+
+      const recServer = normalizeServerUrl(typeof rec.serverUrl === "string" ? rec.serverUrl : "");
+      const recRoom = (typeof rec.roomId === "string" ? rec.roomId : "").trim();
+      if (recServer !== s) continue;
+      if (recRoom !== r) continue;
+
+      if (typeof rec.playerId !== "string" || !rec.playerId) continue;
+      const color = rec.color === "W" || rec.color === "B" ? rec.color : undefined;
+      const savedAtMs = Number.isFinite(rec.savedAtMs) ? Number(rec.savedAtMs) : 0;
+      return { serverUrl: s, roomId: r, playerId: rec.playerId, ...(color ? { color } : {}), savedAtMs };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -71,7 +161,7 @@ function readPlayMode(key: string, fallback: PlayMode): PlayMode {
 
 function readOnlineAction(key: string, fallback: OnlineAction): OnlineAction {
   const raw = localStorage.getItem(key);
-  if (raw === "create" || raw === "join") return raw;
+  if (raw === "create" || raw === "join" || raw === "rejoin") return raw;
   return fallback;
 }
 
@@ -101,6 +191,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const elPlayMode = byId<HTMLSelectElement>("launchPlayMode");
   const elOnlineServerUrl = byId<HTMLInputElement>("launchOnlineServerUrl");
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
+  const elOnlinePlayerIdLabel = byId<HTMLElement>("launchOnlinePlayerIdLabel");
+  const elOnlinePlayerId = byId<HTMLInputElement>("launchOnlinePlayerId");
   const elOnlineRoomIdLabel = byId<HTMLElement>("launchOnlineRoomIdLabel");
   const elOnlineRoomId = byId<HTMLInputElement>("launchOnlineRoomId");
 
@@ -186,7 +278,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const baseOk = Boolean(v.available && v.entryUrl);
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
-    const onlineAction = (elOnlineAction.value === "join" ? "join" : "create") as OnlineAction;
+    const onlineAction =
+      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
 
@@ -199,10 +292,33 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!serverUrl) {
         ok = false;
         warning = "Online mode needs a server URL.";
-      } else if (onlineAction === "join" && !roomId) {
+      } else if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) {
         ok = false;
-        warning = "Online Join needs a room ID.";
+        warning = onlineAction === "rejoin" ? "Online Rejoin needs a room ID." : "Online Join needs a room ID.";
+      } else if (onlineAction === "rejoin") {
+        const resume = resolveOnlineResumeRecord(serverUrl, roomId);
+        if (!resume) {
+          ok = false;
+          const anyMatches = findAnyResumeRecordsForRoomId(roomId);
+          warning =
+            anyMatches.length > 1
+              ? "Multiple saved seats found for this room. Set the correct server URL, then Rejoin."
+              : "No saved seat for this room on this browser. Use Join instead.";
+        } else if (resume.serverUrl !== serverUrl) {
+          // If roomId uniquely identifies a saved seat but the server URL field doesn't match,
+          // auto-correct it so Rejoin works without guessing ports/hosts.
+          elOnlineServerUrl.value = resume.serverUrl;
+          localStorage.setItem(LS_KEYS.onlineServerUrl, resume.serverUrl);
+        }
       }
+    }
+
+    // Player ID field is informational; it should not influence ok/warning.
+    if (playMode === "online" && onlineAction === "rejoin") {
+      const resume = resolveOnlineResumeRecord(serverUrl, roomId);
+      elOnlinePlayerId.value = resume?.playerId ?? "";
+    } else {
+      elOnlinePlayerId.value = "";
     }
 
     elLaunch.disabled = !ok;
@@ -234,13 +350,19 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function syncOnlineVisibility(): void {
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
-    const onlineAction = (elOnlineAction.value === "join" ? "join" : "create") as OnlineAction;
+    const onlineAction =
+      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
 
     const showOnline = playMode === "online";
     elOnlineServerUrl.disabled = !showOnline;
     elOnlineAction.disabled = !showOnline;
 
-    const showRoomId = showOnline && onlineAction === "join";
+    const showPlayerId = showOnline && onlineAction === "rejoin";
+    elOnlinePlayerIdLabel.style.display = showPlayerId ? "" : "none";
+    elOnlinePlayerId.style.display = showPlayerId ? "" : "none";
+    elOnlinePlayerId.disabled = !showPlayerId;
+
+    const showRoomId = showOnline && (onlineAction === "join" || onlineAction === "rejoin");
     elOnlineRoomIdLabel.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.disabled = !showRoomId;
@@ -276,16 +398,20 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const onlineAction = (elOnlineAction.value === "join" ? "join" : "create") as OnlineAction;
+    const onlineAction =
+      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
     if (!serverUrl) return;
-    if (onlineAction === "join" && !roomId) return;
+    if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) return;
 
-    // If joining, prefer the room's authoritative variant so we don't load the wrong board/rules UI.
+    const resume = onlineAction === "rejoin" ? resolveOnlineResumeRecord(serverUrl, roomId) : null;
+    if (onlineAction === "rejoin" && !resume) return;
+
+    // If joining/rejoining, prefer the room's authoritative variant so we don't load the wrong board/rules UI.
     // This prevents cases like: Damasca room joined via Lasca/Dama page (can look like wrong moves).
     let targetVariant = v;
-    if (onlineAction === "join") {
+    if (onlineAction === "join" || onlineAction === "rejoin") {
       try {
         const res = await fetch(`${serverUrl}/api/room/${encodeURIComponent(roomId)}`);
         const json = (await res.json()) as any;
@@ -304,9 +430,13 @@ window.addEventListener("DOMContentLoaded", () => {
     url.searchParams.set("server", serverUrl);
     if (onlineAction === "create") {
       url.searchParams.set("create", "1");
-    } else {
+    } else if (onlineAction === "join") {
       url.searchParams.set("join", "1");
       url.searchParams.set("roomId", roomId);
+    } else {
+      url.searchParams.set("roomId", roomId);
+      url.searchParams.set("playerId", (resume as OnlineResumeRecord).playerId);
+      if ((resume as OnlineResumeRecord).color) url.searchParams.set("color", (resume as OnlineResumeRecord).color as any);
     }
     window.location.assign(url.toString());
   });

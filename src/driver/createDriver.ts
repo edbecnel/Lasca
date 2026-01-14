@@ -41,6 +41,68 @@ type OnlineQuery = {
   color: "W" | "B" | null;
 };
 
+type OnlineResumeRecord = {
+  serverUrl: string;
+  roomId: string;
+  playerId: string;
+  color?: "W" | "B";
+  savedAtMs: number;
+};
+
+function normalizeServerUrlForStorage(raw: string): string {
+  return (raw || "").trim().replace(/\/+$/, "");
+}
+
+function normalizeRoomIdForStorage(raw: string): string {
+  return (raw || "").trim();
+}
+
+function resumeStorageKey(serverUrl: string, roomId: string): string {
+  // Namespaced per server so multiple dev servers don't collide.
+  // encodeURIComponent keeps the key safe for localStorage.
+  const s = normalizeServerUrlForStorage(serverUrl);
+  const r = normalizeRoomIdForStorage(roomId);
+  return `lasca.online.resume.${encodeURIComponent(s)}.${encodeURIComponent(r)}`;
+}
+
+function saveOnlineResumeRecord(args: { serverUrl: string; roomId: string; playerId: string; color?: "W" | "B" }): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!args.serverUrl || !args.roomId || !args.playerId) return;
+    // Avoid persisting spectator pseudo-identity.
+    if (args.playerId === "spectator") return;
+
+    const serverUrl = normalizeServerUrlForStorage(args.serverUrl);
+    const roomId = normalizeRoomIdForStorage(args.roomId);
+
+    const record: OnlineResumeRecord = {
+      serverUrl,
+      roomId,
+      playerId: args.playerId,
+      ...(args.color ? { color: args.color } : {}),
+      savedAtMs: Date.now(),
+    };
+
+    // Preferred key format (normalized).
+    window.localStorage.setItem(resumeStorageKey(serverUrl, roomId), JSON.stringify(record));
+
+    // Back-compat: if the URL had different formatting (e.g., trailing slash),
+    // also store under the legacy key so older builds/tabs can still find it.
+    const legacyKey = `lasca.online.resume.${encodeURIComponent(args.serverUrl)}.${encodeURIComponent(args.roomId)}`;
+    const preferredKey = resumeStorageKey(serverUrl, roomId);
+    if (legacyKey !== preferredKey) {
+      window.localStorage.setItem(legacyKey, JSON.stringify(record));
+    }
+
+    // Also persist the last-used online connection details so the Start Page
+    // defaults match the session that just loaded.
+    window.localStorage.setItem("lasca.online.serverUrl", serverUrl);
+    window.localStorage.setItem("lasca.online.roomId", roomId);
+  } catch {
+    // ignore
+  }
+}
+
 function updateBrowserUrlForOnline(args: {
   serverUrl: string;
   roomId: string;
@@ -58,6 +120,10 @@ function updateBrowserUrlForOnline(args: {
     url.searchParams.delete("create");
     url.searchParams.delete("join");
     window.history.replaceState(null, "", url.toString());
+
+    // Also persist a resume token so the Start Page can resume without requiring
+    // the user to manually copy the playerId.
+    saveOnlineResumeRecord(args);
   } catch {
     // ignore
   }
@@ -213,5 +279,14 @@ export async function createDriverAsync(args: {
   const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
   const anySnap: any = snap;
   await driver.connectFromSnapshot({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId }, anySnap.snapshot);
+
+  // Even if this page was loaded directly via a reconnect URL (roomId+playerId),
+  // persist the resume token so the Start Page can offer "Rejoin" next time.
+  updateBrowserUrlForOnline({
+    serverUrl: q.serverUrl,
+    roomId: q.roomId,
+    playerId: q.playerId,
+    color: q.color ?? undefined,
+  });
   return driver;
 }

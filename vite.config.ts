@@ -8,7 +8,10 @@ export default defineConfig(({ mode }) => ({
   root: "src",
   server: {
     port: 8080,
-    open: "/index.html",
+    // When running the multiplayer dev stack (server+client), the client dev server may
+    // restart (or be restarted) and Vite would re-open the Start Page each time.
+    // Allow disabling auto-open via env so `npm run online:dev` doesn't spam tabs.
+    open: process.env.VITE_NO_OPEN === "1" ? false : "/index.html",
   },
   build: {
     outDir: "../dist",

@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node", "ws"]
   },
   "include": ["src/**/*.ts", "../src/**/*.ts"]
 }
