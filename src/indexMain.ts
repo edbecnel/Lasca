@@ -20,7 +20,10 @@ const LS_KEYS = {
   onlineServerUrl: "lasca.online.serverUrl",
   onlineAction: "lasca.online.action",
   onlineRoomId: "lasca.online.roomId",
+  onlinePrefColor: "lasca.online.prefColor",
 } as const;
+
+type PreferredColor = "auto" | "W" | "B";
 
 type Difficulty = "human" | "easy" | "medium" | "advanced";
 type PlayMode = "local" | "online";
@@ -165,6 +168,12 @@ function readOnlineAction(key: string, fallback: OnlineAction): OnlineAction {
   return fallback;
 }
 
+function readPreferredColor(key: string, fallback: PreferredColor): PreferredColor {
+  const raw = localStorage.getItem(key);
+  if (raw === "auto" || raw === "W" || raw === "B") return raw;
+  return fallback;
+}
+
 function normalizeServerUrl(raw: string): string {
   const s = (raw || "").trim();
   return s.replace(/\/+$/, "");
@@ -191,6 +200,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const elPlayMode = byId<HTMLSelectElement>("launchPlayMode");
   const elOnlineServerUrl = byId<HTMLInputElement>("launchOnlineServerUrl");
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
+  const elOnlinePrefColorLabel = byId<HTMLElement>("launchOnlinePrefColorLabel");
+  const elOnlinePrefColor = byId<HTMLSelectElement>("launchOnlinePrefColor");
   const elOnlinePlayerIdLabel = byId<HTMLElement>("launchOnlinePlayerIdLabel");
   const elOnlinePlayerId = byId<HTMLInputElement>("launchOnlinePlayerId");
   const elOnlineRoomIdLabel = byId<HTMLElement>("launchOnlineRoomIdLabel");
@@ -244,6 +255,7 @@ window.addEventListener("DOMContentLoaded", () => {
     (typeof envServerUrl === "string" && envServerUrl.trim() ? envServerUrl.trim() : "http://localhost:8788");
   elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, "create");
   elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
+  elOnlinePrefColor.value = readPreferredColor(LS_KEYS.onlinePrefColor, "auto");
 
   elMoveHints.checked = readBool(LS_KEYS.optMoveHints, false);
   elAnimations.checked = readBool(LS_KEYS.optAnimations, true);
@@ -276,6 +288,16 @@ window.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(LS_KEYS.variantId, v.variantId);
 
     const baseOk = Boolean(v.available && v.entryUrl);
+
+    const isAiGame = elAiWhite.value !== "human" || elAiBlack.value !== "human";
+
+    // Online (2 players) requires both sides Human.
+    const onlineOpt = Array.from(elPlayMode.options).find((o) => o.value === "online") ?? null;
+    if (onlineOpt) onlineOpt.disabled = isAiGame;
+    if (isAiGame && elPlayMode.value === "online") {
+      elPlayMode.value = "local";
+    }
+    elPlayMode.disabled = isAiGame;
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const onlineAction =
@@ -325,6 +347,22 @@ window.addEventListener("DOMContentLoaded", () => {
     elWarning.textContent = warning ?? "—";
   };
 
+  // When navigating back to the Start Page from a game tab, browsers may restore
+  // this page from the back/forward cache without re-running DOMContentLoaded.
+  // Re-hydrate online fields from localStorage so newly-created Room IDs appear.
+  window.addEventListener("pageshow", () => {
+    try {
+      elPlayMode.value = readPlayMode(LS_KEYS.playMode, (elPlayMode.value === "online" ? "online" : "local") as PlayMode);
+      elOnlineServerUrl.value = localStorage.getItem(LS_KEYS.onlineServerUrl) ?? elOnlineServerUrl.value;
+      elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, (elOnlineAction.value as any) ?? "create");
+      elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
+    } catch {
+      // ignore
+    }
+    syncOnlineVisibility();
+    syncAvailability();
+  });
+
   elGame.addEventListener("change", syncAvailability);
   elPlayMode.addEventListener("change", () => {
     localStorage.setItem(LS_KEYS.playMode, elPlayMode.value);
@@ -343,12 +381,39 @@ window.addEventListener("DOMContentLoaded", () => {
     syncAvailability();
   });
 
+  elOnlinePrefColor.addEventListener("change", () => {
+    localStorage.setItem(LS_KEYS.onlinePrefColor, elOnlinePrefColor.value);
+    syncAvailability();
+  });
+
   elOnlineRoomId.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineRoomId, elOnlineRoomId.value);
     syncAvailability();
   });
 
+  elAiWhite.addEventListener("change", () => {
+    localStorage.setItem(LS_KEYS.aiWhite, elAiWhite.value);
+    syncOnlineVisibility();
+    syncAvailability();
+  });
+
+  elAiBlack.addEventListener("change", () => {
+    localStorage.setItem(LS_KEYS.aiBlack, elAiBlack.value);
+    syncOnlineVisibility();
+    syncAvailability();
+  });
+
   function syncOnlineVisibility(): void {
+    const isAiGame = elAiWhite.value !== "human" || elAiBlack.value !== "human";
+
+    // Online (2 players) requires both sides Human.
+    const onlineOpt = Array.from(elPlayMode.options).find((o) => o.value === "online") ?? null;
+    if (onlineOpt) onlineOpt.disabled = isAiGame;
+    if (isAiGame && elPlayMode.value === "online") {
+      elPlayMode.value = "local";
+    }
+    elPlayMode.disabled = isAiGame;
+
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const onlineAction =
       elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
@@ -356,6 +421,32 @@ window.addEventListener("DOMContentLoaded", () => {
     const showOnline = playMode === "online";
     elOnlineServerUrl.disabled = !showOnline;
     elOnlineAction.disabled = !showOnline;
+
+    // Online color preference:
+    // - Only meaningful for Create (first player chooses their seat).
+    // - For Join/Rejoin, force "Auto" and disable other options.
+    const showPrefColor = showOnline;
+    const allowNonAuto = showOnline && onlineAction === "create";
+
+    elOnlinePrefColorLabel.style.display = showPrefColor ? "" : "none";
+    elOnlinePrefColor.style.display = showPrefColor ? "" : "none";
+    elOnlinePrefColor.disabled = !allowNonAuto;
+
+    // Disable White/Black options when joining/rejoining.
+    for (const opt of Array.from(elOnlinePrefColor.options)) {
+      const v = opt.value;
+      if (v === "W" || v === "B") {
+        opt.disabled = !allowNonAuto;
+      }
+    }
+
+    if (!allowNonAuto) {
+      // Don't persist this to localStorage; it's action-dependent.
+      elOnlinePrefColor.value = "auto";
+    } else {
+      // Restore user's saved preference when returning to Create.
+      elOnlinePrefColor.value = readPreferredColor(LS_KEYS.onlinePrefColor, "auto");
+    }
 
     const showPlayerId = showOnline && onlineAction === "rejoin";
     elOnlinePlayerIdLabel.style.display = showPlayerId ? "" : "none";
@@ -402,6 +493,7 @@ window.addEventListener("DOMContentLoaded", () => {
       elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
+    const prefColor = (elOnlinePrefColor.value === "W" || elOnlinePrefColor.value === "B") ? elOnlinePrefColor.value : "auto";
     if (!serverUrl) return;
     if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) return;
 
@@ -430,9 +522,11 @@ window.addEventListener("DOMContentLoaded", () => {
     url.searchParams.set("server", serverUrl);
     if (onlineAction === "create") {
       url.searchParams.set("create", "1");
+      if (prefColor !== "auto") url.searchParams.set("prefColor", prefColor);
     } else if (onlineAction === "join") {
       url.searchParams.set("join", "1");
       url.searchParams.set("roomId", roomId);
+      if (prefColor !== "auto") url.searchParams.set("prefColor", prefColor);
     } else {
       url.searchParams.set("roomId", roomId);
       url.searchParams.set("playerId", (resume as OnlineResumeRecord).playerId);

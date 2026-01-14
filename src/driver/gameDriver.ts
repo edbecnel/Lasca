@@ -35,3 +35,45 @@ export interface GameDriver {
   getHistory(): Array<{ index: number; toMove: "B" | "W"; isCurrent: boolean; notation: string }>;
   getHistoryCurrent(): GameState | null;
 }
+
+/**
+ * Runtime-online driver surface area used by the UI/controller.
+ *
+ * IMPORTANT: UI code should prefer `driver.mode === "online"` over `instanceof`
+ * checks, because bundlers/dev-servers can duplicate module instances and break
+ * `instanceof` across package boundaries.
+ */
+export interface OnlineGameDriver extends GameDriver {
+  readonly mode: "online";
+
+  getRoomId(): string | null;
+  getPlayerColor(): "W" | "B" | null;
+
+  /**
+   * Starts realtime server push (WebSockets preferred, SSE fallback).
+   * Returns true if realtime was started, else false.
+   */
+  startRealtime(onUpdated: () => void): boolean;
+
+  /** Subscribe to realtime events (WS/SSE unified). */
+  onSseEvent(eventName: string, cb: (payload: any) => void): () => void;
+
+  /** Polling fallback: fetch the latest snapshot and apply it. */
+  fetchLatest(): Promise<boolean>;
+
+  /**
+   * Online-only: finalize a capture chain on the server.
+   * (Used by Dama/Damasca when finalization happens at end-of-sequence.)
+   */
+  finalizeCaptureChainRemote(
+    args:
+      | { rulesetId: "dama"; state: GameState; landing: string; jumpedSquares: Set<string> }
+      | { rulesetId: "damasca"; state: GameState; landing: string }
+  ): Promise<GameState & { didPromote?: boolean }>;
+
+  /** Online-only: end the current turn on the server (optionally with notation). */
+  endTurnRemote(notation?: string): Promise<GameState>;
+
+  /** Online-only: resign the game on the server. */
+  resignRemote(): Promise<GameState>;
+}

@@ -9,6 +9,8 @@ import type {
   FinalizeCaptureChainResponse,
   GetRoomSnapshotResponse,
   JoinRoomResponse,
+  ResignRequest,
+  ResignResponse,
   SubmitMoveResponse,
 } from "../shared/onlineProtocol.ts";
 import { hashGameState } from "../game/hashState.ts";
@@ -322,11 +324,23 @@ export class RemoteDriver implements GameDriver {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = (await res.json()) as any;
+    const raw = await res.text();
+    let json: any = null;
+    try {
+      json = raw ? JSON.parse(raw) : null;
+    } catch {
+      json = null;
+    }
     if (!res.ok) {
-      const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
+      const msg =
+        typeof json?.error === "string"
+          ? json.error
+          : raw && raw.trim()
+            ? raw.trim().slice(0, 200)
+            : `HTTP ${res.status}`;
       throw new Error(msg);
     }
+    if (json == null) throw new Error("Invalid JSON response");
     if (json?.error) throw new Error(String(json.error));
     return json as TRes;
   }
@@ -334,11 +348,23 @@ export class RemoteDriver implements GameDriver {
   private async getJson<TRes>(path: string): Promise<TRes> {
     const { serverUrl } = this.requireIds();
     const res = await fetch(`${serverUrl}${path}`);
-    const json = (await res.json()) as any;
+    const raw = await res.text();
+    let json: any = null;
+    try {
+      json = raw ? JSON.parse(raw) : null;
+    } catch {
+      json = null;
+    }
     if (!res.ok) {
-      const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
+      const msg =
+        typeof json?.error === "string"
+          ? json.error
+          : raw && raw.trim()
+            ? raw.trim().slice(0, 200)
+            : `HTTP ${res.status}`;
       throw new Error(msg);
     }
+    if (json == null) throw new Error("Invalid JSON response");
     if (json?.error) throw new Error(String(json.error));
     return json as TRes;
   }
@@ -435,6 +461,16 @@ export class RemoteDriver implements GameDriver {
       ...(notation ? { notation } : {}),
     };
     const res = await this.postJson<EndTurnRequest, EndTurnResponse>("/api/endTurn", req);
+    return this.applySnapshot((res as any).snapshot).next;
+  }
+
+  async resignRemote(): Promise<GameState> {
+    const ids = this.requireIds();
+    const req: ResignRequest = {
+      roomId: ids.roomId,
+      playerId: ids.playerId,
+    };
+    const res = await this.postJson<ResignRequest, ResignResponse>("/api/resign", req);
     return this.applySnapshot((res as any).snapshot).next;
   }
 

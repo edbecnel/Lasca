@@ -62,4 +62,55 @@ describe("MP online", () => {
     await closing;
     await rmWithRetries(tmpRoot);
   }, 30_000);
+
+  it("honors preferredColor for create/join", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-pref-colors-"));
+    const gamesDir = path.join(tmpRoot, "games");
+    const s = await startLascaServer({ port: 0, gamesDir });
+
+    const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+    const history = new HistoryManager();
+    history.push(initial);
+
+    const createRes = await fetch(`${s.url}/api/create`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        variantId: "lasca_7_classic",
+        preferredColor: "B",
+        snapshot: {
+          state: serializeWireGameState(initial),
+          history: serializeWireHistory(history.exportSnapshots()),
+          stateVersion: 0,
+        },
+      }),
+    }).then((r) => r.json() as Promise<any>);
+
+    expect(createRes.error).toBeUndefined();
+    expect(createRes.color).toBe("B");
+
+    const joinTaken = await fetch(`${s.url}/api/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId: createRes.roomId, preferredColor: "B" }),
+    }).then((r) => r.json() as Promise<any>);
+
+    expect(String(joinTaken.error ?? "").toLowerCase()).toContain("color");
+    expect(String(joinTaken.error ?? "").toLowerCase()).toContain("taken");
+
+    const joinRes = await fetch(`${s.url}/api/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId: createRes.roomId, preferredColor: "W" }),
+    }).then((r) => r.json() as Promise<any>);
+
+    expect(joinRes.error).toBeUndefined();
+    expect(joinRes.roomId).toBe(createRes.roomId);
+    expect(joinRes.playerId).not.toBe(createRes.playerId);
+    expect(joinRes.color).toBe("W");
+
+    const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
+    await closing;
+    await rmWithRetries(tmpRoot);
+  }, 30_000);
 });

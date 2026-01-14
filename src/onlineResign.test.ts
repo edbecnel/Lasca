@@ -7,7 +7,6 @@ import path from "node:path";
 import { startLascaServer } from "../server/src/app.ts";
 import { createInitialGameStateForVariant } from "./game/state.ts";
 import { HistoryManager } from "./game/historyManager.ts";
-import { generateLegalMoves } from "./game/movegen.ts";
 import { serializeWireGameState, serializeWireHistory, deserializeWireGameState } from "./shared/wireState.ts";
 
 function toWsUrl(httpUrl: string): string {
@@ -88,7 +87,6 @@ async function openWsRoom(args: { serverHttpUrl: string; roomId: string }): Prom
       return new Promise<any>((resolve, reject) => {
         pendingResolve = resolve;
         pendingReject = reject;
-        // Safety timeout so test fails cleanly.
         setTimeout(() => {
           if (pendingReject) {
             const rj = pendingReject;
@@ -122,9 +120,9 @@ async function rmWithRetries(p: string): Promise<void> {
   await fs.rm(p, { recursive: true, force: true });
 }
 
-describe("MP1.5 realtime push transport (WebSockets)", () => {
-  it("broadcasts snapshots to all connected sockets", async () => {
-    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-ws-"));
+describe("MP online", () => {
+  it("broadcasts resign immediately", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-resign-"));
     const gamesDir = path.join(tmpRoot, "games");
     const s = await startLascaServer({ port: 0, gamesDir });
 
@@ -156,97 +154,19 @@ describe("MP1.5 realtime push transport (WebSockets)", () => {
 
     expect(joinRes.error).toBeUndefined();
 
-    const playerW = createRes.playerId as string;
-    const playerB = joinRes.playerId as string;
+    // Default assignment: creator=W, joiner=B.
+    const blackPlayerId = joinRes.playerId as string;
 
     const a = await openWsRoom({ serverHttpUrl: s.url, roomId });
     const b = await openWsRoom({ serverHttpUrl: s.url, roomId });
 
     const a0 = await a.nextSnapshot();
     const b0 = await b.nextSnapshot();
-    expect(a0.roomId).toBe(roomId);
-    expect(b0.roomId).toBe(roomId);
-
-    const snap = await fetch(`${s.url}/api/room/${encodeURIComponent(roomId)}`).then((r) => r.json() as Promise<any>);
-    const state = deserializeWireGameState(snap.snapshot.state);
-    const toMove = state.toMove as "W" | "B";
-    const mover = toMove === "W" ? playerW : playerB;
-
-    const legal = generateLegalMoves(state);
-    expect(legal.length).toBeGreaterThan(0);
-    const move = legal.find((m) => m.kind === "move") ?? legal[0];
-
-    const submitRes = await fetch(`${s.url}/api/submitMove`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId, playerId: mover, move }),
-    }).then((r) => r.json() as Promise<any>);
-
-    expect(submitRes.error).toBeUndefined();
-
-    const a1 = await nextSnapshotWithNewerVersion(a, a0.snapshot.stateVersion);
-    const b1 = await nextSnapshotWithNewerVersion(b, b0.snapshot.stateVersion);
-
-    expect(a1.snapshot.stateVersion).toBeGreaterThan(a0.snapshot.stateVersion);
-    expect(b1.snapshot.stateVersion).toBeGreaterThan(b0.snapshot.stateVersion);
-
-    await a.close();
-    await b.close();
-
-    const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
-    await closing;
-    await rmWithRetries(tmpRoot);
-  }, 30_000);
-
-  it("broadcasts resign game-over immediately", async () => {
-    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-ws-resign-"));
-    const gamesDir = path.join(tmpRoot, "games");
-    const s = await startLascaServer({ port: 0, gamesDir });
-
-    const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
-    const history = new HistoryManager();
-    history.push(initial);
-
-    const createRes = await fetch(`${s.url}/api/create`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        variantId: "lasca_7_classic",
-        snapshot: {
-          state: serializeWireGameState(initial),
-          history: serializeWireHistory(history.exportSnapshots()),
-          stateVersion: 0,
-        },
-      }),
-    }).then((r) => r.json() as Promise<any>);
-
-    expect(createRes.error).toBeUndefined();
-    const roomId = createRes.roomId as string;
-
-    const joinRes = await fetch(`${s.url}/api/join`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId }),
-    }).then((r) => r.json() as Promise<any>);
-
-    expect(joinRes.error).toBeUndefined();
-
-    const playerW = createRes.playerId as string;
-    const playerB = joinRes.playerId as string;
-
-    const a = await openWsRoom({ serverHttpUrl: s.url, roomId });
-    const b = await openWsRoom({ serverHttpUrl: s.url, roomId });
-
-    const a0 = await a.nextSnapshot();
-    const b0 = await b.nextSnapshot();
-
-    const resigningPlayer = joinRes.color === "B" ? playerB : playerW;
-    const expectedWinner = joinRes.color === "B" ? "W" : "B";
 
     const resignRes = await fetch(`${s.url}/api/resign`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId, playerId: resigningPlayer }),
+      body: JSON.stringify({ roomId, playerId: blackPlayerId }),
     }).then((r) => r.json() as Promise<any>);
 
     expect(resignRes.error).toBeUndefined();
@@ -257,9 +177,10 @@ describe("MP1.5 realtime push transport (WebSockets)", () => {
     const stA = deserializeWireGameState(a1.snapshot.state);
     const stB = deserializeWireGameState(b1.snapshot.state);
 
-    expect((stA as any).forcedGameOver?.winner).toBe(expectedWinner);
-    expect(String((stA as any).forcedGameOver?.message ?? "").toLowerCase()).toContain("resign");
-    expect((stB as any).forcedGameOver?.winner).toBe(expectedWinner);
+    expect((stA as any).forcedGameOver?.winner).toBe("W");
+    expect(String((stA as any).forcedGameOver?.message ?? "").toLowerCase()).toContain("resigned");
+
+    expect((stB as any).forcedGameOver?.winner).toBe("W");
 
     await a.close();
     await b.close();

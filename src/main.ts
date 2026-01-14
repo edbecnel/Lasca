@@ -21,7 +21,7 @@ import { installHoldDrag } from "./ui/holdDrag";
 import { ACTIVE_VARIANT_ID } from "./variants/activeVariant";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import { createDriverAsync } from "./driver/createDriver.ts";
-import { RemoteDriver } from "./driver/remoteDriver.ts";
+import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
@@ -45,9 +45,10 @@ function writeBoolPref(key: string, value: boolean): void {
 function updatePlayerColorBadge(driver: unknown): void {
   const el = document.getElementById("playerColorBadge") as HTMLElement | null;
   if (!el) return;
-  if (!(driver instanceof RemoteDriver)) return;
+  const anyDriver = driver as any;
+  if (!anyDriver || anyDriver.mode !== "online" || typeof anyDriver.getPlayerColor !== "function") return;
 
-  const color = driver.getPlayerColor();
+  const color = (anyDriver as OnlineGameDriver).getPlayerColor();
   if (color !== "W" && color !== "B") return;
 
   el.textContent = color === "W" ? "⚪" : "⚫";
@@ -171,9 +172,38 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   bindEvaluationPanel(controller);
 
-  // AI (human vs AI / AI vs AI)
-  const aiManager = new AIManager(controller);
-  aiManager.bind();
+  // Online (2 players): disable in-game AI controls entirely.
+  if (driver.mode === "online") {
+    const aiSection = document.querySelector(
+      '.panelSection[data-section="ai"]',
+    ) as HTMLElement | null;
+    if (aiSection) {
+      aiSection.style.display = "none";
+    }
+
+    const elW = document.getElementById("aiWhiteSelect") as HTMLSelectElement | null;
+    const elB = document.getElementById("aiBlackSelect") as HTMLSelectElement | null;
+    if (elW) {
+      elW.value = "human";
+      elW.disabled = true;
+    }
+    if (elB) {
+      elB.value = "human";
+      elB.disabled = true;
+    }
+    const elDelay = document.getElementById("aiDelay") as HTMLInputElement | null;
+    const elDelayReset = document.getElementById("aiDelayReset") as HTMLButtonElement | null;
+    const elPause = document.getElementById("aiPauseBtn") as HTMLButtonElement | null;
+    const elStep = document.getElementById("aiStepBtn") as HTMLButtonElement | null;
+    if (elDelay) elDelay.disabled = true;
+    if (elDelayReset) elDelayReset.disabled = true;
+    if (elPause) elPause.disabled = true;
+    if (elStep) elStep.disabled = true;
+  } else {
+    // AI (human vs AI / AI vs AI)
+    const aiManager = new AIManager(controller);
+    aiManager.bind();
+  }
 
 
   // Wire up move hints toggle
@@ -362,10 +392,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   const resignBtn = document.getElementById("resignBtn") as HTMLButtonElement | null;
   if (resignBtn) {
     resignBtn.addEventListener("click", () => {
-      const currentPlayer = controller.getState().toMove === "B" ? "Black" : "White";
+      const localColor =
+        driver.mode === "online"
+          ? (driver as OnlineGameDriver).getPlayerColor()
+          : controller.getState().toMove;
+      const currentPlayer = localColor === "B" ? "Black" : localColor === "W" ? "White" : "—";
       const confirmed = confirm(`Are you sure you want to resign as ${currentPlayer}?`);
       if (confirmed) {
-        controller.resign();
+        void controller.resign();
       }
     });
   }

@@ -25,6 +25,8 @@ import type {
   EndTurnRequest,
   EndTurnResponse,
   GetRoomSnapshotResponse,
+  ResignRequest,
+  ResignResponse,
   RoomId,
   PlayerId,
   PlayerColor,
@@ -858,12 +860,15 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
       const timeControl: TimeControl = isValidTimeControl((body as any).timeControl) ? (body as any).timeControl : { mode: "none" };
 
+      const preferredColor = (body as any)?.preferredColor;
+      const creatorColor: PlayerColor = preferredColor === "B" || preferredColor === "W" ? preferredColor : "W";
+
       const room: Room = {
         roomId,
         state: aligned,
         history,
-        players: new Map([[playerId, "W"]]),
-        colorsTaken: new Set(["W"]),
+        players: new Map([[playerId, creatorColor]]),
+        colorsTaken: new Set([creatorColor]),
         variantId,
         stateVersion: 0,
         rulesVersion: SUPPORTED_RULES_VERSION,
@@ -899,7 +904,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const response: CreateRoomResponse = {
         roomId,
         playerId,
-        color: "W",
+        color: creatorColor,
         snapshot: snapshotForRoom(room),
         presence: presenceForRoom(room),
         timeControl: room.timeControl,
@@ -923,7 +928,17 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const room = await requireRoom(roomId);
       touchClock(room);
       await maybeForceClockTimeout(room);
-      const color = nextColor(room);
+
+      const preferredColor = (body as any)?.preferredColor;
+      let color: PlayerColor | null = null;
+      if (preferredColor === "W" || preferredColor === "B") {
+        // Enforce explicit seat choice.
+        const taken = new Set<PlayerColor>(Array.from(room.players.values()));
+        if (taken.has(preferredColor)) throw new Error("Color taken");
+        color = preferredColor;
+      } else {
+        color = nextColor(room);
+      }
       if (!color) throw new Error("Room full");
 
       const playerId: PlayerId = randId();
@@ -1136,6 +1151,61 @@ export function createLascaApp(opts: ServerOpts = {}): {
       // eslint-disable-next-line no-console
       console.error("[lasca-server] endTurn error", msg);
       const response: EndTurnResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  app.post("/api/resign", async (req, res) => {
+    try {
+      const body = req.body as ResignRequest;
+      const room = await requireRoom(body.roomId);
+      touchClock(room);
+      await maybeForceClockTimeout(room);
+      const color = requirePlayer(room, body.playerId);
+      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+      if (isRoomOver(room)) throw new Error("Game over");
+
+      const winner: PlayerColor = color === "W" ? "B" : "W";
+      const winnerName = winner === "W" ? "White" : "Black";
+      const loserName = color === "W" ? "White" : "Black";
+
+      room.state = {
+        ...(room.state as any),
+        forcedGameOver: {
+          winner,
+          reasonCode: "RESIGN",
+          message: `${loserName} resigned — ${winnerName} wins!`,
+        },
+      };
+
+      room.stateVersion += 1;
+      room.lastGameOverVersion = room.stateVersion;
+      await appendEvent(
+        gamesDir,
+        room.roomId,
+        makeGameOverEvent({
+          roomId: room.roomId,
+          stateVersion: room.stateVersion,
+          winner,
+          reason: "RESIGN",
+        })
+      );
+      await persistSnapshot(gamesDir, room);
+
+      const response: ResignResponse = {
+        snapshot: snapshotForRoom(room),
+        presence: presenceForRoom(room),
+        timeControl: room.timeControl,
+        clock: room.clock ?? undefined,
+      };
+      broadcastRoomSnapshot(room);
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Resign failed";
+      // eslint-disable-next-line no-console
+      console.error("[lasca-server] resign error", msg);
+      const response: ResignResponse = { error: msg };
       res.status(400).json(response);
     }
   });

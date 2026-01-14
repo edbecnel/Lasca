@@ -39,6 +39,7 @@ type OnlineQuery = {
   roomId: string | null;
   playerId: string | null;
   color: "W" | "B" | null;
+  prefColor: "W" | "B" | null;
 };
 
 type OnlineResumeRecord = {
@@ -156,7 +157,9 @@ function parseOnlineQuery(search: string, envServerUrl?: string | undefined): On
   const playerId = params.get("playerId");
   const c = params.get("color");
   const color = c === "W" || c === "B" ? c : null;
-  return { serverUrl, create, join, roomId, playerId, color };
+  const p = params.get("prefColor");
+  const prefColor = p === "W" || p === "B" ? p : null;
+  return { serverUrl, create, join, roomId, playerId, color, prefColor };
 }
 
 async function postJson<TReq, TRes>(serverUrl: string, path: string, body: TReq): Promise<TRes> {
@@ -165,22 +168,46 @@ async function postJson<TReq, TRes>(serverUrl: string, path: string, body: TReq)
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = (await res.json()) as any;
+  const raw = await res.text();
+  let json: any = null;
+  try {
+    json = raw ? JSON.parse(raw) : null;
+  } catch {
+    json = null;
+  }
   if (!res.ok) {
-    const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
+    const msg =
+      typeof json?.error === "string"
+        ? json.error
+        : raw && raw.trim()
+          ? raw.trim().slice(0, 200)
+          : `HTTP ${res.status}`;
     throw new Error(msg);
   }
+  if (json == null) throw new Error("Invalid JSON response");
   if (json?.error) throw new Error(String(json.error));
   return json as TRes;
 }
 
 async function getJson<TRes>(serverUrl: string, path: string): Promise<TRes> {
   const res = await fetch(`${serverUrl}${path}`);
-  const json = (await res.json()) as any;
+  const raw = await res.text();
+  let json: any = null;
+  try {
+    json = raw ? JSON.parse(raw) : null;
+  } catch {
+    json = null;
+  }
   if (!res.ok) {
-    const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
+    const msg =
+      typeof json?.error === "string"
+        ? json.error
+        : raw && raw.trim()
+          ? raw.trim().slice(0, 200)
+          : `HTTP ${res.status}`;
     throw new Error(msg);
   }
+  if (json == null) throw new Error("Invalid JSON response");
   if (json?.error) throw new Error(String(json.error));
   return json as TRes;
 }
@@ -212,12 +239,27 @@ export async function createDriverAsync(args: {
   if (q.create) {
     const variantId = args.state.meta?.variantId;
     if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
-    const res = await postJson<{ variantId: any; snapshot: WireSnapshot }, CreateRoomResponse>(
+    const res = await postJson<{ variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B" }, CreateRoomResponse>(
       q.serverUrl,
       "/api/create",
-      { variantId, snapshot: wireSnapshot }
+      { variantId, snapshot: wireSnapshot, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
     );
     const anyRes: any = res;
+
+    if ((import.meta as any)?.env?.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[online] create", {
+        serverUrl: q.serverUrl,
+        preferredColor: q.prefColor,
+        roomId: anyRes.roomId,
+        playerId: anyRes.playerId,
+        assignedColor: anyRes.color,
+      });
+    }
+
+    if (anyRes.roomId && anyRes.playerId) {
+      driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId });
+    }
     if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
     await driver.connectFromSnapshot(
       { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
@@ -237,8 +279,27 @@ export async function createDriverAsync(args: {
   // Join room
   if (q.join) {
     if (!q.roomId) throw new Error("Cannot join online room: missing roomId");
-    const res = await postJson<{ roomId: string }, JoinRoomResponse>(q.serverUrl, "/api/join", { roomId: q.roomId });
+    const res = await postJson<{ roomId: string; preferredColor?: "W" | "B" }, JoinRoomResponse>(
+      q.serverUrl,
+      "/api/join",
+      { roomId: q.roomId, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
+    );
     const anyRes: any = res;
+
+    if ((import.meta as any)?.env?.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[online] join", {
+        serverUrl: q.serverUrl,
+        roomId: q.roomId,
+        preferredColor: q.prefColor,
+        playerId: anyRes.playerId,
+        assignedColor: anyRes.color,
+      });
+    }
+
+    if (anyRes.roomId && anyRes.playerId) {
+      driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId });
+    }
     if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
     await driver.connectFromSnapshot(
       { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },

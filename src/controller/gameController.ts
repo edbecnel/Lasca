@@ -15,8 +15,8 @@ import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
+import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
-import { RemoteDriver } from "../driver/remoteDriver.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -90,23 +90,23 @@ export class GameController {
     if (!btn) return;
 
     btn.addEventListener("click", async () => {
-      if (!(this.driver instanceof RemoteDriver)) return;
-      const roomId = this.driver.getRoomId();
+      if (this.driver.mode !== "online") return;
+      const roomId = (this.driver as OnlineGameDriver).getRoomId();
       if (!roomId) return;
       await this.copyTextToClipboard(roomId);
     });
   }
 
   private isLocalPlayersTurn(): boolean {
-    if (!(this.driver instanceof RemoteDriver)) return true;
-    const color = this.driver.getPlayerColor();
+    if (this.driver.mode !== "online") return true;
+    const color = (this.driver as OnlineGameDriver).getPlayerColor();
     if (!color) return false;
     return this.state.toMove === color;
   }
 
   private startOnlinePolling(): void {
-    if (!(this.driver instanceof RemoteDriver)) return;
-    const remote = this.driver;
+    if (this.driver.mode !== "online") return;
+    const remote = this.driver as OnlineGameDriver;
     if (this.onlinePollTimer || this.onlineRealtimeEnabled) return;
 
     // Prefer realtime server push (WebSockets; falls back to SSE). Falls back to polling if unavailable.
@@ -256,7 +256,7 @@ export class GameController {
     // In online mode, the RemoteDriver may have already applied a server snapshot
     // during startup (create/join/resume). Sync controller state to the driver so
     // the board and history panel are consistent immediately.
-    if (this.driver instanceof RemoteDriver) {
+    if (this.driver.mode === "online") {
       this.state = this.driver.getState();
       this.renderAuthoritative();
     }
@@ -420,9 +420,10 @@ export class GameController {
   redo(): void {
     const nextState = this.driver.redo();
     if (nextState) {
-      // Redo should also work after undoing out of a terminal state.
+      // Allow redoing out of terminal states.
       this.isGameOver = false;
 
+      // Cancel any transient UI timers from the previous position.
       if (this.bannerTimer) {
         window.clearTimeout(this.bannerTimer);
         this.bannerTimer = null;
@@ -546,14 +547,29 @@ export class GameController {
     return this.state;
   }
 
-  resign(): void {
+  async resign(): Promise<void> {
     if (this.isGameOver) return;
-    
-    // Current player resigns, so the other player wins
+
+    if (this.driver.mode === "online") {
+      try {
+        const next = await (this.driver as OnlineGameDriver).resignRemote();
+        // Clear selection/overlays even if setState exits early on game-over.
+        this.clearSelection();
+        this.setState(next);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[controller] resign failed", err);
+        const msg = err instanceof Error ? err.message : "Resign failed";
+        this.showBanner(msg, 1500);
+      }
+      return;
+    }
+
+    // Local: current player resigns, so the other player wins
     const winner = this.state.toMove === "B" ? "W" : "B";
     const winnerName = winner === "B" ? "Black" : "White";
     const loserName = this.state.toMove === "B" ? "Black" : "White";
-    
+
     this.isGameOver = true;
     this.clearSelection();
     this.showBanner(`${loserName} resigned — ${winnerName} wins!`, 0);
@@ -632,7 +648,7 @@ export class GameController {
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
     const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
     const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
-    const isOnline = this.driver instanceof RemoteDriver;
+    const isOnline = this.driver.mode === "online";
 
     if (elNewGame) elNewGame.disabled = isOnline;
     if (elLoadGame) elLoadGame.disabled = isOnline;
@@ -641,8 +657,8 @@ export class GameController {
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
     if (elRoomId) {
-      if (this.driver instanceof RemoteDriver) {
-        const roomId = this.driver.getRoomId();
+      if (this.driver.mode === "online") {
+        const roomId = (this.driver as OnlineGameDriver).getRoomId();
         elRoomId.textContent = roomId ?? "—";
         if (elCopy) elCopy.disabled = !roomId;
       } else {
@@ -879,9 +895,9 @@ export class GameController {
       // In online mode, a failed submit often means our local view is stale
       // (opponent moved, grace timeout fired, etc). Resync once so UI doesn't
       // stay in an inconsistent state (e.g. still showing Select while server is over).
-      if (this.driver instanceof RemoteDriver) {
+      if (this.driver.mode === "online") {
         try {
-          await this.driver.fetchLatest();
+          await (this.driver as OnlineGameDriver).fetchLatest();
           this.state = this.driver.getState();
           this.lockedCaptureFrom = null;
           this.lockedCaptureDir = null;
@@ -971,8 +987,8 @@ export class GameController {
         if (isDama) {
           // Dama promotes only at the end of the sequence; if we ever get here,
           // still finalize the chain correctly.
-          if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
-            this.state = await this.driver.finalizeCaptureChainRemote({
+          if (this.driver.mode === "online") {
+            this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
               rulesetId: "dama",
               state: this.state,
               landing: move.to,
@@ -988,8 +1004,8 @@ export class GameController {
           }
         } else if (isDamasca) {
           // Damasca should not promote mid-chain, but finalize defensively.
-          if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
-            this.state = await this.driver.finalizeCaptureChainRemote({
+          if (this.driver.mode === "online") {
+            this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
               rulesetId: "damasca",
               state: this.state,
               landing: move.to,
@@ -1003,12 +1019,12 @@ export class GameController {
           }
         }
         // Switch turn now
-        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+        if (this.driver.mode === "online") {
           const separator = this.currentTurnHasCapture ? " × " : " → ";
           const boardSize = this.state.meta?.boardSize ?? 7;
           const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
           try {
-            this.state = await this.driver.endTurnRemote(notation);
+            this.state = await (this.driver as OnlineGameDriver).endTurnRemote(notation);
           } catch (err) {
             const msg = err instanceof Error ? err.message : "End turn failed";
             this.showBanner(msg, 2500);
@@ -1032,7 +1048,7 @@ export class GameController {
         this.clearSelection();
         
         // Record state in history at turn boundary
-        if (!(this.driver.mode === "online" && this.driver instanceof RemoteDriver)) {
+        if (this.driver.mode !== "online") {
           const separator = this.currentTurnHasCapture ? " × " : " → ";
           const boardSize = this.state.meta?.boardSize ?? 7;
           const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
@@ -1082,8 +1098,8 @@ export class GameController {
       
       // No more captures, switch turn and end
       if (isDama) {
-        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
-          this.state = await this.driver.finalizeCaptureChainRemote({
+        if (this.driver.mode === "online") {
+          this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
             rulesetId: "dama",
             state: this.state,
             landing: move.to,
@@ -1098,8 +1114,8 @@ export class GameController {
           });
         }
       } else if (isDamasca) {
-        if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
-          this.state = await this.driver.finalizeCaptureChainRemote({
+        if (this.driver.mode === "online") {
+          this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
             rulesetId: "damasca",
             state: this.state,
             landing: move.to,
@@ -1112,12 +1128,12 @@ export class GameController {
           });
         }
       }
-      if (this.driver.mode === "online" && this.driver instanceof RemoteDriver) {
+      if (this.driver.mode === "online") {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
         const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
         try {
-          this.state = await this.driver.endTurnRemote(notation);
+          this.state = await (this.driver as OnlineGameDriver).endTurnRemote(notation);
         } catch (err) {
           const msg = err instanceof Error ? err.message : "End turn failed";
           this.showBanner(msg, 2500);
@@ -1142,7 +1158,7 @@ export class GameController {
       this.clearSelection();
       
       // Record state in history at turn boundary
-      if (!(this.driver.mode === "online" && this.driver instanceof RemoteDriver)) {
+      if (this.driver.mode !== "online") {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
         const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
@@ -1184,7 +1200,9 @@ export class GameController {
       const separator = this.currentTurnHasCapture ? " × " : " → ";
       const boardSize = this.state.meta?.boardSize ?? 7;
       const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
-      this.driver.pushHistory(this.state, notation);
+      if (this.driver.mode !== "online") {
+        this.driver.pushHistory(this.state, notation);
+      }
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");

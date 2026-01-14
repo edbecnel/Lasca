@@ -39,6 +39,8 @@ export type OnlineError = {
 export type CreateRoomRequest = {
   variantId: VariantId;
   snapshot: WireSnapshot;
+  /** Optional seat preference for the creator. If omitted, creator is White (back-compat). */
+  preferredColor?: PlayerColor;
   /** Immutable per game; only settable at create. */
   timeControl?: TimeControl;
 };
@@ -57,6 +59,8 @@ export type CreateRoomResponse =
 
 export type JoinRoomRequest = {
   roomId: RoomId;
+  /** Optional seat preference for the joiner. If omitted, server assigns the remaining color. */
+  preferredColor?: PlayerColor;
 };
 
 export type JoinRoomResponse =
@@ -119,6 +123,20 @@ export type EndTurnRequest = {
 };
 
 export type EndTurnResponse =
+  | {
+      snapshot: WireSnapshot;
+      presence?: PresenceByPlayerId;
+      timeControl?: TimeControl;
+      clock?: ClockState;
+    }
+  | OnlineError;
+
+export type ResignRequest = {
+  roomId: RoomId;
+  playerId: PlayerId;
+};
+
+export type ResignResponse =
   | {
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
