@@ -13,6 +13,7 @@ const LS_KEYS = {
 
   optMoveHints: "lasca.opt.moveHints",
   optAnimations: "lasca.opt.animations",
+  optShowResizeIcon: "lasca.opt.showResizeIcon",
   optBoardCoords: "lasca.opt.boardCoords",
   optThreefold: "lasca.opt.threefold",
 
@@ -207,8 +208,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const elOnlineRoomIdLabel = byId<HTMLElement>("launchOnlineRoomIdLabel");
   const elOnlineRoomId = byId<HTMLInputElement>("launchOnlineRoomId");
 
-  const elMoveHints = byId<HTMLInputElement>("launchMoveHints");
-  const elAnimations = byId<HTMLInputElement>("launchAnimations");
+  const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elThreefold = byId<HTMLInputElement>("launchThreefold");
 
@@ -257,8 +257,7 @@ window.addEventListener("DOMContentLoaded", () => {
   elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
   elOnlinePrefColor.value = readPreferredColor(LS_KEYS.onlinePrefColor, "auto");
 
-  elMoveHints.checked = readBool(LS_KEYS.optMoveHints, false);
-  elAnimations.checked = readBool(LS_KEYS.optAnimations, true);
+  elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
   elThreefold.checked = readBool(LS_KEYS.optThreefold, true);
 
@@ -386,6 +385,10 @@ window.addEventListener("DOMContentLoaded", () => {
     syncAvailability();
   });
 
+  elShowResizeIcon.addEventListener("change", () => {
+    writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
+  });
+
   elOnlineRoomId.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineRoomId, elOnlineRoomId.value);
     syncAvailability();
@@ -469,8 +472,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
     localStorage.setItem(LS_KEYS.theme, elTheme.value);
 
-    writeBool(LS_KEYS.optMoveHints, elMoveHints.checked);
-    writeBool(LS_KEYS.optAnimations, elAnimations.checked);
+    // Force these UI prefs.
+    writeBool(LS_KEYS.optMoveHints, false);
+    writeBool(LS_KEYS.optAnimations, true);
+    writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
     writeBool(LS_KEYS.optThreefold, elThreefold.checked);
 

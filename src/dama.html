@@ -459,13 +459,6 @@
         transform: scale(1.05);
       }
 
-      /* Show on touch devices (likely tablets/phones) */
-      @media (any-pointer: coarse) {
-        #boardHeightToggle {
-          display: flex;
-        }
-      }
-
       /* ===== Inspector (kept, but now inside right sidebar) ===== */
       #zoomHint {
         color: var(--panel-subtext);
@@ -1009,14 +1002,14 @@
               >
                 <input
                   type="checkbox"
-                  id="moveHintsToggle"
+                  id="showResizeIconToggle"
                   style="width: 16px; height: 16px; cursor: pointer"
                 />
                 <label
-                  for="moveHintsToggle"
+                  for="showResizeIconToggle"
                   style="font-size: 13px; cursor: pointer; user-select: none"
                 >
-                  Show move hints
+                  Show resize icon
                 </label>
               </div>
               <div
@@ -1027,40 +1020,7 @@
                   margin-left: 24px;
                 "
               >
-                Red = piece to capture<br />
-                Orange = landing position
-              </div>
-
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  margin-top: 12px;
-                "
-              >
-                <input
-                  type="checkbox"
-                  id="animationsToggle"
-                  checked
-                  style="width: 16px; height: 16px; cursor: pointer"
-                />
-                <label
-                  for="animationsToggle"
-                  style="font-size: 13px; cursor: pointer; user-select: none"
-                >
-                  Animations
-                </label>
-              </div>
-              <div
-                style="
-                  font-size: 11px;
-                  color: rgba(255, 255, 255, 0.6);
-                  margin-top: 6px;
-                  margin-left: 24px;
-                "
-              >
-                Smooth piece movement
+                Shows the ↕️ button on the board
               </div>
 
               <div

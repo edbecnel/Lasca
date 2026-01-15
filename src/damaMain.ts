@@ -36,6 +36,7 @@ const ACTIVE_VARIANT_ID: VariantId = getActiveDamaVariantId();
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
   animations: "lasca.opt.animations",
+  showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
   threefold: "lasca.opt.threefold",
 } as const;
@@ -89,6 +90,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked), activeVariant.boardSize);
   applyBoardCoords();
 
+  const showResizeIconToggle = document.getElementById("showResizeIconToggle") as HTMLInputElement | null;
+  const savedShowResizeIcon = readOptionalBoolPref(LS_OPT_KEYS.showResizeIcon);
+  if (showResizeIconToggle && savedShowResizeIcon !== null) {
+    showResizeIconToggle.checked = savedShowResizeIcon;
+  }
+
   initSplitLayout();
 
   const themeDropdown = document.getElementById("themeDropdown") as HTMLElement | null;
@@ -140,24 +147,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
 
-  // Apply startup preferences (if present) without changing defaults.
-  const savedMoveHints = readOptionalBoolPref(LS_OPT_KEYS.moveHints);
-  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
-  if (moveHintsToggle && savedMoveHints !== null) {
-    moveHintsToggle.checked = savedMoveHints;
-  }
-  if (moveHintsToggle) {
-    controller.setMoveHints(Boolean(moveHintsToggle.checked));
-  }
-
-  const savedAnimations = readOptionalBoolPref(LS_OPT_KEYS.animations);
-  const animationsToggle = document.getElementById("animationsToggle") as HTMLInputElement | null;
-  if (animationsToggle && savedAnimations !== null) {
-    animationsToggle.checked = savedAnimations;
-  }
-  if (animationsToggle) {
-    controller.setAnimations(Boolean(animationsToggle.checked));
-  }
+  // Force these display prefs.
+  controller.setMoveHints(false);
+  writeBoolPref(LS_OPT_KEYS.moveHints, false);
+  controller.setAnimations(true);
+  writeBoolPref(LS_OPT_KEYS.animations, true);
 
   const savedThreefold = readOptionalBoolPref(LS_OPT_KEYS.threefold);
   const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
@@ -201,22 +195,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     // AI (human vs AI / AI vs AI)
     const aiManager = new AIManager(controller);
     aiManager.bind();
-  }
-
-  // Wire up move hints toggle
-  if (moveHintsToggle) {
-    moveHintsToggle.addEventListener("change", () => {
-      controller.setMoveHints(moveHintsToggle.checked);
-      writeBoolPref(LS_OPT_KEYS.moveHints, moveHintsToggle.checked);
-    });
-  }
-
-  // Wire up animations toggle
-  if (animationsToggle) {
-    animationsToggle.addEventListener("change", () => {
-      controller.setAnimations(animationsToggle.checked);
-      writeBoolPref(LS_OPT_KEYS.animations, animationsToggle.checked);
-    });
   }
 
   if (boardCoordsToggle) {
@@ -447,6 +425,20 @@ window.addEventListener("DOMContentLoaded", async () => {
     const STORAGE_KEY = "lasca.boardHeightReduced";
     const POS_KEY = "lasca.boardHeightTogglePos";
 
+    const applyResizeIconVisibility = () => {
+      const showResizeIcon = showResizeIconToggle?.checked ?? (readOptionalBoolPref(LS_OPT_KEYS.showResizeIcon) ?? false);
+      boardHeightToggle.style.display = showResizeIcon ? "flex" : "none";
+
+      if (!showResizeIcon) {
+        centerArea.classList.remove("reduced-height");
+        boardHeightToggle.textContent = "↕️";
+        boardHeightToggle.title = "Adjust board height for bottom navigation bar";
+        localStorage.setItem(STORAGE_KEY, "false");
+      }
+    };
+
+    applyResizeIconVisibility();
+
     const isToggleVisible = () => window.getComputedStyle(boardHeightToggle).display !== "none";
 
     const drag = installHoldDrag(boardHeightToggle, {
@@ -502,6 +494,21 @@ window.addEventListener("DOMContentLoaded", async () => {
         centerArea.classList.remove("reduced-height");
       }
     };
+  }
+
+  if (showResizeIconToggle) {
+    showResizeIconToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.showResizeIcon, showResizeIconToggle.checked);
+      const boardHeightToggle = document.getElementById("boardHeightToggle") as HTMLButtonElement | null;
+      if (boardHeightToggle) {
+        boardHeightToggle.style.display = showResizeIconToggle.checked ? "flex" : "none";
+      }
+      const centerArea = document.getElementById("centerArea") as HTMLElement | null;
+      if (!showResizeIconToggle.checked && centerArea) {
+        centerArea.classList.remove("reduced-height");
+        localStorage.setItem("lasca.boardHeightReduced", "false");
+      }
+    });
   }
 
   // Dev-only: expose rerender/random that also sync controller state
