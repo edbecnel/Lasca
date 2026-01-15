@@ -190,4 +190,38 @@ describe("saveLoad", () => {
 
     expect(() => deserializeSaveData(legacy)).toThrow(/legacy 'hybrid' IDs/i);
   });
+
+  it("loads v3 current state when history snapshot is stale/mismatched", () => {
+    const save: any = {
+      saveVersion: 3,
+      variantId: "damasca_8",
+      rulesetId: "damasca",
+      boardSize: 8,
+      current: {
+        board: [["r0c0", [{ owner: "B", rank: "S" }]]],
+        toMove: "B",
+        phase: "idle",
+        meta: { variantId: "damasca_8", rulesetId: "damasca", boardSize: 8 },
+      },
+      history: {
+        // Stale history that doesn't match `current`.
+        states: [
+          {
+            board: [["r7c7", [{ owner: "W", rank: "S" }]]],
+            toMove: "W",
+            phase: "select",
+            meta: { variantId: "damasca_8", rulesetId: "damasca", boardSize: 8 },
+          },
+        ],
+        notation: [""],
+        currentIndex: 0,
+      },
+    };
+
+    const loaded = deserializeSaveData(save);
+    expect(Array.from(loaded.state.board.entries())).toEqual([["r0c0", [{ owner: "B", rank: "S" }]]]);
+    expect(loaded.state.toMove).toBe("B");
+    // Mismatched history should be dropped to avoid loading the wrong position.
+    expect(loaded.history).toBeUndefined();
+  });
 });

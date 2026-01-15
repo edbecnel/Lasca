@@ -195,6 +195,13 @@ export function deserializeSaveData(
   state: GameState;
   history?: { states: GameState[]; notation: string[]; currentIndex: number };
 } {
+  const stableBoardForCompare = (s: GameState): string => {
+    const entries = Array.from(s.board.entries())
+      .map(([k, stack]) => [k, stack.map((p) => `${p.owner}${p.rank}`).join(",")] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify({ toMove: s.toMove, board: entries });
+  };
+
   const expectedMeta = expected ? normalizeMetaFromVariantId(coerceMeta(expected) ?? defaultMeta()) : null;
 
   // v3: metadata wrapper (preferred)
@@ -250,10 +257,19 @@ export function deserializeSaveData(
     const currentIndex = Number.isInteger(v3.history.currentIndex) ? v3.history.currentIndex : states.length - 1;
 
     const historyCurrent = currentIndex >= 0 && currentIndex < states.length ? states[currentIndex] : null;
-    const aligned = historyCurrent ?? state;
+    if (!historyCurrent) {
+      // History is missing/invalid; fall back to the current position.
+      return { state };
+    }
+
+    // Some saves may contain a partial/incorrect history (e.g., only the initial position).
+    // In that case, prefer the explicitly saved current state so load restores the expected board.
+    if (stableBoardForCompare(historyCurrent) !== stableBoardForCompare(state)) {
+      return { state };
+    }
 
     return {
-      state: aligned,
+      state: historyCurrent,
       history: { states, notation, currentIndex },
     };
   }
