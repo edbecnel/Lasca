@@ -25,6 +25,20 @@ export interface GameState {
   };
 
   /**
+   * Damasca-specific endgame counter.
+   *
+   * When one side is reduced to a lone Officer (their only remaining piece) and
+   * the opponent has one or more Officers, the lone Officer must be captured
+   * within 10 moves.
+   *
+   * This is serialized (so it works for save/load and online play).
+   */
+  damascaLoneKingVsKings?: {
+    loneKingSide: Player;
+    plies: number;
+  };
+
+  /**
    * Ephemeral (not serialized): used by some rulesets to track multi-capture chain state.
    * Currently used by Damasca to remember if a soldier has reached the promotion row
    * at any point during a capture chain (promotion is applied at chain end).

@@ -13,6 +13,7 @@ import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
 import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
+import { endTurn } from "../game/endTurn.ts";
 import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
 import type { OnlineGameDriver } from "../driver/gameDriver.ts";
@@ -643,6 +644,7 @@ export class GameController {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
     const elMsg = document.getElementById("statusMessage");
+    const elLoneKingTimer = document.getElementById("statusLoneKingTimer");
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
@@ -656,6 +658,21 @@ export class GameController {
 
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
+
+    if (elLoneKingTimer) {
+      const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+      const lk = (this.state as any).damascaLoneKingVsKings as
+        | { loneKingSide: "B" | "W"; plies: number }
+        | undefined;
+      if (rulesetId === "damasca" && lk && Number.isFinite(lk.plies) && lk.plies > 0) {
+        const total = 10;
+        const remaining = Math.max(0, total - lk.plies);
+        const sideName = lk.loneKingSide === "B" ? "Black" : "White";
+        elLoneKingTimer.textContent = `${remaining} moves remaining (lone king: ${sideName})`;
+      } else {
+        elLoneKingTimer.textContent = "—";
+      }
+    }
     if (elRoomId) {
       if (this.driver.mode === "online") {
         const roomId = (this.driver as OnlineGameDriver).getRoomId();
@@ -1031,7 +1048,7 @@ export class GameController {
             return;
           }
         } else {
-          this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+          this.state = endTurn(this.state);
         }
 
         // In Dama, finalization may remove jumped pieces and/or promote.
@@ -1140,7 +1157,7 @@ export class GameController {
           return;
         }
       } else {
-        this.state = { ...this.state, toMove: this.state.toMove === "B" ? "W" : "B" };
+        this.state = endTurn(this.state);
       }
 
       // Dama may promote during finalization even in immediate-removal mode.

@@ -9,6 +9,15 @@ export interface SerializedGameState {
   toMove: "B" | "W";
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
+  forcedGameOver?: {
+    winner: "B" | "W";
+    reasonCode: string;
+    message: string;
+  };
+  damascaLoneKingVsKings?: {
+    loneKingSide: "B" | "W";
+    plies: number;
+  };
 }
 
 export interface SerializedHistory {
@@ -147,6 +156,8 @@ export function serializeGameState(state: GameState): SerializedGameState {
     toMove: state.toMove,
     phase: state.phase,
     meta: coerceMeta(state.meta) ?? undefined,
+    forcedGameOver: (state as any).forcedGameOver,
+    damascaLoneKingVsKings: (state as any).damascaLoneKingVsKings,
   };
 }
 
@@ -160,6 +171,8 @@ export function deserializeGameState(data: SerializedGameState): GameState {
     toMove: data.toMove,
     phase,
     meta: coerceMeta((data as any).meta) ?? undefined,
+    forcedGameOver: (data as any).forcedGameOver,
+    damascaLoneKingVsKings: (data as any).damascaLoneKingVsKings,
   };
 }
 

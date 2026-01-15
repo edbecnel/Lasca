@@ -2,6 +2,7 @@ import type { GameState } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 import { promoteIfNeeded } from "./promote.ts";
 import { parseNodeId } from "./coords.ts";
+import { endTurn } from "./endTurn.ts";
 
 /**
  * Damasca uses Lasca-style stacking capture transfer with Dama-style movement.
@@ -73,6 +74,13 @@ export function applyMoveDamasca(
   const tempState = { ...state, board: nextBoard };
   const didPromote = promoteIfNeeded(tempState, move.to);
 
-  const nextToMove = state.toMove === "B" ? "W" : "B";
-  return { ...state, board: nextBoard, toMove: nextToMove, phase: "idle", didPromote, captureChain: undefined };
+  const beforeTurnEnd: GameState = {
+    ...state,
+    board: nextBoard,
+    toMove: state.toMove,
+    phase: "idle",
+    captureChain: undefined,
+  };
+  const afterTurnEnd = endTurn(beforeTurnEnd);
+  return { ...afterTurnEnd, didPromote };
 }

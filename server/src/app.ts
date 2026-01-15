@@ -7,6 +7,7 @@ import WebSocket, { WebSocketServer, type RawData } from "ws";
 import { applyMove } from "../../src/game/applyMove.ts";
 import { finalizeDamaCaptureChain } from "../../src/game/damaCaptureChain.ts";
 import { finalizeDamascaCaptureChain } from "../../src/game/damascaCaptureChain.ts";
+import { endTurn } from "../../src/game/endTurn.ts";
 import { nodeIdToA1 } from "../../src/game/coordFormat.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
 import { checkCurrentPlayerLost } from "../../src/game/gameOver.ts";
@@ -1110,11 +1111,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
       const prevToMove = (room.state as any).toMove as PlayerColor;
-      room.state = {
-        ...(room.state as any),
-        toMove: room.state.toMove === "B" ? "W" : "B",
-        phase: "idle",
-      };
+      room.state = endTurn(room.state as any);
 
       const nextToMove = (room.state as any).toMove as PlayerColor;
       onTurnSwitch(room, prevToMove, nextToMove);

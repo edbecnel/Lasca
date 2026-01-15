@@ -7,6 +7,7 @@ import { RULES } from "../game/ruleset.ts";
 import { evaluateState } from "./evaluate.ts";
 import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
+import { endTurn } from "../game/endTurn.ts";
 import { parseNodeId } from "../game/coords.ts";
 
 type CaptureDir = { dr: number; dc: number };
@@ -145,7 +146,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
     } else if (rulesetId === "damasca") {
       nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
     }
-    nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
+    nextCtx.state = endTurn(nextCtx.state);
     nextCtx.lockedFrom = null;
     nextCtx.lockedDir = null;
     nextCtx.excludedJumpSquares.clear();
@@ -176,7 +177,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   } else if (rulesetId === "damasca") {
     nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
   }
-  nextCtx.state = { ...nextCtx.state, toMove: nextCtx.state.toMove === "B" ? "W" : "B" };
+  nextCtx.state = endTurn(nextCtx.state);
   nextCtx.lockedFrom = null;
   nextCtx.lockedDir = null;
   nextCtx.excludedJumpSquares.clear();

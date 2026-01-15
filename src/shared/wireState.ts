@@ -16,6 +16,10 @@ export type WireGameState = {
     message: string;
   };
   captureChain?: WireCaptureChain;
+  damascaLoneKingVsKings?: {
+    loneKingSide: "B" | "W";
+    plies: number;
+  };
 };
 
 export type WireHistory = {
@@ -38,6 +42,7 @@ export function serializeWireGameState(state: any): WireGameState {
     meta: state.meta,
     forcedGameOver: state.forcedGameOver,
     captureChain: state.captureChain,
+    damascaLoneKingVsKings: state.damascaLoneKingVsKings,
   };
 }
 
@@ -49,6 +54,7 @@ export function deserializeWireGameState(wire: WireGameState): any {
     meta: wire.meta,
     forcedGameOver: (wire as any).forcedGameOver,
     captureChain: wire.captureChain,
+    damascaLoneKingVsKings: (wire as any).damascaLoneKingVsKings,
   };
 }
 
