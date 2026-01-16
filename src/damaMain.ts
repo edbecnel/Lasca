@@ -39,6 +39,7 @@ const LS_OPT_KEYS = {
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
   threefold: "lasca.opt.threefold",
+  toasts: "lasca.opt.toasts",
 } as const;
 
 function readOptionalBoolPref(key: string): boolean | null {
@@ -160,6 +161,27 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
   if (threefoldToggle) {
     RULES.drawByThreefold = Boolean(threefoldToggle.checked);
+  }
+
+  const toastToggle = document.getElementById("toastToggle") as HTMLInputElement | null;
+  const savedToasts = readOptionalBoolPref(LS_OPT_KEYS.toasts);
+  if (toastToggle && savedToasts !== null) {
+    toastToggle.checked = savedToasts;
+  }
+  if (toastToggle && savedToasts === null) {
+    try {
+      const w = localStorage.getItem("lasca.ai.white") ?? "human";
+      const b = localStorage.getItem("lasca.ai.black") ?? "human";
+      const bothAI = w !== "human" && b !== "human";
+      if (bothAI) toastToggle.checked = false;
+    } catch {
+      // ignore (no localStorage)
+    }
+  }
+  if (toastToggle) {
+    toastToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.toasts, toastToggle.checked);
+    });
   }
 
   bindEvaluationPanel(controller);

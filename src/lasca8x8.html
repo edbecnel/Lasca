@@ -1105,6 +1105,38 @@
               >
                 Same position 3× = draw
               </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="toastToggle"
+                  checked
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="toastToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                >
+                  Show toast notifications
+                </label>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Shows a center-screen toast when it’s your turn
+              </div>
             </div>
           </div>
 
@@ -1497,21 +1529,6 @@
                 "
               >
                 Switches piece/board SVG defs at runtime (hot-swappable).
-              </div>
-            </div>
-          </div>
-
-          <div class="panelSection" id="messagesPanel" data-section="messages">
-            <div class="sectionHeader" data-toggle="messages">
-              <h3>Messages</h3>
-              <span class="collapseBtn">▼</span>
-            </div>
-            <div class="sectionContent">
-              <div
-                id="messagesBody"
-                style="font-size: 12px; color: rgba(255, 255, 255, 0.72)"
-              >
-                (Reserved for special messages, prompts, help, etc.)
               </div>
             </div>
           </div>

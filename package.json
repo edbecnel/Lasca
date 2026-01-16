@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bootstrap": "npm ci && npm --prefix server ci",
+    "audit:all": "npm audit && npm --prefix server audit",
+    "verify": "npm run -s audit:all && npm test && npm run build",
     "dev": "vite",
     "start": "vite",
     "online:server": "cross-env PORT=8788 npm --prefix server run start",

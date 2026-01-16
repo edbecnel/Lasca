@@ -11,14 +11,14 @@ export type WireGameState = {
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
   forcedGameOver?: {
-    winner: "B" | "W";
+    winner: "B" | "W" | null;
     reasonCode: string;
     message: string;
   };
   captureChain?: WireCaptureChain;
-  damascaLoneKingVsKings?: {
-    loneKingSide: "B" | "W";
-    plies: number;
+  damascaDeadPlay?: {
+    noProgressPlies: number;
+    officerOnlyPlies: number;
   };
 };
 
@@ -42,7 +42,7 @@ export function serializeWireGameState(state: any): WireGameState {
     meta: state.meta,
     forcedGameOver: state.forcedGameOver,
     captureChain: state.captureChain,
-    damascaLoneKingVsKings: state.damascaLoneKingVsKings,
+    damascaDeadPlay: state.damascaDeadPlay,
   };
 }
 
@@ -54,7 +54,7 @@ export function deserializeWireGameState(wire: WireGameState): any {
     meta: wire.meta,
     forcedGameOver: (wire as any).forcedGameOver,
     captureChain: wire.captureChain,
-    damascaLoneKingVsKings: (wire as any).damascaLoneKingVsKings,
+    damascaDeadPlay: (wire as any).damascaDeadPlay,
   };
 }
 

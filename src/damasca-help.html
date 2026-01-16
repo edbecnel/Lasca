@@ -383,22 +383,27 @@
           </li>
         </ul>
 
-        <h3>Endgame (lone king timeout)</h3>
+        <h3>Dead-play / infinite-loop end conditions (adjudicated)</h3>
         <ul>
           <li>
-            If one side is reduced to a <strong>lone Officer</strong> (their
-            only remaining piece) and the opponent has
-            <strong>one or more Officers</strong>, the lone Officer must be
-            captured within <strong>10 moves</strong>.
+            <strong>Threefold repetition:</strong> if the exact same position
+            (including stack composition/order) occurs three times, the game
+            ends immediately and is <strong>adjudicated</strong>.
           </li>
           <li>
-            If the lone Officer is not captured in time, the winner is decided
-            by a <strong>material count</strong>.
+            <strong>No-progress counter:</strong> if there is no capture,
+            promotion, or Soldier advance for <strong>40 plies</strong>, the
+            game ends and is <strong>adjudicated</strong>.
           </li>
           <li>
-            When this rule is active, the game shows a countdown in the left
-            panel:
-            <strong>Status → Lone king timer</strong>.
+            <strong>Officer-only fast path:</strong> if
+            <strong>only</strong> Officers move (no Soldier moves at all) for
+            <strong>30 plies</strong>, the game ends and is
+            <strong>adjudicated</strong>.
+          </li>
+          <li>
+            The current counters are shown in the left panel:
+            <strong>Status → Dead-play counters</strong>.
           </li>
         </ul>
       </div>

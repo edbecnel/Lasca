@@ -19,23 +19,20 @@ export interface GameState {
    * When present, the game should be treated as finished.
    */
   forcedGameOver?: {
-    winner: Player;
+    winner: Player | null;
     reasonCode: string;
     message: string;
   };
 
   /**
-   * Damasca-specific endgame counter.
+   * Damasca-specific dead-play counters.
    *
-   * When one side is reduced to a lone Officer (their only remaining piece) and
-   * the opponent has one or more Officers, the lone Officer must be captured
-   * within 10 moves.
-   *
-   * This is serialized (so it works for save/load and online play).
+   * Plies (half-moves) are counted and reset based on captures, promotions,
+   * and soldier-advance to prevent endless non-progress play.
    */
-  damascaLoneKingVsKings?: {
-    loneKingSide: Player;
-    plies: number;
+  damascaDeadPlay?: {
+    noProgressPlies: number;
+    officerOnlyPlies: number;
   };
 
   /**

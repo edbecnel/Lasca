@@ -55,7 +55,7 @@ export type MoveAppliedEvent = PersistedEventBase & {
 
 export type GameOverEvent = PersistedEventBase & {
   type: "GAME_OVER";
-  winner: "B" | "W";
+  winner: "B" | "W" | null;
   reason?: string;
 };
 
@@ -105,13 +105,22 @@ async function ensureRoomDir(gamesDir: string, roomId: RoomId): Promise<void> {
   await fs.mkdir(roomDir(gamesDir, roomId), { recursive: true });
 }
 
+async function gamesDirExists(gamesDir: string): Promise<boolean> {
+  return fs
+    .stat(gamesDir)
+    .then(() => true)
+    .catch(() => false);
+}
+
 export async function appendEvent(gamesDir: string, roomId: RoomId, ev: PersistedEvent): Promise<void> {
+  if (!(await gamesDirExists(gamesDir))) return;
   await ensureRoomDir(gamesDir, roomId);
   const p = eventsPath(gamesDir, roomId);
   await fs.appendFile(p, `${JSON.stringify(ev)}\n`, "utf8");
 }
 
 export async function writeSnapshotAtomic(gamesDir: string, roomId: RoomId, file: PersistedSnapshotFile): Promise<void> {
+  if (!(await gamesDirExists(gamesDir))) return;
   await ensureRoomDir(gamesDir, roomId);
   const p = snapshotPath(gamesDir, roomId);
   const tmp = `${p}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
@@ -307,7 +316,7 @@ export function makeMoveAppliedEvent(args: {
 export function makeGameOverEvent(args: {
   roomId: RoomId;
   stateVersion: number;
-  winner: "B" | "W";
+  winner: "B" | "W" | null;
   reason?: string;
 }): GameOverEvent {
   return {

@@ -10,13 +10,13 @@ export interface SerializedGameState {
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
   forcedGameOver?: {
-    winner: "B" | "W";
+    winner: "B" | "W" | null;
     reasonCode: string;
     message: string;
   };
-  damascaLoneKingVsKings?: {
-    loneKingSide: "B" | "W";
-    plies: number;
+  damascaDeadPlay?: {
+    noProgressPlies: number;
+    officerOnlyPlies: number;
   };
 }
 
@@ -157,7 +157,7 @@ export function serializeGameState(state: GameState): SerializedGameState {
     phase: state.phase,
     meta: coerceMeta(state.meta) ?? undefined,
     forcedGameOver: (state as any).forcedGameOver,
-    damascaLoneKingVsKings: (state as any).damascaLoneKingVsKings,
+    damascaDeadPlay: (state as any).damascaDeadPlay,
   };
 }
 
@@ -172,7 +172,7 @@ export function deserializeGameState(data: SerializedGameState): GameState {
     phase,
     meta: coerceMeta((data as any).meta) ?? undefined,
     forcedGameOver: (data as any).forcedGameOver,
-    damascaLoneKingVsKings: (data as any).damascaLoneKingVsKings,
+    damascaDeadPlay: (data as any).damascaDeadPlay,
   };
 }
 

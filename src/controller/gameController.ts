@@ -8,6 +8,11 @@ import { RULES } from "../game/ruleset.ts";
 import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
+import {
+  adjudicateDamascaDeadPlay,
+  DAMASCA_NO_PROGRESS_LIMIT_PLIES,
+  DAMASCA_OFFICER_ONLY_LIMIT_PLIES,
+} from "../game/damascaDeadPlay.ts";
 import { animateStack } from "../render/animateMove.ts";
 import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
 import { nodeIdToA1 } from "../game/coordFormat.ts";
@@ -44,12 +49,21 @@ export class GameController {
   private driver: GameDriver;
   private historyListeners: Array<(reason: HistoryChangeReason) => void> = [];
   private inputEnabled: boolean = true;
+  private lastInputEnabled: boolean = true;
   private currentTurnNodes: string[] = []; // Track node IDs visited in current turn
   private currentTurnHasCapture: boolean = false; // Track if current turn includes captures
   private repetitionCounts: Map<string, number> = new Map();
   private onlinePollTimer: number | null = null;
   private onlineRealtimeEnabled: boolean = false;
   private onlineTransportStatus: "connected" | "reconnecting" = "connected";
+  private lastDeadPlayWarning: string | null = null;
+  private lastGameOverToast: string | null = null;
+  private lastLocalTurn: boolean | null = null;
+  private lastToastToMove: GameState["toMove"] | null = null;
+  private toastTimer: number | null = null;
+  private toastEl: HTMLDivElement | null = null;
+
+  private static readonly TOAST_PREF_KEY = "lasca.opt.toasts";
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
     if (!text) return false;
@@ -118,6 +132,9 @@ export class GameController {
       if (this.onlineTransportStatus === status) return;
       this.onlineTransportStatus = status;
       this.updatePanel();
+
+      // If we became connected and it's our turn, show a toast.
+      this.maybeToastTurnChange();
     });
 
     const startedRealtime = remote.startRealtime(() => {
@@ -138,6 +155,9 @@ export class GameController {
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
       this.updatePanel();
+
+      // Opponent updates can make it our turn.
+      this.maybeToastTurnChange();
 
       this.fireHistoryChange("move");
     });
@@ -170,6 +190,9 @@ export class GameController {
         this.checkAndHandleCurrentPlayerLost();
         this.updatePanel();
 
+        // Poll updates can make it our turn.
+        this.maybeToastTurnChange();
+
         // Remote snapshots can advance history/notation; notify listeners so UI updates
         // (e.g., move list) without requiring local input.
         this.fireHistoryChange("move");
@@ -177,6 +200,134 @@ export class GameController {
         // Ignore transient network errors; server is best-effort.
       }
     }, 750);
+  }
+
+  private isBothSidesAIFromPrefs(): boolean {
+    // Observer mode heuristic: if both AI difficulty prefs are set to non-human.
+    // Keep this local (no imports) to avoid cycles; just treat anything but "human" as AI.
+    if (this.driver.mode === "online") return false;
+    if (typeof localStorage === "undefined") return false;
+    const w = localStorage.getItem("lasca.ai.white");
+    const b = localStorage.getItem("lasca.ai.black");
+    return Boolean(w && w !== "human" && b && b !== "human");
+  }
+
+  private readToastPref(): boolean {
+    if (typeof localStorage === "undefined") return true;
+    const raw = localStorage.getItem(GameController.TOAST_PREF_KEY);
+    if (raw == null) return !this.isBothSidesAIFromPrefs(); // default ON, except AI-vs-AI observer mode
+    if (raw === "1" || raw === "true") return true;
+    if (raw === "0" || raw === "false") return false;
+    return true;
+  }
+
+  private ensureToastEl(): HTMLDivElement | null {
+    if (typeof document === "undefined") return null;
+    if (this.toastEl && document.body.contains(this.toastEl)) return this.toastEl;
+
+    // Inject styles once.
+    const styleId = "lasca-toast-style";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .lascaToastWrap {
+          position: fixed;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 99999;
+          pointer-events: none;
+          display: none;
+        }
+        .lascaToast {
+          max-width: min(92vw, 560px);
+          padding: 12px 16px;
+          border-radius: 14px;
+          background: rgba(0, 0, 0, 0.78);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          color: rgba(255, 255, 255, 0.96);
+          font-size: 16px;
+          font-weight: 750;
+          letter-spacing: 0.2px;
+          text-align: center;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+          opacity: 0;
+          transform: scale(0.98);
+          transition: opacity 140ms ease, transform 140ms ease;
+        }
+        .lascaToastWrap.isVisible { display: block; }
+        .lascaToastWrap.isVisible .lascaToast {
+          opacity: 1;
+          transform: scale(1);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "lascaToastWrap";
+    wrap.setAttribute("aria-live", "polite");
+    wrap.setAttribute("role", "status");
+
+    const inner = document.createElement("div");
+    inner.className = "lascaToast";
+    inner.textContent = "";
+    wrap.appendChild(inner);
+    document.body.appendChild(wrap);
+    this.toastEl = wrap;
+    return wrap;
+  }
+
+  private showToast(text: string, durationMs: number = 1400): void {
+    if (!this.readToastPref()) return;
+    const el = this.ensureToastEl();
+    if (!el) return;
+    const inner = el.firstElementChild as HTMLElement | null;
+    if (!inner) return;
+
+    inner.textContent = text;
+    if (this.toastTimer) window.clearTimeout(this.toastTimer);
+
+    el.classList.add("isVisible");
+
+    this.toastTimer = window.setTimeout(() => {
+      this.toastTimer = null;
+      el.classList.remove("isVisible");
+    }, Math.max(0, durationMs));
+  }
+
+  private showGameOverToast(message: string): void {
+    const msg = typeof message === "string" ? message.trim() : "";
+    if (!msg) return;
+    if (msg === this.lastGameOverToast) return;
+    this.lastGameOverToast = msg;
+    this.showToast(msg, 3200);
+  }
+
+  private maybeToastTurnChange(): void {
+    if (this.isGameOver) return;
+    if (this.driver.mode === "online") {
+      if (this.onlineTransportStatus !== "connected") return;
+
+      const isLocalTurn = this.isLocalPlayersTurn();
+      const shouldToast = this.lastLocalTurn === null ? isLocalTurn : !this.lastLocalTurn && isLocalTurn;
+      this.lastLocalTurn = isLocalTurn;
+
+      if (shouldToast) {
+        this.showToast("Your turn", 1500);
+      }
+      return;
+    }
+
+    // Local play: toast whenever side-to-move changes (and once on startup).
+    const toMove = this.state.toMove;
+    const shouldToast = this.lastToastToMove === null ? true : this.lastToastToMove !== toMove;
+    this.lastToastToMove = toMove;
+
+    if (shouldToast) {
+      this.showToast(`${toMove === "B" ? "Black" : "White"} to move`, 1500);
+    }
   }
 
   private drawPendingDamaCapturedMarks(): void {
@@ -268,6 +419,11 @@ export class GameController {
     this.recomputeRepetitionCounts();
     this.updatePanel();
 
+    // Initialize and (optionally) show a turn toast at startup.
+    this.lastLocalTurn = null;
+    this.lastToastToMove = null;
+    this.maybeToastTurnChange();
+
     this.bindRoomIdCopyButton();
 
     this.startOnlinePolling();
@@ -299,7 +455,9 @@ export class GameController {
       if (this.isGameOver) return true;
       this.isGameOver = true;
       this.clearSelection();
-      this.showBanner(result.reason || "Game Over", 0);
+      const msg = result.reason || "Game Over";
+      this.showBanner(msg, 0);
+      this.showGameOverToast(msg);
       this.updatePanel();
       this.fireHistoryChange("gameOver");
       return true;
@@ -323,10 +481,20 @@ export class GameController {
   }
 
   setInputEnabled(enabled: boolean): void {
+    const wasEnabled = this.lastInputEnabled;
+    this.lastInputEnabled = enabled;
     this.inputEnabled = enabled;
     if (!enabled) {
       // Avoid leaving stale selection overlays when AI is running.
       this.clearSelectionForInputLock();
+      return;
+    }
+
+    // Local play: AI often disables input while thinking. When input returns,
+    // show a prominent toast indicating who is up next.
+    if (!wasEnabled && !this.isGameOver && this.driver.mode !== "online") {
+      this.lastToastToMove = null;
+      this.maybeToastTurnChange();
     }
   }
 
@@ -414,6 +582,7 @@ export class GameController {
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
+      this.maybeToastTurnChange();
       this.fireHistoryChange("undo");
     }
   }
@@ -447,6 +616,7 @@ export class GameController {
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
+      this.maybeToastTurnChange();
       this.fireHistoryChange("redo");
     }
   }
@@ -481,6 +651,7 @@ export class GameController {
     this.updatePanel();
     this.recomputeRepetitionCounts();
     this.checkAndHandleCurrentPlayerLost();
+    this.maybeToastTurnChange();
     this.fireHistoryChange("jump");
   }
 
@@ -527,7 +698,9 @@ export class GameController {
     const currentPlayerResult = checkCurrentPlayerLost(this.state);
     if (currentPlayerResult.winner) {
       this.isGameOver = true;
-      this.showBanner(currentPlayerResult.reason || "Game Over", 0);
+      const msg = currentPlayerResult.reason || "Game Over";
+      this.showBanner(msg, 0);
+      this.showGameOverToast(msg);
       this.updatePanel();
       return;
     }
@@ -542,6 +715,8 @@ export class GameController {
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.updatePanel();
+
+    this.maybeToastTurnChange();
   }
 
   getState(): GameState {
@@ -573,7 +748,9 @@ export class GameController {
 
     this.isGameOver = true;
     this.clearSelection();
-    this.showBanner(`${loserName} resigned — ${winnerName} wins!`, 0);
+    const msg = `${loserName} resigned — ${winnerName} wins!`;
+    this.showBanner(msg, 0);
+    this.showGameOverToast(msg);
   }
 
   newGame(initialState: GameState): void {
@@ -596,6 +773,11 @@ export class GameController {
     const allLegal = generateLegalMoves(this.state);
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.updatePanel();
+
+    // Always re-toast at new game start.
+    this.lastLocalTurn = null;
+    this.lastToastToMove = null;
+    this.maybeToastTurnChange();
     
     // Notify history change
     this.fireHistoryChange("newGame");
@@ -635,6 +817,11 @@ export class GameController {
 
     // If the loaded position is already terminal for the player to move, end immediately.
     this.checkAndHandleCurrentPlayerLost();
+
+    // Always re-toast after load.
+    this.lastLocalTurn = null;
+    this.lastToastToMove = null;
+    this.maybeToastTurnChange();
     
     // Notify history change
     this.fireHistoryChange("loadGame");
@@ -644,7 +831,9 @@ export class GameController {
     const elTurn = document.getElementById("statusTurn");
     const elPhase = document.getElementById("statusPhase");
     const elMsg = document.getElementById("statusMessage");
-    const elLoneKingTimer = document.getElementById("statusLoneKingTimer");
+    const elDeadPlayTimer =
+      (document.getElementById("statusDeadPlayTimer") as HTMLElement | null) ??
+      (document.getElementById("statusLoneKingTimer") as HTMLElement | null);
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
@@ -659,18 +848,47 @@ export class GameController {
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
-    if (elLoneKingTimer) {
+    if (elDeadPlayTimer) {
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
-      const lk = (this.state as any).damascaLoneKingVsKings as
-        | { loneKingSide: "B" | "W"; plies: number }
+      const dp = (this.state as any).damascaDeadPlay as
+        | { noProgressPlies?: number; officerOnlyPlies?: number }
         | undefined;
-      if (rulesetId === "damasca" && lk && Number.isFinite(lk.plies) && lk.plies > 0) {
-        const total = 10;
-        const remaining = Math.max(0, total - lk.plies);
-        const sideName = lk.loneKingSide === "B" ? "Black" : "White";
-        elLoneKingTimer.textContent = `${remaining} moves remaining (lone king: ${sideName})`;
+      if (rulesetId === "damasca" && dp) {
+        const np = Math.max(0, Math.floor(dp.noProgressPlies ?? 0));
+        const oo = Math.max(0, Math.floor(dp.officerOnlyPlies ?? 0));
+        const npRem = Math.max(0, DAMASCA_NO_PROGRESS_LIMIT_PLIES - np);
+        const ooRem = Math.max(0, DAMASCA_OFFICER_ONLY_LIMIT_PLIES - oo);
+
+        elDeadPlayTimer.textContent = `No-progress: ${npRem} plies left • Officer-only: ${ooRem} plies left`;
+
+        // Prominent warning banner when either counter gets low.
+        // Trigger at 20/10/5 plies remaining to avoid spam.
+        if (!this.isGameOver && this.onlineTransportStatus === "connected") {
+          const thresholds = new Set([20, 10, 5]);
+          const warnings: string[] = [];
+          if (thresholds.has(npRem)) {
+            warnings.push(
+              `Dead-play warning: no-progress counter reaches 0 in ${npRem} plies (game ends; adjudicated)`
+            );
+          }
+          if (thresholds.has(ooRem)) {
+            warnings.push(
+              `Dead-play warning: officer-only counter reaches 0 in ${ooRem} plies (game ends; adjudicated)`
+            );
+          }
+
+          // Reset warning memory once we're safely out of the warning zone.
+          if (npRem > 20 && ooRem > 20) this.lastDeadPlayWarning = null;
+
+          const msg = warnings.join(" • ");
+          if (msg && msg !== this.lastDeadPlayWarning) {
+            this.lastDeadPlayWarning = msg;
+            this.showBanner(msg, 2500);
+            this.showToast(msg, 2600);
+          }
+        }
       } else {
-        elLoneKingTimer.textContent = "—";
+        elDeadPlayTimer.textContent = "—";
       }
     }
     if (elRoomId) {
@@ -782,7 +1000,8 @@ export class GameController {
 
   private recomputeRepetitionCounts(): void {
     this.repetitionCounts.clear();
-    if (!RULES.drawByThreefold) return;
+    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    if (!RULES.drawByThreefold && !isDamasca) return;
 
     const snap = this.driver.exportHistorySnapshots();
     const states = snap.states;
@@ -794,7 +1013,8 @@ export class GameController {
   }
 
   private recordRepetitionForCurrentState(): boolean {
-    if (!RULES.drawByThreefold) return false;
+    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    if (!RULES.drawByThreefold && !isDamasca) return false;
     const h = hashGameState(this.state);
     const next = (this.repetitionCounts.get(h) || 0) + 1;
     this.repetitionCounts.set(h, next);
@@ -802,7 +1022,8 @@ export class GameController {
   }
 
   private checkThreefoldRepetition(): boolean {
-    if (!RULES.drawByThreefold) return false;
+    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    if (!RULES.drawByThreefold && !isDamasca) return false;
     const h = hashGameState(this.state);
     return (this.repetitionCounts.get(h) || 0) >= 3;
   }
@@ -940,6 +1161,7 @@ export class GameController {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Game Over", 0);
+        this.showGameOverToast("Game Over");
         this.updatePanel();
         this.fireHistoryChange("gameOver");
         return;
@@ -966,6 +1188,31 @@ export class GameController {
     
     // Now render the new state after animation
     this.renderAuthoritative();
+
+    // Dead-play / server-enforced game over can happen mid-capture-chain.
+    const forcedMsg = (this.state as any).forcedGameOver?.message as string | undefined;
+    if (typeof forcedMsg === "string" && forcedMsg.length > 0) {
+      this.isGameOver = true;
+      this.lockedCaptureFrom = null;
+      this.lockedCaptureDir = null;
+      this.jumpedSquares.clear();
+      this.clearSelection();
+
+      // In local mode, capture chains normally push history at turn boundary.
+      // If the game ends mid-turn, record the final authoritative state now.
+      if (this.driver.mode !== "online") {
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const boardSize = this.state.meta?.boardSize ?? 7;
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        this.driver.pushHistory(this.state, notation);
+      }
+      this.currentTurnNodes = [];
+      this.currentTurnHasCapture = false;
+      this.showBanner(forcedMsg, 0);
+      this.showGameOverToast(forcedMsg);
+      this.fireHistoryChange("gameOver");
+      return;
+    }
     
     // Clear overlays immediately after move is rendered
     // Also cancel any pending remainder hint timers
@@ -1077,9 +1324,34 @@ export class GameController {
         
         // Check for threefold repetition draw
         if (this.recordRepetitionForCurrentState()) {
+          const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
+          if (rulesetId2 === "damasca") {
+            this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
+
+            // Update the last history entry so export/undo sees the adjudication.
+            if (this.driver.mode !== "online") {
+              const snap2 = this.driver.exportHistorySnapshots();
+              if (snap2.states.length > 0 && snap2.currentIndex >= 0) {
+                snap2.states[snap2.currentIndex] = this.state;
+                this.driver.replaceHistory(snap2);
+              }
+            }
+
+            this.isGameOver = true;
+            this.clearSelection();
+            {
+              const msg = (this.state as any).forcedGameOver?.message ?? "Game Over";
+              this.showBanner(msg, 0);
+              this.showGameOverToast(msg);
+            }
+            this.fireHistoryChange("gameOver");
+            return;
+          }
+
           this.isGameOver = true;
           this.clearSelection();
           this.showBanner("Draw by threefold repetition", 0);
+          this.showGameOverToast("Draw by threefold repetition");
           this.fireHistoryChange("gameOver");
           return;
         }
@@ -1092,10 +1364,16 @@ export class GameController {
         const gameResult = checkCurrentPlayerLost(this.state);
         if (gameResult.winner) {
           this.isGameOver = true;
-          this.showBanner(gameResult.reason || "Game Over", 0);
+          {
+            const msg = gameResult.reason || "Game Over";
+            this.showBanner(msg, 0);
+            this.showGameOverToast(msg);
+          }
           this.fireHistoryChange("gameOver");
           return;
         }
+
+        this.maybeToastTurnChange();
         
         this.showBanner("Promoted — capture turn ends");
         // Don't show remainder hint - it will interfere with next turn's overlays
@@ -1187,9 +1465,33 @@ export class GameController {
       
       // Check for threefold repetition draw
       if (this.recordRepetitionForCurrentState()) {
+        const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
+        if (rulesetId2 === "damasca") {
+          this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
+
+          if (this.driver.mode !== "online") {
+            const snap2 = this.driver.exportHistorySnapshots();
+            if (snap2.states.length > 0 && snap2.currentIndex >= 0) {
+              snap2.states[snap2.currentIndex] = this.state;
+              this.driver.replaceHistory(snap2);
+            }
+          }
+
+          this.isGameOver = true;
+          this.clearSelection();
+          {
+            const msg = (this.state as any).forcedGameOver?.message ?? "Game Over";
+            this.showBanner(msg, 0);
+            this.showGameOverToast(msg);
+          }
+          this.fireHistoryChange("gameOver");
+          return;
+        }
+
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
+        this.showGameOverToast("Draw by threefold repetition");
         this.fireHistoryChange("gameOver");
         return;
       }
@@ -1202,10 +1504,16 @@ export class GameController {
       const gameResult = checkCurrentPlayerLost(this.state);
       if (gameResult.winner) {
         this.isGameOver = true;
-        this.showBanner(gameResult.reason || "Game Over", 0);
+        {
+          const msg = gameResult.reason || "Game Over";
+          this.showBanner(msg, 0);
+          this.showGameOverToast(msg);
+        }
         this.fireHistoryChange("gameOver");
         return;
       }
+
+      this.maybeToastTurnChange();
       
       this.showBanner("Turn changed");
       // Don't show remainder hint - it will interfere with next turn's overlays
@@ -1229,6 +1537,7 @@ export class GameController {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
+        this.showGameOverToast("Draw by threefold repetition");
         this.fireHistoryChange("gameOver");
         return;
       }
@@ -1241,13 +1550,19 @@ export class GameController {
       const gameResult = checkCurrentPlayerLost(this.state);
       if (gameResult.winner) {
         this.isGameOver = true;
-        this.showBanner(gameResult.reason || "Game Over", 0);
+        {
+          const msg = gameResult.reason || "Game Over";
+          this.showBanner(msg, 0);
+          this.showGameOverToast(msg);
+        }
         this.fireHistoryChange("gameOver");
         return;
       }
       
       // Update panel to show capture message if needed
       this.updatePanel();
+
+      this.maybeToastTurnChange();
     }
   }
 

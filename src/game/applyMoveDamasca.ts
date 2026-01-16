@@ -3,6 +3,7 @@ import type { Move } from "./moveTypes.ts";
 import { promoteIfNeeded } from "./promote.ts";
 import { parseNodeId } from "./coords.ts";
 import { endTurn } from "./endTurn.ts";
+import { updateDamascaDeadPlayCounters } from "./damascaDeadPlay.ts";
 
 /**
  * Damasca uses Lasca-style stacking capture transfer with Dama-style movement.
@@ -21,6 +22,8 @@ export function applyMoveDamasca(
     if (!moving || moving.length === 0) {
       throw new Error(`applyMoveDamasca: no moving stack at ${move.from}`);
     }
+
+    const movedTopRank = moving[moving.length - 1].rank;
 
     const enemy = nextBoard.get(move.over);
     if (!enemy || enemy.length === 0) {
@@ -55,13 +58,25 @@ export function applyMoveDamasca(
       : state.captureChain;
 
     // No promotion during capture chains.
-    return { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", captureChain };
+    const after: GameState = { ...state, board: nextBoard, toMove: state.toMove, phase: "idle", captureChain };
+
+    // Capture resets both counters.
+    return updateDamascaDeadPlayCounters(after, {
+      movedTopRank,
+      didCapture: true,
+      didPromote: false,
+      didSoldierAdvance: false,
+    });
   }
 
   // Quiet move
   const nextBoard = new Map(state.board);
   const fromStack = nextBoard.get(move.from);
   if (!fromStack || fromStack.length === 0) return state;
+
+  const movedTopRank = fromStack[fromStack.length - 1].rank;
+  const { r: fromR } = parseNodeId(move.from);
+  const { r: toR } = parseNodeId(move.to);
 
   const dest = nextBoard.get(move.to);
   if (dest && dest.length > 0) {
@@ -74,6 +89,15 @@ export function applyMoveDamasca(
   const tempState = { ...state, board: nextBoard };
   const didPromote = promoteIfNeeded(tempState, move.to);
 
+  const boardSize = state.meta?.boardSize ?? 8;
+  const lastRow = boardSize - 1;
+  const didSoldierAdvance =
+    movedTopRank === "S" &&
+    ((state.toMove === "W" && toR < fromR) || (state.toMove === "B" && toR > fromR)) &&
+    // Sanity: ensure distance to the promotion row shrinks.
+    ((state.toMove === "W" && toR < fromR && toR >= 0) ||
+      (state.toMove === "B" && toR > fromR && toR <= lastRow));
+
   const beforeTurnEnd: GameState = {
     ...state,
     board: nextBoard,
@@ -81,6 +105,17 @@ export function applyMoveDamasca(
     phase: "idle",
     captureChain: undefined,
   };
-  const afterTurnEnd = endTurn(beforeTurnEnd);
+
+  const withCounters = updateDamascaDeadPlayCounters(beforeTurnEnd, {
+    movedTopRank,
+    didCapture: false,
+    didPromote,
+    didSoldierAdvance,
+  });
+
+  // If dead-play ended the game, do not switch turns.
+  if ((withCounters as any).forcedGameOver) return { ...withCounters, didPromote };
+
+  const afterTurnEnd = endTurn(withCounters);
   return { ...afterTurnEnd, didPromote };
 }

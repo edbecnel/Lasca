@@ -160,6 +160,8 @@ export class HistoryManager {
       toMove: state.toMove,
       phase: state.phase,
       meta: state.meta ? { ...state.meta } : undefined,
+      forcedGameOver: (state as any).forcedGameOver ? { ...(state as any).forcedGameOver } : undefined,
+      damascaDeadPlay: (state as any).damascaDeadPlay ? { ...(state as any).damascaDeadPlay } : undefined,
       captureChain: state.captureChain ? { ...state.captureChain } : undefined,
     };
   }

@@ -11,6 +11,8 @@ import { endTurn } from "../../src/game/endTurn.ts";
 import { nodeIdToA1 } from "../../src/game/coordFormat.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
 import { checkCurrentPlayerLost } from "../../src/game/gameOver.ts";
+import { hashGameState } from "../../src/game/hashState.ts";
+import { adjudicateDamascaDeadPlay } from "../../src/game/damascaDeadPlay.ts";
 import type { Move } from "../../src/game/moveTypes.ts";
 import type { VariantId } from "../../src/variants/variantTypes.ts";
 
@@ -223,8 +225,12 @@ async function persistMoveApplied(args: {
 }
 
 async function maybePersistGameOver(gamesDir: string, room: Room): Promise<void> {
+  const forced = (room.state as any)?.forcedGameOver;
   const result = checkCurrentPlayerLost(room.state as any);
-  if (!result.winner) return;
+
+  const isForced = Boolean(forced?.message);
+  const isNormalWin = Boolean(result.winner);
+  if (!isForced && !isNormalWin) return;
 
   // Avoid spamming GAME_OVER on every subsequent action.
   if (room.lastGameOverVersion === room.stateVersion) return;
@@ -236,8 +242,8 @@ async function maybePersistGameOver(gamesDir: string, room: Room): Promise<void>
     makeGameOverEvent({
       roomId: room.roomId,
       stateVersion: room.stateVersion,
-      winner: result.winner,
-      reason: result.reason ?? undefined,
+      winner: (result.winner ?? forced?.winner ?? null) as any,
+      reason: (result.reason ?? forced?.message ?? undefined) as any,
     })
   );
   await persistSnapshot(gamesDir, room);
@@ -639,7 +645,34 @@ export function createLascaApp(opts: ServerOpts = {}): {
   }
 
   function isRoomOver(room: Room): boolean {
-    return Boolean((room.state as any)?.forcedGameOver?.winner);
+    return Boolean((room.state as any)?.forcedGameOver?.message);
+  }
+
+  function maybeApplyDamascaThreefold(room: Room): void {
+    if (isRoomOver(room)) return;
+    const rulesetId = (room.state as any)?.meta?.rulesetId ?? "lasca";
+    if (rulesetId !== "damasca") return;
+
+    const snap = room.history.exportSnapshots();
+    const end = snap.currentIndex;
+    if (end < 0 || end >= snap.states.length) return;
+
+    const current = snap.states[end];
+    const h = hashGameState(current as any);
+    let count = 0;
+    for (let i = 0; i <= end && i < snap.states.length; i++) {
+      if (hashGameState(snap.states[i] as any) === h) count++;
+    }
+    if (count < 3) return;
+
+    room.state = adjudicateDamascaDeadPlay(room.state as any, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
+
+    // Ensure history's current entry reflects the adjudicated state.
+    const snap2 = room.history.exportSnapshots();
+    if (snap2.states.length > 0 && snap2.currentIndex >= 0 && snap2.currentIndex < snap2.states.length) {
+      snap2.states[snap2.currentIndex] = room.state as any;
+      room.history.replaceAll(snap2.states as any, snap2.notation, snap2.currentIndex);
+    }
   }
 
   async function forceDisconnectTimeout(args: { gamesDir: string; room: Room; disconnectedPlayerId: PlayerId }): Promise<void> {
@@ -1023,6 +1056,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const notation = `${from}${sep}${to}`;
       room.history.push(room.state, notation);
 
+      // Damasca: adjudicate and end on threefold repetition.
+      maybeApplyDamascaThreefold(room);
+
       const nextToMove = (room.state as any).toMove as PlayerColor;
       onTurnSwitch(room, prevToMove, nextToMove);
 
@@ -1130,6 +1166,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
         }
         room.history.replaceAll(snap.states as any, snap.notation, snap.states.length - 1);
       }
+
+      // Damasca: adjudicate and end on threefold repetition.
+      maybeApplyDamascaThreefold(room);
 
       room.stateVersion += 1;
       await persistMoveApplied({ gamesDir, room, action: "END_TURN", snapshotEvery });

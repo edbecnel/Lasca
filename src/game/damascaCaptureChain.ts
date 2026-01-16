@@ -1,5 +1,6 @@
 import type { GameState, NodeId } from "./state.ts";
 import { promoteIfNeeded, promoteTopSoldierIfOwnedByToMove } from "./promote.ts";
+import { updateDamascaDeadPlayCounters } from "./damascaDeadPlay.ts";
 
 /**
  * Finalize a Damasca capture chain.
@@ -18,5 +19,17 @@ export function finalizeDamascaCaptureChain(
     ? promoteTopSoldierIfOwnedByToMove(tempState, lastLanding)
     : promoteIfNeeded(tempState, lastLanding);
 
-  return { ...tempState, didPromote, captureChain: undefined };
+  const cleared: GameState = { ...tempState, captureChain: undefined };
+
+  // Promotion is a dead-play reset event.
+  const afterCounters = didPromote
+    ? updateDamascaDeadPlayCounters(cleared, {
+        movedTopRank: "S",
+        didCapture: false,
+        didPromote: true,
+        didSoldierAdvance: false,
+      })
+    : cleared;
+
+  return { ...afterCounters, didPromote };
 }
