@@ -17,13 +17,6 @@ export const THEMES: ThemeDef[] = [
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
   },
   {
-    id: "highContrast",
-    label: "High Contrast",
-    piecesDefs: new URL("../assets/themes/highContrast/pieces_defs.svg", import.meta.url),
-    boardDefs: new URL("../assets/themes/highContrast/board_defs.svg", import.meta.url),
-    css: new URL("../assets/themes/highContrast/theme.css", import.meta.url),
-  },
-  {
     id: "wooden",
     label: "Wooden",
     piecesDefs: new URL("../assets/themes/wooden/pieces_defs.svg", import.meta.url),

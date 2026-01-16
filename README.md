@@ -39,7 +39,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 🎯 Move hints showing capture targets and landing positions
 - ⏮️ Full undo/redo with move history tracking
 - 💾 Save and load games (JSON format)
-- 🎨 Multiple themes (Classic and High Contrast)
+  - Multiple themes (Classic, Wooden, and others)
 - 📊 Stack inspector showing piece composition
 - 🎮 Game over detection with win conditions
 - 🔄 Multi-capture sequences with anti-loop protection
