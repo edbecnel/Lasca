@@ -695,17 +695,23 @@ export function createLascaApp(opts: ServerOpts = {}): {
     };
 
     room.stateVersion += 1;
-    await appendEvent(
-      args.gamesDir,
-      room.roomId,
-      makeGameOverEvent({
-        roomId: room.roomId,
-        stateVersion: room.stateVersion,
-        winner,
-        reason: "DISCONNECT_TIMEOUT",
-      })
-    );
-    await persistSnapshot(args.gamesDir, room);
+    try {
+      await appendEvent(
+        args.gamesDir,
+        room.roomId,
+        makeGameOverEvent({
+          roomId: room.roomId,
+          stateVersion: room.stateVersion,
+          winner,
+          reason: "DISCONNECT_TIMEOUT",
+        })
+      );
+      await persistSnapshot(args.gamesDir, room);
+    } catch (err) {
+      // Persistence is best-effort; in tests the data dir may be deleted while the grace timer is running.
+      // eslint-disable-next-line no-console
+      console.error("[lasca-server] forceDisconnectTimeout persist error", err);
+    }
     broadcastRoomSnapshot(room);
   }
 
