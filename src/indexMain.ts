@@ -209,6 +209,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const elPlayMode = byId<HTMLSelectElement>("launchPlayMode");
   const elOnlineServerUrl = byId<HTMLInputElement>("launchOnlineServerUrl");
+  const elOnlineServerUrlLabel =
+    (document.querySelector('label[for="launchOnlineServerUrl"]') as HTMLElement | null) ?? null;
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
   const elOnlinePrefColorLabel = byId<HTMLElement>("launchOnlinePrefColorLabel");
   const elOnlinePrefColor = byId<HTMLSelectElement>("launchOnlinePrefColor");
@@ -230,6 +232,22 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const elWarning = byId<HTMLElement>("launchWarning");
   const elLaunch = byId<HTMLButtonElement>("launchBtn");
+
+  const setWarning = (text: string, opts?: { isError?: boolean }): void => {
+    const msg = (text || "").trim();
+    elWarning.textContent = msg || "—";
+    elWarning.classList.toggle("isError", Boolean(opts?.isError));
+  };
+
+  const setRoomIdError = (isError: boolean): void => {
+    elOnlineRoomId.classList.toggle("isError", isError);
+    elOnlineRoomIdLabel.classList.toggle("isError", isError);
+  };
+
+  const setServerError = (isError: boolean): void => {
+    elOnlineServerUrl.classList.toggle("isError", isError);
+    elOnlineServerUrlLabel?.classList.toggle("isError", isError);
+  };
 
   // Populate variant select
   elGame.textContent = "";
@@ -354,7 +372,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     elLaunch.disabled = !ok;
-    elWarning.textContent = warning ?? "—";
+    setWarning(warning ?? "—", { isError: false });
+    setRoomIdError(false);
+    setServerError(false);
   };
 
   // When navigating back to the Start Page from a game tab, browsers may restore
@@ -382,6 +402,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elOnlineServerUrl.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineServerUrl, elOnlineServerUrl.value);
+    setServerError(false);
     syncAvailability();
   });
 
@@ -406,6 +427,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elOnlineRoomId.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineRoomId, elOnlineRoomId.value);
+    setRoomIdError(false);
     syncAvailability();
   });
 
@@ -515,11 +537,27 @@ window.addEventListener("DOMContentLoaded", () => {
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
     const prefColor = (elOnlinePrefColor.value === "W" || elOnlinePrefColor.value === "B") ? elOnlinePrefColor.value : "auto";
-    if (!serverUrl) return;
+    if (!serverUrl) {
+      setServerError(true);
+      setWarning("Invalid Server: (empty)", { isError: true });
+      return;
+    }
+
+    // Basic sanity check: must parse as an absolute URL.
+    try {
+      // eslint-disable-next-line no-new
+      new URL(serverUrl);
+    } catch {
+      setServerError(true);
+      setWarning(`Invalid Server: ${serverUrl}`, { isError: true });
+      return;
+    }
+
     if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) return;
 
     if ((onlineAction === "join" || onlineAction === "rejoin") && !isPlausibleRoomId(roomId)) {
-      elWarning.textContent = "Invalid Room ID (must be hex).";
+      setRoomIdError(true);
+      setWarning(`Invalid Room ID: ${roomId} (must be hex).`, { isError: true });
       return;
     }
 
@@ -536,7 +574,20 @@ window.addEventListener("DOMContentLoaded", () => {
 
         if (!res.ok || json?.error) {
           const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
-          elWarning.textContent = `Online room check failed: ${msg}`;
+          const lower = String(msg).toLowerCase();
+          const isRoomError =
+            lower.includes("room not found") ||
+            lower.includes("no such room") ||
+            lower.includes("invalid room") ||
+            lower.includes("invalid room id");
+
+          if (isRoomError) {
+            setRoomIdError(true);
+          } else {
+            setServerError(true);
+          }
+
+          setWarning(`Online room check failed: ${msg}`, { isError: true });
           return;
         }
 
@@ -546,7 +597,8 @@ window.addEventListener("DOMContentLoaded", () => {
           localStorage.setItem(LS_KEYS.variantId, targetVariant.variantId);
         }
       } catch {
-        elWarning.textContent = "Online room check failed (network error).";
+        setServerError(true);
+        setWarning(`Online room check failed (network error) — server: ${serverUrl}`, { isError: true });
         return;
       }
     }

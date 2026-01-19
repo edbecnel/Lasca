@@ -11,6 +11,9 @@
       :root {
         --page-bg: #1b1b1b;
 
+        --error: #ff5a5a;
+        --error-bg: rgba(255, 90, 90, 0.16);
+
         --panel-bg: rgba(255, 255, 255, 0.06);
         --panel-border: rgba(255, 255, 255, 0.1);
         --panel-text: rgba(255, 255, 255, 0.9);
@@ -208,6 +211,21 @@
         color: rgba(255, 255, 255, 0.75);
         font-size: 12px;
         margin: 0;
+      }
+
+      .warn.isError {
+        color: var(--error);
+        font-weight: 750;
+      }
+
+      .panelSelect.isError {
+        border-color: var(--error);
+        box-shadow: 0 0 0 2px var(--error-bg);
+        color: var(--error);
+      }
+
+      label.isError {
+        color: var(--error);
       }
 
       .actions {
