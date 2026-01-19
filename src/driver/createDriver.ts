@@ -50,6 +50,50 @@ type OnlineResumeRecord = {
   savedAtMs: number;
 };
 
+let pendingStartupMessage: string | null = null;
+
+export function consumeStartupMessage(): string | null {
+  const msg = pendingStartupMessage;
+  pendingStartupMessage = null;
+  return msg;
+}
+
+function setStartupMessage(msg: string): void {
+  const s = (msg || "").trim();
+  pendingStartupMessage = s ? s : null;
+}
+
+function isPlausibleRoomId(roomId: string): boolean {
+  const r = (roomId || "").trim();
+  if (!r) return false;
+  // Server-generated IDs are hex strings; reject obvious junk to avoid noisy 400s.
+  if (!/^[0-9a-f]+$/i.test(r)) return false;
+  // Keep length permissive (server IDs are variable-length), but avoid single-char typos.
+  if (r.length < 4) return false;
+  return true;
+}
+
+function tryLoadOnlineResumeRecord(args: { serverUrl: string; roomId: string }): OnlineResumeRecord | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const normalizedServerUrl = normalizeServerUrlForStorage(args.serverUrl);
+    const normalizedRoomId = normalizeRoomIdForStorage(args.roomId);
+
+    const preferredKey = resumeStorageKey(normalizedServerUrl, normalizedRoomId);
+    const legacyKey = `lasca.online.resume.${encodeURIComponent(args.serverUrl)}.${encodeURIComponent(args.roomId)}`;
+
+    const raw = window.localStorage.getItem(preferredKey) ?? window.localStorage.getItem(legacyKey);
+    if (!raw) return null;
+    const rec = JSON.parse(raw) as OnlineResumeRecord;
+    if (!rec || typeof rec !== "object") return null;
+    if (typeof rec.playerId !== "string" || !rec.playerId.trim()) return null;
+    if (rec.playerId === "spectator") return null;
+    return rec;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeServerUrlForStorage(raw: string): string {
   return (raw || "").trim().replace(/\/+$/, "");
 }
@@ -130,6 +174,36 @@ function updateBrowserUrlForOnline(args: {
   }
 }
 
+function updateBrowserUrlForLocal(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("mode");
+    url.searchParams.delete("server");
+    url.searchParams.delete("roomId");
+    url.searchParams.delete("playerId");
+    url.searchParams.delete("color");
+    url.searchParams.delete("prefColor");
+    url.searchParams.delete("create");
+    url.searchParams.delete("join");
+    window.history.replaceState(null, "", url.toString());
+  } catch {
+    // ignore
+  }
+}
+
+function showOnlineLoadMessage(text: string): void {
+  if (typeof document === "undefined") return;
+  try {
+    const msg = (text || "").trim();
+    if (!msg) return;
+    const el = document.getElementById("statusMessage") as HTMLElement | null;
+    if (el) el.textContent = msg;
+  } catch {
+    // ignore
+  }
+}
+
 function logJoinUrl(args: { serverUrl: string; roomId: string }): void {
   if (typeof window === "undefined") return;
   try {
@@ -153,8 +227,8 @@ function parseOnlineQuery(search: string, envServerUrl?: string | undefined): On
   const serverUrl = params.get("server") ?? envServerUrl ?? "http://localhost:8787";
   const create = params.get("create") === "1" || params.get("create") === "true";
   const join = params.get("join") === "1" || params.get("join") === "true";
-  const roomId = params.get("roomId");
-  const playerId = params.get("playerId");
+  const roomId = (params.get("roomId") ?? "").trim() || null;
+  const playerId = (params.get("playerId") ?? "").trim() || null;
   const c = params.get("color");
   const color = c === "W" || c === "B" ? c : null;
   const p = params.get("prefColor");
@@ -235,16 +309,23 @@ export async function createDriverAsync(args: {
     stateVersion: 0,
   };
 
+  const failToLocal = (message: string): GameDriver => {
+    setStartupMessage(message);
+    showOnlineLoadMessage(message);
+    updateBrowserUrlForLocal();
+    return new LocalDriver(args.state, args.history);
+  };
+
   // Create room
   if (q.create) {
-    const variantId = args.state.meta?.variantId;
-    if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
-    const res = await postJson<{ variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B" }, CreateRoomResponse>(
-      q.serverUrl,
-      "/api/create",
-      { variantId, snapshot: wireSnapshot, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
-    );
-    const anyRes: any = res;
+    try {
+      const variantId = args.state.meta?.variantId;
+      if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
+      const res = await postJson<
+        { variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B" },
+        CreateRoomResponse
+      >(q.serverUrl, "/api/create", { variantId, snapshot: wireSnapshot, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) });
+      const anyRes: any = res;
 
     if ((import.meta as any)?.env?.DEV) {
       // eslint-disable-next-line no-console
@@ -257,34 +338,120 @@ export async function createDriverAsync(args: {
       });
     }
 
-    if (anyRes.roomId && anyRes.playerId) {
-      driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId });
-    }
-    if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
-    await driver.connectFromSnapshot(
-      { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
-      anyRes.snapshot
-    );
+      if (anyRes.roomId && anyRes.playerId) {
+        driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId });
+      }
+      if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
+      await driver.connectFromSnapshot(
+        { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
+        anyRes.snapshot
+      );
 
-    updateBrowserUrlForOnline({
-      serverUrl: q.serverUrl,
-      roomId: anyRes.roomId,
-      playerId: anyRes.playerId,
-      color: anyRes.color === "W" || anyRes.color === "B" ? anyRes.color : undefined,
-    });
-    logJoinUrl({ serverUrl: q.serverUrl, roomId: anyRes.roomId });
-    return driver;
+      updateBrowserUrlForOnline({
+        serverUrl: q.serverUrl,
+        roomId: anyRes.roomId,
+        playerId: anyRes.playerId,
+        color: anyRes.color === "W" || anyRes.color === "B" ? anyRes.color : undefined,
+      });
+      logJoinUrl({ serverUrl: q.serverUrl, roomId: anyRes.roomId });
+      return driver;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Create failed";
+      return failToLocal(`Online create failed: ${msg}`);
+    }
   }
 
   // Join room
   if (q.join) {
     if (!q.roomId) throw new Error("Cannot join online room: missing roomId");
-    const res = await postJson<{ roomId: string; preferredColor?: "W" | "B" }, JoinRoomResponse>(
-      q.serverUrl,
-      "/api/join",
-      { roomId: q.roomId, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
-    );
-    const anyRes: any = res;
+
+    if (!isPlausibleRoomId(q.roomId)) {
+      return failToLocal("Invalid Room ID");
+    }
+
+    // If we already have a resume token for this room, prefer reconnecting directly.
+    // This avoids spamming the server with a join attempt (and noisy 400s) on stale join links.
+    const rec0 = tryLoadOnlineResumeRecord({ serverUrl: q.serverUrl, roomId: q.roomId });
+    if (rec0?.playerId) {
+      try {
+        driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId });
+        if (rec0.color === "W" || rec0.color === "B") driver.setPlayerColor(rec0.color);
+        const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+        const anySnap: any = snap;
+        await driver.connectFromSnapshot(
+          { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId },
+          anySnap.snapshot
+        );
+        updateBrowserUrlForOnline({
+          serverUrl: q.serverUrl,
+          roomId: q.roomId,
+          playerId: rec0.playerId,
+          color: rec0.color,
+        });
+        return driver;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return failToLocal(`Online reconnect failed: ${msg}`);
+      }
+    }
+
+    let anyRes: any = null;
+    try {
+      const res = await postJson<{ roomId: string; preferredColor?: "W" | "B" }, JoinRoomResponse>(
+        q.serverUrl,
+        "/api/join",
+        { roomId: q.roomId, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
+      );
+      anyRes = res as any;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+
+      // If the room is already full, fall back to reconnect (if we have a stored playerId)
+      // or to spectator view. This avoids a hard failure when a user reloads a stale join link.
+      if (msg === "Room full" || msg === "Color taken") {
+        const rec = tryLoadOnlineResumeRecord({ serverUrl: q.serverUrl, roomId: q.roomId });
+        if (rec?.playerId) {
+          driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId });
+          if (rec.color === "W" || rec.color === "B") driver.setPlayerColor(rec.color);
+          const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+          const anySnap: any = snap;
+          await driver.connectFromSnapshot(
+            { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId },
+            anySnap.snapshot
+          );
+          updateBrowserUrlForOnline({
+            serverUrl: q.serverUrl,
+            roomId: q.roomId,
+            playerId: rec.playerId,
+            color: rec.color,
+          });
+          return driver;
+        }
+
+        // Spectator fallback.
+        driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
+        const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+        const anySnap: any = snap;
+        await driver.connectFromSnapshot(
+          { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
+          anySnap.snapshot
+        );
+        updateBrowserUrlForOnline({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
+        setStartupMessage("Room is full — opened as spectator");
+        showOnlineLoadMessage("Room is full — opened as spectator");
+        return driver;
+      }
+
+      if (msg === "Room not found") {
+        return failToLocal(`Online game not found (roomId=${q.roomId})`);
+      }
+
+      if (/^Failed to fetch$|NetworkError/i.test(msg)) {
+        return failToLocal(`Cannot reach server (${q.serverUrl})`);
+      }
+
+      return failToLocal(`Online join failed: ${msg}`);
+    }
 
     if ((import.meta as any)?.env?.DEV) {
       // eslint-disable-next-line no-console
@@ -319,27 +486,39 @@ export async function createDriverAsync(args: {
   // If a user only has a roomId, allow read-only viewing by fetching the snapshot.
   // Input will be disabled if the player color is unknown.
   if (q.roomId && !q.playerId) {
-    driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
-    const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
-    const anySnap: any = snap;
-    await driver.connectFromSnapshot(
-      { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
-      anySnap.snapshot
-    );
-    return driver;
+    try {
+      driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
+      const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+      const anySnap: any = snap;
+      await driver.connectFromSnapshot(
+        { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
+        anySnap.snapshot
+      );
+      return driver;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === "Room not found") return failToLocal(`Online game not found (roomId=${q.roomId})`);
+      return failToLocal(`Online load failed: ${msg}`);
+    }
   }
 
   if (!q.roomId || !q.playerId) {
-    throw new Error(
-      "Online mode requires query params: ?mode=online&create=1 OR ?mode=online&join=1&roomId=... OR ?mode=online&roomId=...&playerId=..."
+    return failToLocal(
+      "Online mode requires: ?mode=online&create=1 OR ?mode=online&join=1&roomId=... OR ?mode=online&roomId=...&playerId=..."
     );
   }
 
-  driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId });
-  if (q.color) driver.setPlayerColor(q.color);
-  const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
-  const anySnap: any = snap;
-  await driver.connectFromSnapshot({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId }, anySnap.snapshot);
+  try {
+    driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId });
+    if (q.color) driver.setPlayerColor(q.color);
+    const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+    const anySnap: any = snap;
+    await driver.connectFromSnapshot({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId }, anySnap.snapshot);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "Room not found") return failToLocal(`Online game not found (roomId=${q.roomId})`);
+    return failToLocal(`Online reconnect failed: ${msg}`);
+  }
 
   // Even if this page was loaded directly via a reconnect URL (roomId+playerId),
   // persist the resume token so the Start Page can offer "Rejoin" next time.

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { GameController } from "./gameController";
 import { HistoryManager } from "../game/historyManager";
 import type { GameState } from "../game/state";
@@ -196,5 +196,61 @@ describe("GameController input lock preserves capture chain", () => {
     expect(constraints.lockedCaptureFrom).toBe(null);
     expect(constraints.lockedCaptureDir).toBe(null);
     expect(constraints.jumpedSquares).toEqual([]);
+  });
+});
+
+describe("GameController turn toast indicates capture", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+  });
+
+  it("shows 'to capture' when a capture is available", () => {
+    vi.useFakeTimers();
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([
+        ["r2c2", [{ owner: "B", rank: "S" }]],
+        ["r3c3", [{ owner: "W", rank: "S" }]],
+      ]),
+      toMove: "B",
+      phase: "idle",
+    };
+    history.push(s);
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+
+    (controller as any).maybeToastTurnChange();
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Black to capture");
+
+    vi.runAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("shows 'to move' when no capture is available", () => {
+    vi.useFakeTimers();
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([["r2c2", [{ owner: "B", rank: "S" }]]]),
+      toMove: "B",
+      phase: "idle",
+    };
+    history.push(s);
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+
+    (controller as any).maybeToastTurnChange();
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Black to move");
+
+    vi.runAllTimers();
+    vi.useRealTimers();
   });
 });

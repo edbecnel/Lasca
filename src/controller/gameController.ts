@@ -326,7 +326,9 @@ export class GameController {
     this.lastToastToMove = toMove;
 
     if (shouldToast) {
-      this.showToast(`${toMove === "B" ? "Black" : "White"} to move`, 1500);
+      const legal = this.getLegalMovesForTurn();
+      const hasCapture = legal.some((m) => m.kind === "capture");
+      this.showToast(`${toMove === "B" ? "Black" : "White"} to ${hasCapture ? "capture" : "move"}`, 1500);
     }
   }
 
@@ -478,6 +480,21 @@ export class GameController {
 
   isOver(): boolean {
     return this.isGameOver;
+  }
+
+  showStartupMessage(message: string): void {
+    const msg = typeof message === "string" ? message.trim() : "";
+    if (!msg) return;
+
+    try {
+      const elMsg = document.getElementById("statusMessage");
+      if (elMsg) elMsg.textContent = msg;
+    } catch {
+      // ignore
+    }
+
+    // Toast is preference-gated inside showToast.
+    this.showToast(msg, 3200);
   }
 
   setInputEnabled(enabled: boolean): void {
@@ -834,12 +851,15 @@ export class GameController {
     const elDeadPlayTimer =
       (document.getElementById("statusDeadPlayTimer") as HTMLElement | null) ??
       (document.getElementById("statusLoneKingTimer") as HTMLElement | null);
+    const elOnlineInfoPanel = document.getElementById("onlineInfoPanel") as HTMLElement | null;
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
     const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
     const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
     const isOnline = this.driver.mode === "online";
+
+    if (elOnlineInfoPanel) elOnlineInfoPanel.hidden = !isOnline;
 
     if (elNewGame) elNewGame.disabled = isOnline;
     if (elLoadGame) elLoadGame.disabled = isOnline;

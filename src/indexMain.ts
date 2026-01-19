@@ -16,6 +16,7 @@ const LS_KEYS = {
   optShowResizeIcon: "lasca.opt.showResizeIcon",
   optBoardCoords: "lasca.opt.boardCoords",
   optThreefold: "lasca.opt.threefold",
+  optToasts: "lasca.opt.toasts",
 
   playMode: "lasca.play.mode",
   onlineServerUrl: "lasca.online.serverUrl",
@@ -186,6 +187,14 @@ function parseDelayMs(raw: string, fallback: number): number {
   return clamp(Math.round(n), 0, 3000);
 }
 
+function isPlausibleRoomId(roomId: string): boolean {
+  const r = (roomId || "").trim();
+  if (!r) return false;
+  if (!/^[0-9a-f]+$/i.test(r)) return false;
+  if (r.length < 4) return false;
+  return true;
+}
+
 
 function readVariantId(key: string, fallback: VariantId): VariantId {
   const raw = localStorage.getItem(key);
@@ -211,6 +220,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elThreefold = byId<HTMLInputElement>("launchThreefold");
+  const elToasts = byId<HTMLInputElement>("launchToasts");
 
   const elAiWhite = byId<HTMLSelectElement>("launchAiWhite");
   const elAiBlack = byId<HTMLSelectElement>("launchAiBlack");
@@ -260,6 +270,7 @@ window.addEventListener("DOMContentLoaded", () => {
   elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
   elThreefold.checked = readBool(LS_KEYS.optThreefold, true);
+  elToasts.checked = readBool(LS_KEYS.optToasts, true);
 
   elAiWhite.value = readDifficulty(LS_KEYS.aiWhite, "human");
   elAiBlack.value = readDifficulty(LS_KEYS.aiBlack, "human");
@@ -389,6 +400,10 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
   });
 
+  elToasts.addEventListener("change", () => {
+    writeBool(LS_KEYS.optToasts, elToasts.checked);
+  });
+
   elOnlineRoomId.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineRoomId, elOnlineRoomId.value);
     syncAvailability();
@@ -478,6 +493,7 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
     writeBool(LS_KEYS.optThreefold, elThreefold.checked);
+    writeBool(LS_KEYS.optToasts, elToasts.checked);
 
     localStorage.setItem(LS_KEYS.aiWhite, elAiWhite.value);
     localStorage.setItem(LS_KEYS.aiBlack, elAiBlack.value);
@@ -502,6 +518,11 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!serverUrl) return;
     if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) return;
 
+    if ((onlineAction === "join" || onlineAction === "rejoin") && !isPlausibleRoomId(roomId)) {
+      elWarning.textContent = "Invalid Room ID (must be hex).";
+      return;
+    }
+
     const resume = onlineAction === "rejoin" ? resolveOnlineResumeRecord(serverUrl, roomId) : null;
     if (onlineAction === "rejoin" && !resume) return;
 
@@ -512,13 +533,21 @@ window.addEventListener("DOMContentLoaded", () => {
       try {
         const res = await fetch(`${serverUrl}/api/room/${encodeURIComponent(roomId)}`);
         const json = (await res.json()) as any;
+
+        if (!res.ok || json?.error) {
+          const msg = typeof json?.error === "string" ? json.error : `HTTP ${res.status}`;
+          elWarning.textContent = `Online room check failed: ${msg}`;
+          return;
+        }
+
         const roomVariantId = json?.snapshot?.state?.meta?.variantId as string | undefined;
         if (roomVariantId && isVariantId(roomVariantId)) {
           targetVariant = getVariantById(roomVariantId);
           localStorage.setItem(LS_KEYS.variantId, targetVariant.variantId);
         }
       } catch {
-        // If the room lookup fails, fall back to the user's selected variant.
+        elWarning.textContent = "Online room check failed (network error).";
+        return;
       }
     }
 

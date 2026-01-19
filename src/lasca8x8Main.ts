@@ -20,7 +20,7 @@ import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
-import { createDriverAsync } from "./driver/createDriver.ts";
+import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 
 const ACTIVE_VARIANT_ID: VariantId = "lasca_8_dama_board";
@@ -151,6 +151,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
+
+  const startupMsg = consumeStartupMessage();
+  if (startupMsg) controller.showStartupMessage(startupMsg);
 
   // Force these display prefs.
   controller.setMoveHints(false);

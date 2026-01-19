@@ -17,7 +17,7 @@ import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, isVariantId, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
-import { createDriverAsync } from "./driver/createDriver.ts";
+import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 
 const FALLBACK_VARIANT_ID: VariantId = "dama_8_classic_standard";
@@ -147,6 +147,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
+
+  const startupMsg = consumeStartupMessage();
+  if (startupMsg) controller.showStartupMessage(startupMsg);
 
   // Force these display prefs.
   controller.setMoveHints(false);

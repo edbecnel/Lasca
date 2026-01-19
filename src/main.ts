@@ -20,7 +20,7 @@ import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
 import { ACTIVE_VARIANT_ID } from "./variants/activeVariant";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
-import { createDriverAsync } from "./driver/createDriver.ts";
+import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 
 const LS_OPT_KEYS = {
@@ -149,6 +149,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
+
+  const startupMsg = consumeStartupMessage();
+  if (startupMsg) controller.showStartupMessage(startupMsg);
 
   // Force these display prefs.
   controller.setMoveHints(false);
