@@ -102,7 +102,7 @@ export type FinalizeCaptureChainRequest =
   | {
       roomId: RoomId;
       playerId: PlayerId;
-      rulesetId: "damasca";
+      rulesetId: "damasca" | "damasca_classic";
       landing: string;
     };
 

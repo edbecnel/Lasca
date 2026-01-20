@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -12,7 +12,8 @@
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
         line-height: 1.6;
         color: #e8e6e3;
@@ -131,13 +132,20 @@
       <h1>Damasca - Help & Rules</h1>
 
       <p>
-        <b>Damasca</b> combines Dama-style movement (including flying Officers)
-        with Lasca-style stacking captures.
+        <b>Damasca</b> combines Dama-style movement with Lasca-style stacking
+        captures.
+      </p>
+
+      <p>
+        This app supports two Damasca variants:
+        <b>Damasca Classic</b> (non-flying Officers) and
+        <b>Damasca International</b> (flying Officers).
       </p>
 
       <h2>Table of Contents</h2>
       <ul>
         <li><a href="#overview">Rules Overview</a></li>
+        <li><a href="#variants">Variants (Classic vs International)</a></li>
         <li><a href="#lasca-vs-damasca">Lasca vs Damasca</a></li>
         <li>
           <a href="#damasca-vs-dama">Damasca vs Dama (Filipino Checkers)</a>
@@ -156,8 +164,14 @@
             <strong>Soldiers:</strong> quiet move diagonally forward 1 square.
           </li>
           <li>
-            <strong>Officers:</strong> "fly" on quiet moves (slide diagonally
-            any distance until blocked).
+            <strong>Officers:</strong>
+            <ul>
+              <li><b>Classic:</b> move diagonally 1 square (non-flying).</li>
+              <li>
+                <b>International:</b> "fly" on quiet moves (slide diagonally any
+                distance until blocked).
+              </li>
+            </ul>
           </li>
         </ul>
 
@@ -205,6 +219,26 @@
         </ul>
       </div>
 
+      <h2 id="variants">Variants (Classic vs International)</h2>
+      <div class="rule-box">
+        <ul>
+          <li>
+            <strong>Damasca Classic:</strong> Officers move/capture like Lasca
+            Officers (non-flying). Soldiers still capture forward/backward.
+          </li>
+          <li>
+            <strong>Damasca International:</strong> Officers have flying
+            movement/capture (Dama-style).
+          </li>
+        </ul>
+        <p>
+          All other Damasca rules are shared between the two variants: mandatory
+          capture, multi-capture chains, max-capture selection, stacking
+          captures (top piece captured, inserted at the bottom), and end-of-turn
+          promotion.
+        </p>
+      </div>
+
       <h2 id="lasca-vs-damasca">Lasca vs Damasca</h2>
       <p>
         If you have played <b>Lasca (Classic)</b>, Damasca will feel familiar
@@ -227,10 +261,11 @@
             Classic, Soldiers capture <strong>forward only</strong>.
           </li>
           <li>
-            <strong>Officer power:</strong> In Damasca, Officers
-            <strong>fly</strong> (long-range diagonal movement and captures). In
-            Lasca Classic, Officers move/capture like English draughts
-            kings/promoted pieces (non-flying).
+            <strong>Officer power:</strong> In Damasca, Officers either
+            <strong>fly</strong> (International) or move/capture
+            <strong>non-flying</strong> (Classic). In Lasca Classic, Officers
+            move/capture like English draughts kings/promoted pieces
+            (non-flying).
           </li>
           <li>
             <strong>Capture choice:</strong> Damasca enforces the
@@ -282,12 +317,17 @@
 
       <h2 id="damasca-vs-dama">Damasca vs Dama (Filipino Checkers)</h2>
       <p>
-        Damasca uses <b>the same movement and capture rules</b> as Dama
-        (Filipino Checkers) on an <b>8×8</b> board (mandatory captures,
-        multi-capture chains, maximum-capture selection, Soldiers capture
-        forward or backward, and Officers have flying movement/capture with the
-        no-180° reversal restriction during a chain). If you already know Dama,
-        Damasca will feel immediately familiar.
+        <b>Damasca International</b> uses
+        <b>the same movement and capture rules</b> as Dama (Filipino Checkers)
+        on an <b>8×8</b> board (mandatory captures, multi-capture chains,
+        maximum-capture selection, Soldiers capture forward or backward, and
+        Officers have flying movement/capture with the no-180° reversal
+        restriction during a chain).
+      </p>
+
+      <p>
+        <b>Damasca Classic</b> keeps the same Soldier rules and capture-chain
+        structure, but uses <b>non-flying Officers</b>.
       </p>
 
       <div class="rule-box">
@@ -367,8 +407,14 @@
             <strong>Soldiers:</strong> move diagonally forward one square.
           </li>
           <li>
-            <strong>Officers:</strong> move diagonally any distance in any
-            direction ("flying" officer for both captures and quiet moves).
+            <strong>Officers:</strong>
+            <ul>
+              <li><b>Classic:</b> move diagonally 1 square (non-flying).</li>
+              <li>
+                <b>International:</b> move diagonally any distance in any
+                direction ("flying" officer).
+              </li>
+            </ul>
           </li>
         </ul>
 
@@ -423,8 +469,18 @@
             adjacent enemy to the empty square beyond (forward or backward).
           </li>
           <li>
-            <strong>Officers:</strong> capture by jumping diagonally over
-            exactly one enemy piece and landing on any empty square beyond it.
+            <strong>Officers:</strong>
+            <ul>
+              <li>
+                <b>Classic:</b> capture by jumping diagonally over an adjacent
+                enemy to the empty square beyond (non-flying).
+              </li>
+              <li>
+                <b>International:</b> capture by jumping diagonally over exactly
+                one enemy piece and landing on any empty square beyond it
+                (flying).
+              </li>
+            </ul>
           </li>
           <li>
             <strong>Officer capture direction rule (multi-captures):</strong>

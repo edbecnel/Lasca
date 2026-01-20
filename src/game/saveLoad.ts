@@ -45,7 +45,7 @@ export interface SerializedSaveFileV3 {
 export type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
 
 function isRulesetId(raw: unknown): raw is RulesetId {
-  return raw === "lasca" || raw === "dama" || raw === "damasca";
+  return raw === "lasca" || raw === "dama" || raw === "damasca" || raw === "damasca_classic";
 }
 
 function isLegacyHybridRulesetId(raw: unknown): boolean {
@@ -124,7 +124,7 @@ function isCompatibleLoadVariant(saved: GameMeta, expected: GameMeta): boolean {
   if (saved.rulesetId !== expected.rulesetId) return false;
   if (saved.boardSize !== expected.boardSize) return false;
 
-  // Allow Dama Classic Standard/International to load each other.
+  // Allow Dama Classic/International to load each other.
   if (
     saved.rulesetId === "dama" &&
     isDamaClassicInteroperableVariant(saved.variantId) &&

@@ -19,7 +19,7 @@ export interface GameDriver {
 
   finalizeCaptureChain(args:
     | { rulesetId: "dama"; state: GameState; landing: string; jumpedSquares: Set<string> }
-    | { rulesetId: "damasca"; state: GameState; landing: string }
+    | { rulesetId: "damasca" | "damasca_classic"; state: GameState; landing: string }
   ): GameState & { didPromote?: boolean };
 
   canUndo(): boolean;
@@ -68,7 +68,7 @@ export interface OnlineGameDriver extends GameDriver {
   finalizeCaptureChainRemote(
     args:
       | { rulesetId: "dama"; state: GameState; landing: string; jumpedSquares: Set<string> }
-      | { rulesetId: "damasca"; state: GameState; landing: string }
+      | { rulesetId: "damasca" | "damasca_classic"; state: GameState; landing: string }
   ): Promise<GameState & { didPromote?: boolean }>;
 
   /** Online-only: end the current turn on the server (optionally with notation). */

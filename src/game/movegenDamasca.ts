@@ -8,6 +8,8 @@ type StackLike = Array<{ owner: "B" | "W"; rank: "S" | "O" }>;
 
 type CaptureDir = { dr: number; dc: number };
 
+type OfficerMoveStyle = "flying" | "step";
+
 function sign(n: number): number {
   if (n > 0) return 1;
   if (n < 0) return -1;
@@ -70,7 +72,8 @@ function generateRawCaptureMovesFrom(
   state: GameState,
   fromId: NodeId,
   excludedJumpSquares?: Set<NodeId>,
-  lastCaptureDir?: CaptureDir
+  lastCaptureDir?: CaptureDir,
+  officerStyle: OfficerMoveStyle = "flying"
 ): CaptureMove[] {
   const top = topAt(state, fromId);
   if (!top || top.owner !== state.toMove) return [];
@@ -115,7 +118,7 @@ function generateRawCaptureMovesFrom(
     return out;
   }
 
-  // Officers: flying captures.
+  // Officers: captures.
   const dirs = [
     { dr: -1, dc: -1 },
     { dr: -1, dc: +1 },
@@ -127,6 +130,25 @@ function generateRawCaptureMovesFrom(
     // Capture-direction rule: during a capture chain, an Officer may continue in the
     // same direction (0°) or turn left/right (±90°), but may NOT reverse (180°).
     if (lastCaptureDir && dr === -lastCaptureDir.dr && dc === -lastCaptureDir.dc) continue;
+
+    if (officerStyle === "step") {
+      // Non-flying officer: capture like English draughts kings.
+      const overR = r + dr;
+      const overC = c + dc;
+      const toR = r + dr * 2;
+      const toC = c + dc * 2;
+      if (!inBounds(overR, overC, boardSize) || !inBounds(toR, toC, boardSize)) continue;
+      if (!isPlayable(toR, toC, boardSize)) continue;
+
+      const overId = makeNodeId(overR, overC);
+      const toId = makeNodeId(toR, toC);
+
+      if (!canJumpOver(overId)) continue;
+      if (!isEmptyAt(state, toId)) continue;
+
+      out.push({ kind: "capture", from: fromId, over: overId, to: toId });
+      continue;
+    }
 
     let rr = r + dr;
     let cc = c + dc;
@@ -184,15 +206,16 @@ function bestRemainingCapturesFrom(
   fromId: NodeId,
   excludedJumpSquares: Set<NodeId>,
   memo: Map<string, number>,
-  lastDir: CaptureDir | null
+  lastDir: CaptureDir | null,
+  officerStyle: OfficerMoveStyle
 ): number {
   const key = `${hashGameState(state)}|from:${fromId}|ex:${Array.from(excludedJumpSquares).sort().join(",")}|dir:${
     lastDir ? `${lastDir.dr},${lastDir.dc}` : "none"
-  }`;
+  }|off:${officerStyle}`;
   const cached = memo.get(key);
   if (cached !== undefined) return cached;
 
-  const nextCaps = generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastDir ?? undefined);
+  const nextCaps = generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastDir ?? undefined, officerStyle);
   if (nextCaps.length === 0) {
     memo.set(key, 0);
     return 0;
@@ -203,7 +226,8 @@ function bestRemainingCapturesFrom(
     const nextExcluded = new Set(excludedJumpSquares);
     nextExcluded.add(m.over);
     const nextState = applyCaptureForSearch(state, m);
-    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to));
+    const score =
+      1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to), officerStyle);
     if (score > best) best = score;
   }
 
@@ -211,7 +235,11 @@ function bestRemainingCapturesFrom(
   return best;
 }
 
-function generateSelectableCaptureMoves(state: GameState, constraints?: MovegenConstraints): CaptureMove[] {
+function generateSelectableCaptureMoves(
+  state: GameState,
+  constraints: MovegenConstraints | undefined,
+  officerStyle: OfficerMoveStyle
+): CaptureMove[] {
   const forcedFrom = constraints?.forcedFrom;
   const excludedJumpSquares = constraints?.excludedJumpSquares ?? new Set<NodeId>();
   const lastCaptureDir = constraints?.lastCaptureDir as CaptureDir | undefined;
@@ -230,7 +258,7 @@ function generateSelectableCaptureMoves(state: GameState, constraints?: MovegenC
   for (const fromId of origins) {
     const top = topAt(state, fromId);
     if (!top || top.owner !== state.toMove) continue;
-    candidates.push(...generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastCaptureDir));
+    candidates.push(...generateRawCaptureMovesFrom(state, fromId, excludedJumpSquares, lastCaptureDir, officerStyle));
   }
 
   if (candidates.length === 0) return [];
@@ -244,7 +272,8 @@ function generateSelectableCaptureMoves(state: GameState, constraints?: MovegenC
     const nextExcluded = new Set(excludedJumpSquares);
     nextExcluded.add(m.over);
     const nextState = applyCaptureForSearch(state, m);
-    const score = 1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to));
+    const score =
+      1 + bestRemainingCapturesFrom(nextState, m.to, nextExcluded, memo, captureDir(m.from, m.to), officerStyle);
     scored.push({ move: m, score });
     if (score > globalBest) globalBest = score;
   }
@@ -253,11 +282,11 @@ function generateSelectableCaptureMoves(state: GameState, constraints?: MovegenC
 }
 
 export function generateCaptureMovesDamasca(state: GameState, constraints?: MovegenConstraints): CaptureMove[] {
-  return generateSelectableCaptureMoves(state, constraints);
+  return generateSelectableCaptureMoves(state, constraints, "flying");
 }
 
 export function generateLegalMovesDamasca(state: GameState, constraints?: MovegenConstraints): Move[] {
-  const captures = generateSelectableCaptureMoves(state, constraints);
+  const captures = generateSelectableCaptureMoves(state, constraints, "flying");
   if (captures.length > 0) return captures;
 
   const boardSize = state.meta?.boardSize ?? 8;
@@ -317,6 +346,66 @@ export function generateLegalMovesDamasca(state: GameState, constraints?: Movege
         rr += dr;
         cc += dc;
       }
+    }
+  }
+
+  return out;
+}
+
+export function generateCaptureMovesDamascaClassic(state: GameState, constraints?: MovegenConstraints): CaptureMove[] {
+  return generateSelectableCaptureMoves(state, constraints, "step");
+}
+
+export function generateLegalMovesDamascaClassic(state: GameState, constraints?: MovegenConstraints): Move[] {
+  const captures = generateSelectableCaptureMoves(state, constraints, "step");
+  if (captures.length > 0) return captures;
+
+  const boardSize = state.meta?.boardSize ?? 8;
+  const forcedFrom = constraints?.forcedFrom;
+
+  const out: Move[] = [];
+  const origins: NodeId[] = [];
+  if (forcedFrom) {
+    origins.push(forcedFrom);
+  } else {
+    for (const [id] of state.board.entries()) origins.push(id);
+  }
+
+  for (const fromId of origins) {
+    const top = topAt(state, fromId);
+    if (!top || top.owner !== state.toMove) continue;
+
+    const { r, c } = parseNodeId(fromId);
+
+    if (top.rank === "S") {
+      // Soldiers: quiet move forward only.
+      const dr = top.owner === "B" ? +1 : -1;
+      for (const dc of [-1, +1]) {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (!inBounds(nr, nc, boardSize) || !isPlayable(nr, nc, boardSize)) continue;
+        const toId = makeNodeId(nr, nc);
+        if (!isEmptyAt(state, toId)) continue;
+        out.push({ kind: "move", from: fromId, to: toId });
+      }
+      continue;
+    }
+
+    // Officers: non-flying quiet moves (one diagonal step).
+    const deltas = [
+      { dr: -1, dc: -1 },
+      { dr: -1, dc: +1 },
+      { dr: +1, dc: -1 },
+      { dr: +1, dc: +1 },
+    ];
+
+    for (const { dr, dc } of deltas) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (!inBounds(nr, nc, boardSize) || !isPlayable(nr, nc, boardSize)) continue;
+      const toId = makeNodeId(nr, nc);
+      if (!isEmptyAt(state, toId)) continue;
+      out.push({ kind: "move", from: fromId, to: toId });
     }
   }
 

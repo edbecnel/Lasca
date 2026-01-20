@@ -5,8 +5,9 @@ import damascaBoardSvgUrl from "../assets/damasca_board.svg?url";
 
 const RULESET_LABEL: Record<RulesetId, string> = {
   lasca: "Lasca",
-  dama: "Dama",
-  damasca: "Damasca",
+  dama: "Dama Classic",
+  damasca: "Damasca International",
+  damasca_classic: "Damasca Classic",
 };
 
 export const VARIANTS: readonly VariantSpec[] = [
@@ -36,8 +37,8 @@ export const VARIANTS: readonly VariantSpec[] = [
   },
   {
     variantId: "dama_8_classic_standard",
-    displayName: "Dama",
-    subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: Immediate",
+    displayName: "Dama Classic",
+    subtitle: "Rules: Dama Classic • Board: 8×8 • Pieces: 12/side • Capture removal: Immediate",
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
@@ -49,8 +50,8 @@ export const VARIANTS: readonly VariantSpec[] = [
   },
   {
     variantId: "dama_8_classic_international",
-    displayName: "Dama (International)",
-    subtitle: "Rules: Dama • Board: 8×8 • Pieces: 12/side • Capture removal: End-of-sequence",
+    displayName: "Dama International",
+    subtitle: "Rules: Dama International • Board: 8×8 • Pieces: 12/side • Capture removal: End-of-sequence",
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
@@ -61,9 +62,21 @@ export const VARIANTS: readonly VariantSpec[] = [
     available: true,
   },
   {
+    variantId: "damasca_8_classic",
+    displayName: "Damasca Classic",
+    subtitle: "Dama movement + Lasca stacking captures. Mandatory capture. Max-capture rule. Non-flying officers.",
+    rulesetId: "damasca_classic",
+    boardSize: 8,
+    piecesPerSide: 12,
+    svgAsset: damascaBoardSvgUrl,
+    entryUrl: "./damasca.html",
+    defaultSaveName: "damasca_8_classic-save.json",
+    available: true,
+  },
+  {
     variantId: "damasca_8",
-    displayName: "Damasca",
-    subtitle: "Dama movement + Lasca stacking captures. Mandatory capture. Max-capture rule. Officers fly.",
+    displayName: "Damasca International",
+    subtitle: "Dama movement + Lasca stacking captures. Mandatory capture. Max-capture rule. Flying officers.",
     rulesetId: "damasca",
     boardSize: 8,
     piecesPerSide: 12,

@@ -1,4 +1,4 @@
-export type RulesetId = "lasca" | "dama" | "damasca";
+export type RulesetId = "lasca" | "dama" | "damasca" | "damasca_classic";
 
 export type DamaCaptureRemoval = "immediate" | "end_of_sequence";
 
@@ -8,7 +8,8 @@ export type VariantId =
   | "dama_8_classic"
   | "dama_8_classic_standard"
   | "dama_8_classic_international"
-  | "damasca_8";
+  | "damasca_8"
+  | "damasca_8_classic";
 
 export interface GameMeta {
   variantId: VariantId;

@@ -65,8 +65,9 @@ function hasControlledStacks(state: GameState, p: Player): boolean {
 
 function legalMovesForContext(ctx: SearchContext): Move[] {
   const rulesetId = ctx.state.meta?.rulesetId ?? "lasca";
-  const chainRules = rulesetId === "lasca" || rulesetId === "dama" || rulesetId === "damasca";
-  const chainHasDir = rulesetId === "dama" || rulesetId === "damasca";
+  const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
+  const chainRules = rulesetId === "lasca" || rulesetId === "dama" || isDamasca;
+  const chainHasDir = rulesetId === "dama" || isDamasca;
   const constraints = ctx.lockedFrom
     ? {
         forcedFrom: ctx.lockedFrom,
@@ -134,6 +135,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
 
   const rulesetId = nextCtx.state.meta?.rulesetId ?? "lasca";
   const isDama = rulesetId === "dama";
+  const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
   const damaRemoval = isDama ? getDamaCaptureRemovalMode(nextCtx.state) : null;
   const isLasca = rulesetId === "lasca";
 
@@ -143,7 +145,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   if (didPromote && RULES.stopCaptureOnPromotion) {
     if (isDama) {
       nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
-    } else if (rulesetId === "damasca") {
+    } else if (isDamasca) {
       nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
     }
     nextCtx.state = endTurn(nextCtx.state);
@@ -156,10 +158,10 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Check for more captures from the landing square.
   const allNext = generateLegalMoves(nextCtx.state, {
     forcedFrom: move.to,
-    ...((isLasca || isDama || rulesetId === "damasca")
+    ...((isLasca || isDama || isDamasca)
       ? {
           excludedJumpSquares: nextCtx.excludedJumpSquares,
-          ...(isDama || rulesetId === "damasca" ? { lastCaptureDir: captureDir(move.from, move.to) } : {}),
+          ...(isDama || isDamasca ? { lastCaptureDir: captureDir(move.from, move.to) } : {}),
         }
       : {}),
   });
@@ -174,7 +176,7 @@ function applySearchMove(ctx: SearchContext, move: Move): SearchContext {
   // Chain ends: switch turn.
   if (isDama) {
     nextCtx.state = finalizeDamaCaptureChain(nextCtx.state, move.to, nextCtx.excludedJumpSquares);
-  } else if (rulesetId === "damasca") {
+  } else if (isDamasca) {
     nextCtx.state = finalizeDamascaCaptureChain(nextCtx.state, move.to);
   }
   nextCtx.state = endTurn(nextCtx.state);

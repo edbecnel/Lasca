@@ -5,6 +5,10 @@ import { evaluateState } from "../ai/evaluate.ts";
 export const DAMASCA_NO_PROGRESS_LIMIT_PLIES = 40;
 export const DAMASCA_OFFICER_ONLY_LIMIT_PLIES = 30;
 
+function isDamascaRulesetId(rulesetId: string): boolean {
+  return rulesetId === "damasca" || rulesetId === "damasca_classic";
+}
+
 function pieceValue(p: Piece): number {
   return p.rank === "O" ? 1.6 : 1.0;
 }
@@ -40,7 +44,7 @@ function getDamascaDeadPlay(state: GameState): { noProgressPlies: number; office
 }
 
 export function adjudicateDamascaDeadPlay(state: GameState, reasonCode: string, reasonLabel: string): GameState {
-  if ((state.meta?.rulesetId ?? "lasca") !== "damasca") return state;
+  if (!isDamascaRulesetId(state.meta?.rulesetId ?? "lasca")) return state;
   if (state.forcedGameOver) return state;
 
   const wMat = sumMaterial(state, "W");
@@ -93,7 +97,7 @@ export function adjudicateDamascaDeadPlay(state: GameState, reasonCode: string, 
 }
 
 export function maybeApplyDamascaDeadPlayEnd(state: GameState): GameState {
-  if ((state.meta?.rulesetId ?? "lasca") !== "damasca") return state;
+  if (!isDamascaRulesetId(state.meta?.rulesetId ?? "lasca")) return state;
   if (state.forcedGameOver) return state;
 
   const dp = getDamascaDeadPlay(state);
@@ -119,7 +123,7 @@ export function updateDamascaDeadPlayCounters(
     didSoldierAdvance: boolean;
   }
 ): GameState {
-  if ((state.meta?.rulesetId ?? "lasca") !== "damasca") return state;
+  if (!isDamascaRulesetId(state.meta?.rulesetId ?? "lasca")) return state;
   if (state.forcedGameOver) return state;
 
   const prev = getDamascaDeadPlay(state);

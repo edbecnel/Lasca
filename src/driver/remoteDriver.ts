@@ -415,7 +415,7 @@ export class RemoteDriver implements GameDriver {
   finalizeCaptureChain(
     _args:
       | { rulesetId: "dama"; state: GameState; landing: string; jumpedSquares: Set<string> }
-      | { rulesetId: "damasca"; state: GameState; landing: string }
+      | { rulesetId: "damasca" | "damasca_classic"; state: GameState; landing: string }
   ): GameState & { didPromote?: boolean } {
     // In online mode, chain finalization must come from the server.
     // Keep interface sync by throwing if called synchronously; use finalizeCaptureChainRemote.
@@ -425,7 +425,7 @@ export class RemoteDriver implements GameDriver {
   async finalizeCaptureChainRemote(
     args:
       | { rulesetId: "dama"; state: GameState; landing: string; jumpedSquares: Set<string> }
-      | { rulesetId: "damasca"; state: GameState; landing: string }
+      | { rulesetId: "damasca" | "damasca_classic"; state: GameState; landing: string }
   ): Promise<GameState & { didPromote?: boolean }> {
     const ids = this.requireIds();
     const req: FinalizeCaptureChainRequest =
@@ -440,7 +440,7 @@ export class RemoteDriver implements GameDriver {
         : {
             roomId: ids.roomId,
             playerId: ids.playerId,
-            rulesetId: "damasca",
+            rulesetId: args.rulesetId,
             landing: args.landing,
           };
 

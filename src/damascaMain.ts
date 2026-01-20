@@ -18,12 +18,23 @@ import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
 import { installHoldDrag } from "./ui/holdDrag";
-import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
+import { getVariantById, isVariantId, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 
-const ACTIVE_VARIANT_ID: VariantId = "damasca_8";
+const FALLBACK_VARIANT_ID: VariantId = "damasca_8";
+
+function getActiveDamascaVariantId(): VariantId {
+  const raw = window.localStorage.getItem("lasca.variantId");
+  if (raw && isVariantId(raw)) {
+    const v = getVariantById(raw);
+    if (v.rulesetId === "damasca" || v.rulesetId === "damasca_classic") return v.variantId;
+  }
+  return FALLBACK_VARIANT_ID;
+}
+
+const ACTIVE_VARIANT_ID: VariantId = getActiveDamascaVariantId();
 
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",

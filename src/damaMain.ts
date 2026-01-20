@@ -122,7 +122,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const elPhase = document.getElementById("statusPhase");
   const elMsg = document.getElementById("statusMessage");
   if (elTurn) elTurn.textContent = state.toMove === "B" ? "Black" : "White";
-  if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
+  if (elRulesBoard) elRulesBoard.textContent = `${activeVariant.displayName} Rules • ${activeVariant.boardSize}×${activeVariant.boardSize} Board`;
   if (elPhase) elPhase.textContent = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
   if (elMsg) elMsg.textContent = "—";
 
@@ -564,7 +564,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       const elPhase = document.getElementById("statusPhase");
       const elMsg = document.getElementById("statusMessage");
       if (elTurn) elTurn.textContent = next.toMove === "B" ? "Black" : "White";
-      if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
+      if (elRulesBoard) elRulesBoard.textContent = `${activeVariant.displayName} Rules • ${activeVariant.boardSize}×${activeVariant.boardSize} Board`;
       if (elPhase) elPhase.textContent = next.phase.charAt(0).toUpperCase() + next.phase.slice(1);
       if (elMsg) elMsg.textContent = "—";
       currentState = next;

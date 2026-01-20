@@ -651,7 +651,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
   function maybeApplyDamascaThreefold(room: Room): void {
     if (isRoomOver(room)) return;
     const rulesetId = (room.state as any)?.meta?.rulesetId ?? "lasca";
-    if (rulesetId !== "damasca") return;
+    if (rulesetId !== "damasca" && rulesetId !== "damasca_classic") return;
 
     const snap = room.history.exportSnapshots();
     const end = snap.currentIndex;

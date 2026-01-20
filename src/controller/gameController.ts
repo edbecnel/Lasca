@@ -531,9 +531,10 @@ export class GameController {
     const rulesetId = this.state.meta?.rulesetId ?? "lasca";
     const captureRemoval = rulesetId === "dama" ? getDamaCaptureRemovalMode(this.state) : null;
     // All rulesets with multi-capture chains must prevent re-jumping the same square.
-    const chainRules = rulesetId === "lasca" || rulesetId === "dama" || rulesetId === "damasca";
+    const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
+    const chainRules = rulesetId === "lasca" || rulesetId === "dama" || isDamasca;
     // Only Dama/Damasca have capture-direction constraints (Officer zigzag).
-    const chainHasDir = rulesetId === "dama" || rulesetId === "damasca";
+    const chainHasDir = rulesetId === "dama" || isDamasca;
     const constraints = this.lockedCaptureFrom
       ? {
           forcedFrom: this.lockedCaptureFrom,
@@ -870,10 +871,11 @@ export class GameController {
 
     if (elDeadPlayTimer) {
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+      const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
       const dp = (this.state as any).damascaDeadPlay as
         | { noProgressPlies?: number; officerOnlyPlies?: number }
         | undefined;
-      if (rulesetId === "damasca" && dp) {
+      if (isDamasca && dp) {
         const np = Math.max(0, Math.floor(dp.noProgressPlies ?? 0));
         const oo = Math.max(0, Math.floor(dp.officerOnlyPlies ?? 0));
         const npRem = Math.max(0, DAMASCA_NO_PROGRESS_LIMIT_PLIES - np);
@@ -1020,7 +1022,9 @@ export class GameController {
 
   private recomputeRepetitionCounts(): void {
     this.repetitionCounts.clear();
-    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    const isDamasca =
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
     if (!RULES.drawByThreefold && !isDamasca) return;
 
     const snap = this.driver.exportHistorySnapshots();
@@ -1033,7 +1037,9 @@ export class GameController {
   }
 
   private recordRepetitionForCurrentState(): boolean {
-    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    const isDamasca =
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
     if (!RULES.drawByThreefold && !isDamasca) return false;
     const h = hashGameState(this.state);
     const next = (this.repetitionCounts.get(h) || 0) + 1;
@@ -1042,7 +1048,9 @@ export class GameController {
   }
 
   private checkThreefoldRepetition(): boolean {
-    const isDamasca = (this.state.meta?.rulesetId ?? "lasca") === "damasca";
+    const isDamasca =
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
+      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
     if (!RULES.drawByThreefold && !isDamasca) return false;
     const h = hashGameState(this.state);
     return (this.repetitionCounts.get(h) || 0) >= 3;
@@ -1250,7 +1258,7 @@ export class GameController {
 
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
       const isDama = rulesetId === "dama";
-      const isDamasca = rulesetId === "damasca";
+      const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
       const isLasca = rulesetId === "lasca";
       const damaCaptureRemoval = isDama ? getDamaCaptureRemovalMode(this.state) : null;
       
@@ -1288,15 +1296,18 @@ export class GameController {
           }
         } else if (isDamasca) {
           // Damasca should not promote mid-chain, but finalize defensively.
+          const damascaRulesetId = (rulesetId === "damasca_classic" ? "damasca_classic" : "damasca") as
+            | "damasca"
+            | "damasca_classic";
           if (this.driver.mode === "online") {
             this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
-              rulesetId: "damasca",
+              rulesetId: damascaRulesetId,
               state: this.state,
               landing: move.to,
             });
           } else {
             this.state = this.driver.finalizeCaptureChain({
-              rulesetId: "damasca",
+              rulesetId: damascaRulesetId,
               state: this.state,
               landing: move.to,
             });
@@ -1345,7 +1356,7 @@ export class GameController {
         // Check for threefold repetition draw
         if (this.recordRepetitionForCurrentState()) {
           const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
-          if (rulesetId2 === "damasca") {
+          if (rulesetId2 === "damasca" || rulesetId2 === "damasca_classic") {
             this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
 
             // Update the last history entry so export/undo sees the adjudication.
@@ -1429,15 +1440,18 @@ export class GameController {
           });
         }
       } else if (isDamasca) {
+        const damascaRulesetId = (rulesetId === "damasca_classic" ? "damasca_classic" : "damasca") as
+          | "damasca"
+          | "damasca_classic";
         if (this.driver.mode === "online") {
           this.state = await (this.driver as OnlineGameDriver).finalizeCaptureChainRemote({
-            rulesetId: "damasca",
+            rulesetId: damascaRulesetId,
             state: this.state,
             landing: move.to,
           });
         } else {
           this.state = this.driver.finalizeCaptureChain({
-            rulesetId: "damasca",
+            rulesetId: damascaRulesetId,
             state: this.state,
             landing: move.to,
           });
@@ -1486,7 +1500,7 @@ export class GameController {
       // Check for threefold repetition draw
       if (this.recordRepetitionForCurrentState()) {
         const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
-        if (rulesetId2 === "damasca") {
+        if (rulesetId2 === "damasca" || rulesetId2 === "damasca_classic") {
           this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
 
           if (this.driver.mode !== "online") {

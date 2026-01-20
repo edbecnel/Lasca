@@ -139,7 +139,7 @@ describe("saveLoad", () => {
     expect(loaded.state.meta).toBeDefined();
   });
 
-  it("should allow Dama Classic Standard <-> International saves to load each other (rewrites meta to current)", () => {
+  it("should allow Dama Classic <-> Dama International saves to load each other (rewrites meta to current)", () => {
     const mkDamaState = (variantId: any, damaCaptureRemoval: any): GameState => ({
       board: new Map([["r3c3", [{ owner: "B", rank: "S" }]]]),
       toMove: "B",

@@ -14,6 +14,6 @@ export function applyMove(
 ): GameState & { didPromote?: boolean } {
   const rulesetId = getRulesetId(state);
   if (rulesetId === "dama") return applyMoveDama(state, move);
-  if (rulesetId === "damasca") return applyMoveDamasca(state, move);
+  if (rulesetId === "damasca" || rulesetId === "damasca_classic") return applyMoveDamasca(state, move);
   return applyMoveLasca(state, move);
 }
