@@ -58,7 +58,6 @@ export class GameController {
   private onlineTransportStatus: "connected" | "reconnecting" = "connected";
   private lastDeadPlayWarning: string | null = null;
   private lastGameOverToast: string | null = null;
-  private lastLocalTurn: boolean | null = null;
   private lastToastToMove: GameState["toMove"] | null = null;
   private toastTimer: number | null = null;
   private toastEl: HTMLDivElement | null = null;
@@ -131,10 +130,14 @@ export class GameController {
       if (this.isGameOver) return;
       const status = payload?.status === "reconnecting" ? "reconnecting" : "connected";
       if (this.onlineTransportStatus === status) return;
+      const prevStatus = this.onlineTransportStatus;
       this.onlineTransportStatus = status;
       this.updatePanel();
 
-      // If we became connected and it's our turn, show a toast.
+      // On reconnect, re-toast the current turn state.
+      if (prevStatus === "reconnecting" && status === "connected") {
+        this.lastToastToMove = null;
+      }
       this.maybeToastTurnChange();
     });
 
@@ -343,13 +346,28 @@ export class GameController {
     if (this.driver.mode === "online") {
       if (this.onlineTransportStatus !== "connected") return;
 
-      const isLocalTurn = this.isLocalPlayersTurn();
-      const shouldToast = this.lastLocalTurn === null ? isLocalTurn : !this.lastLocalTurn && isLocalTurn;
-      this.lastLocalTurn = isLocalTurn;
+      // Online play: toast on side-to-move changes (and once on startup), but
+      // localize the message using player color when available.
+      const toMove = this.state.toMove;
+      const shouldToast = this.lastToastToMove === null ? true : this.lastToastToMove !== toMove;
+      this.lastToastToMove = toMove;
+      if (!shouldToast) return;
 
-      if (shouldToast) {
-        this.showToast("Your turn", 1500);
+      const legal = this.getLegalMovesForTurn();
+      const hasCapture = legal.some((m) => m.kind === "capture");
+
+      const localColor = (this.driver as OnlineGameDriver).getPlayerColor();
+      if (localColor === "W" || localColor === "B") {
+        const isLocalTurn = toMove === localColor;
+        if (isLocalTurn) {
+          this.showToast(hasCapture ? "Your turn — must capture" : "Your turn", 1500);
+          return;
+        }
       }
+
+      // If we don't know local color (spectator / reconnect edge), fall back
+      // to explicit side-to-move messaging.
+      this.showToast(`${toMove === "B" ? "Black" : "White"} to ${hasCapture ? "capture" : "move"}`, 1500);
       return;
     }
 
@@ -455,7 +473,6 @@ export class GameController {
     this.updatePanel();
 
     // Initialize and (optionally) show a turn toast at startup.
-    this.lastLocalTurn = null;
     this.lastToastToMove = null;
     this.maybeToastTurnChange();
 
@@ -826,7 +843,6 @@ export class GameController {
     this.updatePanel();
 
     // Always re-toast at new game start.
-    this.lastLocalTurn = null;
     this.lastToastToMove = null;
     this.maybeToastTurnChange();
     
@@ -870,7 +886,6 @@ export class GameController {
     this.checkAndHandleCurrentPlayerLost();
 
     // Always re-toast after load.
-    this.lastLocalTurn = null;
     this.lastToastToMove = null;
     this.maybeToastTurnChange();
     

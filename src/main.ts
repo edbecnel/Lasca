@@ -260,6 +260,18 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (saveGameBtn) {
     saveGameBtn.addEventListener("click", () => {
+      // In online mode, the authoritative history comes from the server snapshots
+      // (stored on the RemoteDriver), not the page-level HistoryManager.
+      if (driver.mode === "online") {
+        const snap = driver.exportHistorySnapshots();
+        const hm = new HistoryManager();
+        hm.replaceAll(snap.states as any, snap.notation, snap.currentIndex);
+        const stateFromHistory = driver.getHistoryCurrent();
+        const currentState = stateFromHistory ?? driver.getState();
+        saveGameToFile(currentState, hm, activeVariant.defaultSaveName);
+        return;
+      }
+
       const currentState = controller.getState();
       saveGameToFile(currentState, history, activeVariant.defaultSaveName);
     });
