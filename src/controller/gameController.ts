@@ -62,6 +62,7 @@ export class GameController {
   private lastToastToMove: GameState["toMove"] | null = null;
   private toastTimer: number | null = null;
   private toastEl: HTMLDivElement | null = null;
+  private stickyToastKey: string | null = null;
 
   private static readonly TOAST_PREF_KEY = "lasca.opt.toasts";
 
@@ -286,6 +287,9 @@ export class GameController {
     const inner = el.firstElementChild as HTMLElement | null;
     if (!inner) return;
 
+    // A timed toast replaces any sticky toast.
+    this.stickyToastKey = null;
+
     inner.textContent = text;
     if (this.toastTimer) window.clearTimeout(this.toastTimer);
 
@@ -295,6 +299,35 @@ export class GameController {
       this.toastTimer = null;
       el.classList.remove("isVisible");
     }, Math.max(0, durationMs));
+  }
+
+  public showStickyToast(key: string, text: string, opts?: { force?: boolean }): void {
+    if (!key) return;
+    if (!opts?.force && !this.readToastPref()) return;
+    const el = this.ensureToastEl();
+    if (!el) return;
+    const inner = el.firstElementChild as HTMLElement | null;
+    if (!inner) return;
+
+    inner.textContent = text;
+    if (this.toastTimer) window.clearTimeout(this.toastTimer);
+    this.toastTimer = null;
+    el.classList.add("isVisible");
+    this.stickyToastKey = key;
+  }
+
+  public clearStickyToast(key: string): void {
+    if (!key) return;
+    if (this.stickyToastKey !== key) return;
+    this.stickyToastKey = null;
+
+    if (this.toastTimer) window.clearTimeout(this.toastTimer);
+    this.toastTimer = null;
+
+    const el = this.toastEl;
+    if (el && typeof document !== "undefined" && document.body.contains(el)) {
+      el.classList.remove("isVisible");
+    }
   }
 
   private showGameOverToast(message: string): void {

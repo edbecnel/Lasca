@@ -66,6 +66,10 @@ export class AIManager {
   private elStep: HTMLButtonElement | null = null;
   private elInfo: HTMLElement | null = null;
 
+  private static readonly TAP_RESUME_TOAST_KEY = "aiPausedTapResume";
+
+  private toastSyncTimer: number | null = null;
+
   constructor(controller: GameController) {
     this.controller = controller;
     this.settings = this.loadSettings();
@@ -95,6 +99,82 @@ export class AIManager {
     this.settings.paused = true;
     localStorage.setItem(LS_KEYS.paused, "true");
     this.refreshUI();
+  }
+
+  private isHumanVsAI(): boolean {
+    const wHuman = this.settings.white === "human";
+    const bHuman = this.settings.black === "human";
+    return (wHuman && !bHuman) || (!wHuman && bHuman);
+  }
+
+  private shouldOfferTapToResume(): boolean {
+    if (!this.settings.paused) return false;
+    if (!this.isHumanVsAI()) return false;
+    if (this.controller.isOver()) return false;
+
+    const p: Player = this.controller.getState().toMove;
+    const diff = difficultyForPlayer(this.settings, p);
+    return diff !== "human";
+  }
+
+  private syncPausedTurnToastNow(): void {
+    if (!this.isHumanVsAI() || this.controller.isOver()) {
+      this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
+      return;
+    }
+
+    const toMove: Player = this.controller.getState().toMove;
+    const diff = difficultyForPlayer(this.settings, toMove);
+    const isAiTurn = diff !== "human";
+
+    if (this.settings.paused && isAiTurn) {
+      const label = toMove === "B" ? "Black" : "White";
+      this.controller.showStickyToast(
+        AIManager.TAP_RESUME_TOAST_KEY,
+        `${label}'s turn. Tap anywhere to resume AI`,
+        { force: true }
+      );
+    } else {
+      this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
+    }
+  }
+
+  private schedulePausedTurnToastSync(): void {
+    // Defer to the next tick so this sticky hint is not immediately overwritten
+    // by the controller's own timed turn-change toast.
+    if (this.toastSyncTimer) return;
+    this.toastSyncTimer = window.setTimeout(() => {
+      this.toastSyncTimer = null;
+      this.syncPausedTurnToastNow();
+    }, 0);
+  }
+
+  private resumeAI(): void {
+    if (!this.settings.paused) return;
+    this.settings.paused = false;
+    localStorage.setItem(LS_KEYS.paused, "false");
+    this.refreshUI();
+    this.syncPausedTurnToastNow();
+    this.kick();
+  }
+
+  private bindBoardTapToResume(): void {
+    if (typeof document === "undefined") return;
+    const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
+    const boardSvg = boardWrap?.querySelector("svg") as SVGSVGElement | null;
+    if (!boardSvg) return;
+
+    const onTap = (ev: Event) => {
+      if (!this.shouldOfferTapToResume()) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.resumeAI();
+    };
+
+    // Use capture so we can intercept before the GameController click handler
+    // (otherwise a tap might select pieces instead of resuming AI).
+    boardSvg.addEventListener("pointerdown", onTap, { capture: true });
+    boardSvg.addEventListener("click", onTap, { capture: true });
   }
 
   private ensureWorker(): void {
@@ -205,6 +285,12 @@ export class AIManager {
     // User must explicitly click Resume to start AI play.
     this.forcePausedUI();
 
+    // Make it easy for mobile/newcomers: tapping the board resumes AI when it's AI's turn.
+    this.bindBoardTapToResume();
+
+    // If we're paused on an AI turn in human-vs-AI, show a persistent hint.
+    this.schedulePausedTurnToastSync();
+
     // Don't auto-kick on page load - wait for user to Resume.
   }
 
@@ -285,6 +371,8 @@ export class AIManager {
       const canStep = !this.busy && !this.controller.isOver() && diff !== "human";
       this.elStep.disabled = !canStep;
     }
+
+    this.schedulePausedTurnToastSync();
   }
 
   private onWorkerFailed(): void {
@@ -376,7 +464,7 @@ export class AIManager {
     // Grab capture-chain constraints (if any).
     const constraints = this.controller.getCaptureChainConstraints
       ? this.controller.getCaptureChainConstraints()
-      : { lockedCaptureFrom: null, jumpedSquares: [] };
+      : { lockedCaptureFrom: null, lockedCaptureDir: null, jumpedSquares: [] };
 
     const serialized = serializeGameState(state);
 

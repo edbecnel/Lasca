@@ -211,7 +211,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const elOnlineServerUrl = byId<HTMLInputElement>("launchOnlineServerUrl");
   const elOnlineServerUrlLabel =
     (document.querySelector('label[for="launchOnlineServerUrl"]') as HTMLElement | null) ?? null;
+  const elOnlineActionLabel =
+    (document.querySelector('label[for="launchOnlineAction"]') as HTMLElement | null) ?? null;
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
+  const elOnlineHint = (document.getElementById("launchOnlineHint") as HTMLElement | null) ?? null;
   const elOnlinePrefColorLabel = byId<HTMLElement>("launchOnlinePrefColorLabel");
   const elOnlinePrefColor = byId<HTMLSelectElement>("launchOnlinePrefColor");
   const elOnlinePlayerIdLabel = byId<HTMLElement>("launchOnlinePlayerIdLabel");
@@ -459,8 +462,16 @@ window.addEventListener("DOMContentLoaded", () => {
       elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
 
     const showOnline = playMode === "online";
+    // When local/offline, hide the online controls entirely to avoid confusion.
+    elOnlineServerUrlLabel && (elOnlineServerUrlLabel.style.display = showOnline ? "" : "none");
+    elOnlineServerUrl.style.display = showOnline ? "" : "none";
     elOnlineServerUrl.disabled = !showOnline;
+
+    elOnlineActionLabel && (elOnlineActionLabel.style.display = showOnline ? "" : "none");
+    elOnlineAction.style.display = showOnline ? "" : "none";
     elOnlineAction.disabled = !showOnline;
+
+    if (elOnlineHint) elOnlineHint.style.display = showOnline ? "" : "none";
 
     // Online color preference:
     // - Only meaningful for Create (first player chooses their seat).
