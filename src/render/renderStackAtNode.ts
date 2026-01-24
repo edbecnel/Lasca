@@ -1,6 +1,7 @@
 import { pieceToHref } from "../pieces/pieceToHref";
 import { makeUse } from "./svgUse";
 import { drawMiniStackSpine } from "./miniSpine";
+import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
 
 type Inspector = {
@@ -32,9 +33,17 @@ export function renderStackAtNode(
   const top = stack[stack.length - 1];
   const half = pieceSize / 2;
 
-  g.appendChild(makeUse(pieceToHref(top, { rulesetId }), cx - half, cy - half, pieceSize));
+  const baseHref = pieceToHref(top, { rulesetId });
+  const href = maybeVariantWoodenPieceHref(svgRoot, baseHref, nodeId);
+  g.appendChild(makeUse(href, cx - half, cy - half, pieceSize));
 
-  drawMiniStackSpine(svgRoot, g, cx, cy, stack, { pieceSize, miniSize: 18, rulesetId, countLayer: countsLayer ?? undefined });
+  drawMiniStackSpine(svgRoot, g, cx, cy, stack, {
+    pieceSize,
+    miniSize: 18,
+    rulesetId,
+    seedKey: nodeId,
+    countLayer: countsLayer ?? undefined,
+  });
 
   if (inspector && stack.length > 1) {
     g.style.cursor = "pointer";

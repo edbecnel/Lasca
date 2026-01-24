@@ -96,6 +96,8 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     await loadSvgDefsInto(themeDefs, [theme.piecesDefs, theme.boardDefs]);
     await applyThemeCss(theme.css);
 
+    svgRoot.setAttribute("data-theme-id", theme.id);
+
     currentId = theme.id;
     saveThemeId(currentId);
     svgRoot.style.visibility = prevVis || "visible";

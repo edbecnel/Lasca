@@ -1,6 +1,7 @@
 import { MINI_SPINE_MAX_SHOWN, MINI_SPINE_KEEP_BOTTOM, MINI_SPINE_KEEP_TOP } from "../config/constants";
 import { pieceToHref } from "../pieces/pieceToHref";
 import { makeUse } from "./svgUse";
+import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -16,6 +17,7 @@ interface MiniSpineOptions {
   spinePad: number;
   crackGap: number;
   rulesetId?: string;
+  seedKey?: string;
   countLayer?: SVGGElement | null;
 }
 
@@ -38,6 +40,7 @@ export function drawMiniStackSpine(
     spinePad = 6,
     crackGap = 12,
     rulesetId,
+    seedKey,
     countLayer,
   } = opts;
 
@@ -105,7 +108,8 @@ export function drawMiniStackSpine(
 
   for (let i = 0; i < countShown; i++) {
     const p = shown[i];
-    const href = pieceToHref(p, { rulesetId });
+    const baseHref = pieceToHref(p, { rulesetId });
+    const href = seedKey ? maybeVariantWoodenPieceHref(svgRoot, baseHref, `${seedKey}:mini:${i}`) : baseHref;
 
     let yOffset = i * (miniSize + miniGap);
     if (hasCrack && i > crackAfterIndex) {
