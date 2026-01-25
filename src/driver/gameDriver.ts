@@ -47,7 +47,11 @@ export interface OnlineGameDriver extends GameDriver {
   readonly mode: "online";
 
   getRoomId(): string | null;
+  getPlayerId(): string | null;
   getPlayerColor(): "W" | "B" | null;
+
+  /** Latest server-reported presence info (if available). */
+  getPresence(): import("../shared/onlineProtocol.ts").PresenceByPlayerId | null;
 
   /**
    * Starts realtime server push (WebSockets preferred, SSE fallback).

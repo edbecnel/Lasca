@@ -44,9 +44,10 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 
 ### MP7 — Online UX
 
-- [ ] **Opponent presence indicator UI**
-  - Server already sends `presence` and grace info; expose it in the Online panel.
-  - Show “Opponent: Connected / Disconnected (grace until …)” and optionally a small dot indicator.
+- [x] **Opponent presence indicator UI**
+  - Exposes server `presence` + grace info in the Online panel.
+  - Shows “Opponent: Connected / Disconnected (grace until …)”.
+  - UI: `#onlineOpponentStatus` in the game HTML; render logic in `GameController.updatePanel()`.
 - [ ] **Replay viewer / post-game summary (from JSONL)**
   - Add a server endpoint to fetch the room event log (or a summarized replay payload).
   - Build a simple UI: list moves + allow stepping through snapshots.

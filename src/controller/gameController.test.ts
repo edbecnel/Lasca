@@ -254,3 +254,105 @@ describe("GameController turn toast indicates capture", () => {
     vi.useRealTimers();
   });
 });
+
+describe("GameController online opponent presence toasts", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  class FakeOnlineDriver {
+    public mode = "online" as const;
+    private presence: any = null;
+
+    setPresence(p: any): void {
+      this.presence = p;
+    }
+
+    getPlayerId(): string {
+      return "p1";
+    }
+
+    getPresence(): any {
+      return this.presence;
+    }
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="onlineInfoPanel"></div>
+      <div id="onlineOpponentStatus">—</div>
+    `;
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+  });
+
+  it("shows sticky toast on disconnect and timed toast on rejoin", () => {
+    vi.useFakeTimers();
+
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([["r1c1", [{ owner: "W", rank: "O" }]]]),
+      toMove: "W",
+      phase: "idle",
+    };
+    history.push(s);
+
+    const driver = new FakeOnlineDriver();
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:00.000Z" },
+      p2: { connected: true, lastSeenAt: "2026-01-25T00:00:00.000Z" },
+    });
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history, driver as any);
+
+    // Prime internal presence state (no toast on first observation).
+    (controller as any).updatePanel();
+    expect(document.querySelector(".lascaToast")).toBeNull();
+
+    // Opponent disconnects.
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:01.000Z" },
+      p2: {
+        connected: false,
+        lastSeenAt: "2026-01-25T00:00:01.000Z",
+        inGrace: true,
+        graceUntil: "2026-01-25T00:10:00.000Z",
+      },
+    });
+    (controller as any).updatePanel();
+    const toast1 = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast1?.textContent ?? "").toContain("Opponent disconnected");
+
+    // Opponent rejoins.
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:02.000Z" },
+      p2: { connected: true, lastSeenAt: "2026-01-25T00:00:02.000Z" },
+    });
+    (controller as any).updatePanel();
+    const toast2 = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast2?.textContent).toBe("Opponent rejoined");
+
+    // Opponent leaves room entirely (seat missing) -> sticky.
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:03.000Z" },
+    });
+    (controller as any).updatePanel();
+    const toast3 = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast3?.textContent).toBe("Opponent left the room");
+
+    // Opponent returns to the room; should auto-close sticky and show rejoined toast.
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:04.000Z" },
+      p2: { connected: true, lastSeenAt: "2026-01-25T00:00:04.000Z" },
+    });
+    (controller as any).updatePanel();
+    const toast4 = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast4?.textContent).toBe("Opponent rejoined");
+
+    vi.runAllTimers();
+    vi.useRealTimers();
+  });
+});

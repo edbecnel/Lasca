@@ -64,6 +64,11 @@ export class GameController {
   private toastTimer: number | null = null;
   private toastEl: HTMLDivElement | null = null;
   private stickyToastKey: string | null = null;
+  private stickyToastText: string | null = null;
+
+  private lastOpponentPresent: boolean | null = null;
+  private lastOpponentConnected: boolean | null = null;
+  private everSawOpponentPresent: boolean = false;
 
   private static readonly TOAST_PREF_KEY = "lasca.opt.toasts";
 
@@ -292,8 +297,8 @@ export class GameController {
     const inner = el.firstElementChild as HTMLElement | null;
     if (!inner) return;
 
-    // A timed toast replaces any sticky toast.
-    this.stickyToastKey = null;
+    // If a sticky toast is active, temporarily show this toast and then
+    // restore the sticky toast after the timer.
 
     inner.textContent = text;
     if (this.toastTimer) window.clearTimeout(this.toastTimer);
@@ -302,6 +307,13 @@ export class GameController {
 
     this.toastTimer = window.setTimeout(() => {
       this.toastTimer = null;
+
+      if (this.stickyToastKey && this.stickyToastText) {
+        inner.textContent = this.stickyToastText;
+        el.classList.add("isVisible");
+        return;
+      }
+
       el.classList.remove("isVisible");
     }, Math.max(0, durationMs));
   }
@@ -319,12 +331,14 @@ export class GameController {
     this.toastTimer = null;
     el.classList.add("isVisible");
     this.stickyToastKey = key;
+    this.stickyToastText = text;
   }
 
   public clearStickyToast(key: string): void {
     if (!key) return;
     if (this.stickyToastKey !== key) return;
     this.stickyToastKey = null;
+    this.stickyToastText = null;
 
     if (this.toastTimer) window.clearTimeout(this.toastTimer);
     this.toastTimer = null;
@@ -923,6 +937,7 @@ export class GameController {
     const elOnlineInfoPanel = document.getElementById("onlineInfoPanel") as HTMLElement | null;
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
+    const elOpponent = document.getElementById("onlineOpponentStatus") as HTMLDivElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
     const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
     const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
@@ -996,6 +1011,42 @@ export class GameController {
     } else {
       if (elCopy) elCopy.disabled = true;
     }
+
+    if (elOpponent) {
+      if (this.driver.mode !== "online") {
+        elOpponent.textContent = "—";
+      } else {
+        const remote = this.driver as OnlineGameDriver;
+        const selfId = remote.getPlayerId();
+        const presence = remote.getPresence();
+
+        if (!presence || !selfId || selfId === "spectator") {
+          elOpponent.textContent = selfId === "spectator" ? "Spectating" : "—";
+        } else {
+          const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+          const opp = opponentId ? (presence as any)[opponentId] : null;
+
+          this.maybeToastOpponentPresence({ selfId, opponentId, opp });
+
+          if (!opp) {
+            elOpponent.textContent = "Waiting for opponent";
+          } else if (opp.inGrace && typeof opp.graceUntil === "string") {
+            let when = opp.graceUntil;
+            try {
+              const d = new Date(opp.graceUntil);
+              if (!Number.isNaN(d.getTime())) when = d.toLocaleTimeString();
+            } catch {
+              // ignore
+            }
+            elOpponent.textContent = `Disconnected (grace until ${when})`;
+          } else if (opp.connected) {
+            elOpponent.textContent = "Connected";
+          } else {
+            elOpponent.textContent = "Disconnected";
+          }
+        }
+      }
+    }
     if (elMsg && !this.isGameOver) {
       if (isOnline && this.onlineTransportStatus === "reconnecting") {
         elMsg.textContent = "Reconnecting…";
@@ -1026,6 +1077,79 @@ export class GameController {
         }
       }
     }
+  }
+
+  private maybeToastOpponentPresence(args: { selfId: string | null; opponentId: string | null; opp: any | null }): void {
+    if (this.driver.mode !== "online") {
+      this.lastOpponentPresent = null;
+      this.lastOpponentConnected = null;
+      this.clearStickyToast("online_opponent_presence");
+      return;
+    }
+    if (this.isGameOver) return;
+
+    const selfId = args.selfId;
+    if (!selfId || selfId === "spectator") {
+      this.lastOpponentPresent = null;
+      this.lastOpponentConnected = null;
+      this.clearStickyToast("online_opponent_presence");
+      return;
+    }
+
+    const opponentPresent = Boolean(args.opp);
+    const opponentConnected = opponentPresent ? Boolean(args.opp.connected) : null;
+    const hadEverOpponent = this.everSawOpponentPresent;
+
+    // Prime state without showing any toasts.
+    if (this.lastOpponentPresent === null && this.lastOpponentConnected === null) {
+      this.lastOpponentPresent = opponentPresent;
+      this.lastOpponentConnected = opponentConnected;
+      return;
+    }
+
+    const key = "online_opponent_presence";
+
+    // Opponent no longer in room (seat missing).
+    if (this.lastOpponentPresent === true && opponentPresent === false) {
+      this.showStickyToast(key, "Opponent left the room");
+    }
+
+    // Opponent (re)joins the room (seat appears).
+    if (this.lastOpponentPresent === false && opponentPresent === true) {
+      // If we already had an opponent earlier, treat this as a rejoin.
+      // Otherwise, it is the initial join for a newly-created room.
+      const msg = hadEverOpponent ? "Opponent rejoined" : "Opponent joined";
+      this.clearStickyToast(key);
+      this.showToast(msg, 1800);
+    }
+
+    // Opponent disconnected (still in room but not connected).
+    if (this.lastOpponentConnected === true && opponentPresent && opponentConnected === false) {
+      let msg = "Opponent disconnected";
+
+      if (args.opp?.inGrace && typeof args.opp?.graceUntil === "string") {
+        let when = args.opp.graceUntil;
+        try {
+          const d = new Date(args.opp.graceUntil);
+          if (!Number.isNaN(d.getTime())) when = d.toLocaleTimeString();
+        } catch {
+          // ignore
+        }
+        msg = `Opponent disconnected (grace until ${when})`;
+      }
+
+      this.showStickyToast(key, msg);
+    }
+
+    // Opponent rejoined.
+    if (this.lastOpponentConnected === false && opponentPresent && opponentConnected === true) {
+      this.clearStickyToast(key);
+      this.showToast("Opponent rejoined", 1800);
+    }
+
+    this.lastOpponentPresent = opponentPresent;
+    this.lastOpponentConnected = opponentConnected;
+    if (opponentPresent) this.everSawOpponentPresent = true;
   }
 
   private resolveClickedNode(target: EventTarget | null): string | null {
