@@ -219,12 +219,21 @@
         <ellipse cx="30" cy="38" rx="4.2" ry="9.2" fill="#ffffff" opacity="0.24"/>
         <ellipse cx="41" cy="33" rx="12" ry="6" fill="#ffffff" opacity="0.06"/>
 
-        <use href="#lumStar5" fill="#fff7da" opacity="0.98" transform="translate(0 -2)"/>
-        <circle cx="50" cy="50" r="18" fill="none" stroke="#fff7da" stroke-opacity="0.70" stroke-width="3"/>
+        <circle cx="50" cy="50" r="18" fill="none" stroke="#3b2a12" stroke-opacity="0.55" stroke-width="5"/>
+        <circle cx="50" cy="50" r="18" fill="none" stroke="#fff7da" stroke-opacity="0.60" stroke-width="3"/>
         <circle cx="50" cy="50" r="43" fill="url(#lumShineWarm)"/>
 
         <circle cx="50" cy="50" r="2.8" fill="#fffaf4" opacity="1"/>
         <circle cx="50" cy="50" r="5.8" fill="#fff1dc" opacity="0.16"/>
+
+        <use
+          href="#lumStar5"
+          fill="#ffe08a"
+          stroke="#3b2a12"
+          stroke-width="2.6"
+          stroke-linejoin="round"
+          opacity="0.98"
+          transform="translate(0 -2)"/>
       </g>
     </symbol>
 
