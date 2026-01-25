@@ -215,8 +215,8 @@ Regression/tests to keep green
   - Online panel shows “Opponent: Connected/Disconnected (grace until …)” and emits toasts for disconnect/leave/rejoin.
 - [x] Latency-safe move UX (authoritative settle)
 - [x] Post-game summary + replay viewer from event log
-- [~] Report issue / copy debug info
-  - Room ID copy exists; no consolidated “copy debug blob” yet.
+- [x] Report issue / copy debug info
+  - Room ID + debug blob copy exists (Online panel).
 
 ---
 

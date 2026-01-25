@@ -125,6 +125,43 @@ export class GameController {
     });
   }
 
+  private bindDebugCopyButton(): void {
+    const btn = document.getElementById("copyDebugBtn") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    btn.addEventListener("click", async () => {
+      if (this.driver.mode !== "online") return;
+      const remote = this.driver as OnlineGameDriver;
+
+      const debug = {
+        app: { name: "lasca", version: "0.1.0" },
+        whenIso: new Date().toISOString(),
+        online: {
+          serverUrl: remote.getServerUrl(),
+          roomId: remote.getRoomId(),
+          playerId: remote.getPlayerId(),
+          playerColor: remote.getPlayerColor(),
+          transport: this.onlineTransportStatus,
+          presence: remote.getPresence(),
+        },
+        game: {
+          variantId: (this.state as any)?.meta?.variantId ?? null,
+          rulesetId: (this.state as any)?.meta?.rulesetId ?? null,
+          stateVersion: (this.state as any)?.stateVersion ?? null,
+          toMove: this.state.toMove,
+          phase: this.state.phase,
+          isGameOver: this.isGameOver,
+          forcedGameOver: (this.state as any)?.forcedGameOver ?? null,
+        },
+        ua: typeof navigator !== "undefined" ? (navigator as any).userAgent : null,
+      };
+
+      const text = JSON.stringify(debug, null, 2);
+      const ok = await this.copyTextToClipboard(text);
+      this.showToast(ok ? "Copied debug info" : "Failed to copy debug info", 1600);
+    });
+  }
+
   private bindReplayButton(): void {
     const btn = document.getElementById("openReplayBtn") as HTMLButtonElement | null;
     if (!btn) return;
@@ -742,6 +779,7 @@ export class GameController {
     this.maybeToastTurnChange();
 
     this.bindRoomIdCopyButton();
+    this.bindDebugCopyButton();
     this.bindReplayButton();
 
     this.startOnlinePolling();
@@ -1185,6 +1223,7 @@ export class GameController {
     const elOnlineInfoPanel = document.getElementById("onlineInfoPanel") as HTMLElement | null;
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
+    const elCopyDebug = document.getElementById("copyDebugBtn") as HTMLButtonElement | null;
     const elOpponent = document.getElementById("onlineOpponentStatus") as HTMLDivElement | null;
     const elReplayBtn = document.getElementById("openReplayBtn") as HTMLButtonElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
@@ -1255,12 +1294,15 @@ export class GameController {
         const roomId = (this.driver as OnlineGameDriver).getRoomId();
         elRoomId.textContent = roomId ?? "—";
         if (elCopy) elCopy.disabled = !roomId;
+        if (elCopyDebug) elCopyDebug.disabled = !roomId;
       } else {
         elRoomId.textContent = "—";
         if (elCopy) elCopy.disabled = true;
+        if (elCopyDebug) elCopyDebug.disabled = true;
       }
     } else {
       if (elCopy) elCopy.disabled = true;
+      if (elCopyDebug) elCopyDebug.disabled = true;
     }
 
     if (elOpponent) {

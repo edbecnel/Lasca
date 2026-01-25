@@ -46,6 +46,7 @@ export interface GameDriver {
 export interface OnlineGameDriver extends GameDriver {
   readonly mode: "online";
 
+  getServerUrl(): string | null;
   getRoomId(): string | null;
   getPlayerId(): string | null;
   getPlayerColor(): "W" | "B" | null;

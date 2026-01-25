@@ -98,6 +98,10 @@ export class RemoteDriver implements GameDriver {
     return this.ids?.roomId ?? null;
   }
 
+  getServerUrl(): string | null {
+    return this.ids?.serverUrl ?? null;
+  }
+
   getPlayerId(): string | null {
     return this.ids?.playerId ?? null;
   }

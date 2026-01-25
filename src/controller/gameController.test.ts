@@ -356,3 +356,73 @@ describe("GameController online opponent presence toasts", () => {
     vi.useRealTimers();
   });
 });
+
+describe("GameController online debug copy", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  class FakeOnlineDriver {
+    public mode = "online" as const;
+    getServerUrl(): string | null {
+      return "http://localhost:9999";
+    }
+    getRoomId(): string | null {
+      return "room123";
+    }
+    getPlayerId(): string | null {
+      return "p1";
+    }
+    getPlayerColor(): any {
+      return "W";
+    }
+    getPresence(): any {
+      return null;
+    }
+  }
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="onlineInfoPanel"></div>
+      <div id="infoRoomId">—</div>
+      <button id="copyRoomIdBtn"></button>
+      <button id="copyDebugBtn"></button>
+    `;
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+
+    // Force clipboard fallback path.
+    (navigator as any).clipboard = undefined;
+    (document as any).execCommand = () => true;
+  });
+
+  it("copies a JSON debug blob and shows a toast", async () => {
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([["r1c1", [{ owner: "W", rank: "O" }]]]),
+      toMove: "W",
+      phase: "idle",
+    };
+    history.push(s);
+
+    const driver = new FakeOnlineDriver();
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history, driver as any);
+
+    // Only bind the debug copy handler; full bind() expects a complete OnlineGameDriver.
+    (controller as any).bindDebugCopyButton();
+
+    const btn = document.getElementById("copyDebugBtn") as HTMLButtonElement;
+    btn.click();
+
+    // Allow the async click handler to complete.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Toast appears synchronously (clipboard fallback returns true).
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Copied debug info");
+  });
+});
