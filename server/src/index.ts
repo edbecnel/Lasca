@@ -211,7 +211,7 @@ app.post("/api/endTurn", (req, res) => {
 
 */
 
-const port = Number(process.env.PORT ?? 8787);
+const port = Number(process.env.PORT ?? 8788);
 
 startLascaServer({ port })
   .then(({ url, gamesDir }) => {

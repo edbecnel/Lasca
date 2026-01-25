@@ -54,7 +54,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 
 ### MP3 — Lobby / Matchmaking
 
-- [ ] Basic lobby list of open rooms
+- [~] Basic lobby list of open rooms
+  - Server endpoint: `GET /api/lobby` (currently lists joinable rooms active in memory on this server process).
+  - UI: Start Page “Lobby” panel (Refresh + quick-fill Join).
 - [ ] Matchmaking queue (optional)
 - [ ] Productized spectator UX (explicit mode)
 
@@ -166,7 +168,8 @@ Regression/tests to keep green
 
 ## MP3 — Matchmaking & Lobby
 
-- [ ] Public lobby list of open games (optional)
+- [~] Public lobby list of open games (optional)
+  - `GET /api/lobby` lists joinable rooms currently active in memory.
 - [ ] Random matchmaking queue
 - [x] Private invite links / friend match
   - Start Page supports Create/Join and shares `roomId`.

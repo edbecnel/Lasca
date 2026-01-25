@@ -1,6 +1,7 @@
 import { DEFAULT_THEME_ID, getThemeById, THEMES } from "./theme/themes";
 import { DEFAULT_VARIANT_ID, VARIANTS, getVariantById, isVariantId } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
+import type { GetLobbyResponse, LobbyRoomSummary } from "./shared/onlineProtocol.ts";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -222,6 +223,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const elOnlineRoomIdLabel = byId<HTMLElement>("launchOnlineRoomIdLabel");
   const elOnlineRoomId = byId<HTMLInputElement>("launchOnlineRoomId");
 
+  const elLobbySection = (document.getElementById("launchLobbySection") as HTMLElement | null) ?? null;
+  const elLobbyStatus = (document.getElementById("launchLobbyStatus") as HTMLElement | null) ?? null;
+  const elLobbyRefresh = (document.getElementById("launchLobbyRefresh") as HTMLButtonElement | null) ?? null;
+  const elLobbyList = (document.getElementById("launchLobbyList") as HTMLElement | null) ?? null;
+
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elThreefold = byId<HTMLInputElement>("launchThreefold");
@@ -245,6 +251,144 @@ window.addEventListener("DOMContentLoaded", () => {
   const setRoomIdError = (isError: boolean): void => {
     elOnlineRoomId.classList.toggle("isError", isError);
     elOnlineRoomIdLabel.classList.toggle("isError", isError);
+  };
+
+  const setLobbyStatus = (text: string): void => {
+    if (!elLobbyStatus) return;
+    elLobbyStatus.textContent = (text || "").trim() || "—";
+  };
+
+  const renderLobby = (rooms: LobbyRoomSummary[]): void => {
+    if (!elLobbyList) return;
+    elLobbyList.textContent = "";
+
+    if (!rooms.length) {
+      const el = document.createElement("div");
+      el.className = "hint";
+      el.style.marginLeft = "0";
+      el.textContent = "No open rooms.";
+      elLobbyList.appendChild(el);
+      return;
+    }
+
+    for (const r of rooms) {
+      const v = getVariantById(r.variantId);
+
+      const item = document.createElement("div");
+      item.className = "lobbyItem";
+
+      const left = document.createElement("div");
+      left.className = "lobbyItemLeft";
+
+      const title = document.createElement("div");
+      title.className = "lobbyItemTitle";
+      title.textContent = `${v.displayName} — `;
+      const rid = document.createElement("span");
+      rid.className = "mono";
+      rid.textContent = r.roomId;
+      title.appendChild(rid);
+
+      const sub = document.createElement("div");
+      sub.className = "lobbyItemSub";
+      const open = r.seatsOpen.length ? `Open: ${r.seatsOpen.join("/")}` : "Open: —";
+      const taken = r.seatsTaken.length ? `Taken: ${r.seatsTaken.join("/")}` : "Taken: —";
+      sub.textContent = `${open} · ${taken}`;
+
+      left.appendChild(title);
+      left.appendChild(sub);
+
+      const right = document.createElement("div");
+      right.style.display = "flex";
+      right.style.gap = "8px";
+      right.style.alignItems = "center";
+
+      const joinBtn = document.createElement("button");
+      joinBtn.type = "button";
+      joinBtn.className = "panelBtn";
+      joinBtn.textContent = "Join";
+      joinBtn.addEventListener("click", () => {
+        // Fill the existing Join fields.
+        elPlayMode.value = "online";
+        localStorage.setItem(LS_KEYS.playMode, "online");
+
+        elOnlineAction.value = "join";
+        localStorage.setItem(LS_KEYS.onlineAction, "join");
+
+        elOnlineRoomId.value = r.roomId;
+        localStorage.setItem(LS_KEYS.onlineRoomId, r.roomId);
+
+        // Clear any existing error styling and re-evaluate Launch availability.
+        setRoomIdError(false);
+        syncOnlineVisibility();
+        syncAvailability();
+
+        // Convenience: immediately run the normal Launch flow.
+        // This preserves all existing checks (room variant probe, rejoin logic, etc).
+        if (!elLaunch.disabled) {
+          elLaunch.click();
+        }
+      });
+
+      right.appendChild(joinBtn);
+
+      item.appendChild(left);
+      item.appendChild(right);
+      elLobbyList.appendChild(item);
+    }
+  };
+
+  let lobbyFetchInFlight = false;
+  let lobbyLastKey = "";
+
+  const fetchLobby = async (): Promise<void> => {
+    if (!elLobbySection || !elLobbySection.offsetParent) return; // hidden
+    const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
+    if (!serverUrl) {
+      setLobbyStatus("Lobby: enter a server URL.");
+      renderLobby([]);
+      return;
+    }
+
+    const key = serverUrl;
+    if (lobbyFetchInFlight) return;
+
+    lobbyFetchInFlight = true;
+    elLobbyRefresh && (elLobbyRefresh.disabled = true);
+    setLobbyStatus("Lobby: loading…");
+
+    try {
+      const res = await fetch(`${serverUrl}/api/lobby?limit=200`);
+      const raw = await res.text();
+      let json: GetLobbyResponse | null = null;
+      try {
+        json = (raw ? JSON.parse(raw) : null) as any;
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok || (json as any)?.error) {
+        const msg =
+          typeof (json as any)?.error === "string"
+            ? (json as any).error
+            : raw && raw.trim()
+              ? raw.trim().slice(0, 120)
+              : `HTTP ${res.status}`;
+        setLobbyStatus(`Lobby: failed (${msg})`);
+        renderLobby([]);
+        return;
+      }
+
+      const rooms = Array.isArray((json as any)?.rooms) ? (((json as any).rooms as any[]) as LobbyRoomSummary[]) : [];
+      renderLobby(rooms);
+      setLobbyStatus(`Lobby: ${rooms.length} open room${rooms.length === 1 ? "" : "s"}.`);
+      lobbyLastKey = key;
+    } catch {
+      setLobbyStatus(`Lobby: network error — server: ${serverUrl}`);
+      renderLobby([]);
+    } finally {
+      lobbyFetchInFlight = false;
+      elLobbyRefresh && (elLobbyRefresh.disabled = false);
+    }
   };
 
   const setServerError = (isError: boolean): void => {
@@ -378,6 +522,14 @@ window.addEventListener("DOMContentLoaded", () => {
     setWarning(warning ?? "—", { isError: false });
     setRoomIdError(false);
     setServerError(false);
+
+    // If we are in online mode and the server URL changed, auto-refresh lobby once.
+    if (playMode === "online") {
+      const serverUrlNow = normalizeServerUrl(elOnlineServerUrl.value);
+      if (serverUrlNow && serverUrlNow !== lobbyLastKey) {
+        void fetchLobby();
+      }
+    }
   };
 
   // When navigating back to the Start Page from a game tab, browsers may restore
@@ -508,10 +660,22 @@ window.addEventListener("DOMContentLoaded", () => {
     elOnlineRoomIdLabel.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.disabled = !showRoomId;
+
+    if (elLobbySection) {
+      elLobbySection.style.display = showOnline ? "" : "none";
+      if (!showOnline) {
+        setLobbyStatus("—");
+        renderLobby([]);
+      }
+    }
   }
 
   syncOnlineVisibility();
   syncAvailability();
+
+  elLobbyRefresh?.addEventListener("click", () => {
+    void fetchLobby();
+  });
 
   elLaunch.addEventListener("click", async () => {
     const vId = (isVariantId(elGame.value) ? elGame.value : DEFAULT_VARIANT_ID) as VariantId;

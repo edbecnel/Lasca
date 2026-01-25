@@ -224,7 +224,7 @@ function logJoinUrl(args: { serverUrl: string; roomId: string }): void {
 
 function parseOnlineQuery(search: string, envServerUrl?: string | undefined): OnlineQuery {
   const params = new URLSearchParams(search.startsWith("?") ? search : `?${search}`);
-  const serverUrl = params.get("server") ?? envServerUrl ?? "http://localhost:8787";
+  const serverUrl = params.get("server") ?? envServerUrl ?? "http://localhost:8788";
   const create = params.get("create") === "1" || params.get("create") === "true";
   const join = params.get("join") === "1" || params.get("join") === "true";
   const roomId = (params.get("roomId") ?? "").trim() || null;

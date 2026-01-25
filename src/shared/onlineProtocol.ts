@@ -164,6 +164,25 @@ export type GetRoomSnapshotResponse =
     }
   | OnlineError;
 
+// --- Lobby / matchmaking ---
+
+export type LobbyRoomSummary = {
+  roomId: RoomId;
+  variantId: VariantId;
+  /** Player colors currently taken (derived from server room.players). */
+  seatsTaken: PlayerColor[];
+  /** Player colors currently available to join. */
+  seatsOpen: PlayerColor[];
+  /** Included for UI display; informational only. */
+  timeControl?: TimeControl;
+};
+
+export type GetLobbyResponse =
+  | {
+      rooms: LobbyRoomSummary[];
+    }
+  | OnlineError;
+
 // --- Replay / post-game summary ---
 
 export type ReplayEvent = {

@@ -422,6 +422,42 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Wire up leave-room button (online only: forfeits; local/spectator: just return).
+  const leaveRoomBtn = document.getElementById("leaveRoomBtn") as HTMLButtonElement | null;
+  if (leaveRoomBtn) {
+    leaveRoomBtn.addEventListener("click", async () => {
+      if (driver.mode !== "online") {
+        window.location.assign("./index.html");
+        return;
+      }
+
+      const online = driver as OnlineGameDriver;
+      const playerId = online.getPlayerId();
+      if (!playerId) {
+        // Spectator / not seated: leaving doesn't affect the game.
+        window.location.assign("./index.html");
+        return;
+      }
+
+      const localColor = online.getPlayerColor();
+      const currentPlayer = localColor === "B" ? "Black" : localColor === "W" ? "White" : "your";
+      const confirmed = confirm(
+        `Leave room? This forfeits the game (counts as resign). ${currentPlayer} will lose. Continue?`
+      );
+      if (!confirmed) return;
+
+      try {
+        await online.resignRemote();
+        window.location.assign("./index.html");
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[ui] leave room failed", err);
+        const msg = err instanceof Error ? err.message : "Leave room failed";
+        alert(msg);
+      }
+    });
+  }
+
   controller.addHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
 

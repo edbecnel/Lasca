@@ -21,8 +21,10 @@ import type { VariantId } from "../../src/variants/variantTypes.ts";
 import type {
   CreateRoomRequest,
   CreateRoomResponse,
+  GetLobbyResponse,
   JoinRoomRequest,
   JoinRoomResponse,
+  LobbyRoomSummary,
   SubmitMoveRequest,
   SubmitMoveResponse,
   FinalizeCaptureChainRequest,
@@ -827,7 +829,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
   }
 
   const app = express();
-  app.use(cors());
+  // Reflect the request origin to keep browser fetch happy across dev modes
+  // (including file:// where Origin can be "null").
+  app.use(cors({ origin: true }));
   app.use(express.json({ limit: "1mb" }));
 
   app.use((req, _res, next) => {
@@ -1061,6 +1065,45 @@ export function createLascaApp(opts: ServerOpts = {}): {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Join failed";
       const response: JoinRoomResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  // MP3: Basic public lobby list of joinable rooms.
+  // Note: currently lists rooms that are active in memory on this server process.
+  app.get("/api/lobby", async (req, res) => {
+    try {
+      const limitRaw = typeof req.query.limit === "string" ? req.query.limit : "";
+      const limit = Math.max(1, Math.min(500, Number.parseInt(limitRaw || "200", 10) || 200));
+
+      const out: LobbyRoomSummary[] = [];
+      for (const room of rooms.values()) {
+        if (isRoomOver(room)) continue;
+
+        // Derive seats from players to stay consistent with other seat handling.
+        const seatsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
+        const seatsOpen: PlayerColor[] = [];
+        if (!seatsTaken.has("W")) seatsOpen.push("W");
+        if (!seatsTaken.has("B")) seatsOpen.push("B");
+
+        if (seatsOpen.length === 0) continue;
+
+        out.push({
+          roomId: room.roomId,
+          variantId: room.variantId,
+          seatsTaken: Array.from(seatsTaken.values()),
+          seatsOpen,
+          timeControl: room.timeControl,
+        });
+
+        if (out.length >= limit) break;
+      }
+
+      const response: GetLobbyResponse = { rooms: out };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Lobby failed";
+      const response: GetLobbyResponse = { error: msg };
       res.status(400).json(response);
     }
   });
@@ -1515,7 +1558,7 @@ export async function startLascaServer(args: {
   });
   await ensureGamesDir(gamesDir);
 
-  const port = Number.isFinite(args.port as any) ? Number(args.port) : 8787;
+  const port = Number.isFinite(args.port as any) ? Number(args.port) : 8788;
 
   // Use an explicit HTTP server so WebSockets can attach cleanly.
   const server = createServer(app);
