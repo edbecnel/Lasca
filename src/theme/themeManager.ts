@@ -5,6 +5,8 @@ import { createThemeDropdown } from "../ui/components/themeDropdown";
 const LS_KEY = "lasca.theme";
 const LINK_ID = "lascaThemeCss";
 
+export const THEME_CHANGE_EVENT = "lasca:themechange" as const;
+
 function ensureDefsStructure(svgRoot: SVGSVGElement) {
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -96,7 +98,21 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     await loadSvgDefsInto(themeDefs, [theme.piecesDefs, theme.boardDefs]);
     await applyThemeCss(theme.css);
 
+    // Luminous theme relies on outer glow; ensure nothing in the board template
+    // (notably node outline strokes) visually sits above the piece glyphs.
+    if (theme.id === "luminous") {
+      const pieces = svgRoot.querySelector("#pieces") as SVGGElement | null;
+      const nodes = svgRoot.querySelector("#nodes") as SVGGElement | null;
+      if (pieces && nodes && nodes.parentElement) {
+        nodes.parentElement.insertBefore(pieces, nodes.nextSibling);
+      }
+    }
+
     svgRoot.setAttribute("data-theme-id", theme.id);
+
+    // Notify listeners (e.g. controller) so they can re-render any <use href="#..."></use>
+    // that may be theme-dependent (Wooden variants).
+    svgRoot.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: { themeId: theme.id } }));
 
     currentId = theme.id;
     saveThemeId(currentId);

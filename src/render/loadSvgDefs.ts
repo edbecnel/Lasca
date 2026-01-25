@@ -14,7 +14,14 @@ export async function loadSvgDefsInto(targetEl: Element, urls: Array<string | UR
   if (!Array.isArray(urls) || urls.length === 0) return;
 
   for (const url of urls) {
-    const res = await fetch(url as string);
+    const href = String(url);
+    // These SVGs are fetched at runtime (not imported as modules), so HMR/caching can
+    // otherwise make iterative theme tweaks appear to have "no effect".
+    const fetchUrl = (import.meta as any)?.env?.DEV
+      ? `${href}${href.includes("?") ? "&" : "?"}t=${Date.now()}`
+      : href;
+
+    const res = await fetch(fetchUrl, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`loadSvgDefsInto: failed to fetch ${String(url)} (${res.status})`);
     }

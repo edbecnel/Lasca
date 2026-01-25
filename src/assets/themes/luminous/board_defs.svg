@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1" aria-hidden="true">
+  <defs>
+    <!-- Same connector mask as other themes; board styling is primarily via CSS. -->
+    <mask id="mask-connectors" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="1000" height="1000" fill="white"/>
+
+      <!-- row 0 -->
+      <circle cx="140" cy="140" r="42" fill="black"/>
+      <circle cx="380" cy="140" r="42" fill="black"/>
+      <circle cx="620" cy="140" r="42" fill="black"/>
+      <circle cx="860" cy="140" r="42" fill="black"/>
+      <!-- row 1 -->
+      <circle cx="260" cy="260" r="42" fill="black"/>
+      <circle cx="500" cy="260" r="42" fill="black"/>
+      <circle cx="740" cy="260" r="42" fill="black"/>
+      <!-- row 2 -->
+      <circle cx="140" cy="380" r="42" fill="black"/>
+      <circle cx="380" cy="380" r="42" fill="black"/>
+      <circle cx="620" cy="380" r="42" fill="black"/>
+      <circle cx="860" cy="380" r="42" fill="black"/>
+      <!-- row 3 -->
+      <circle cx="260" cy="500" r="42" fill="black"/>
+      <circle cx="500" cy="500" r="42" fill="black"/>
+      <circle cx="740" cy="500" r="42" fill="black"/>
+      <!-- row 4 -->
+      <circle cx="140" cy="620" r="42" fill="black"/>
+      <circle cx="380" cy="620" r="42" fill="black"/>
+      <circle cx="620" cy="620" r="42" fill="black"/>
+      <circle cx="860" cy="620" r="42" fill="black"/>
+      <!-- row 5 -->
+      <circle cx="260" cy="740" r="42" fill="black"/>
+      <circle cx="500" cy="740" r="42" fill="black"/>
+      <circle cx="740" cy="740" r="42" fill="black"/>
+      <!-- row 6 -->
+      <circle cx="140" cy="860" r="42" fill="black"/>
+      <circle cx="380" cy="860" r="42" fill="black"/>
+      <circle cx="620" cy="860" r="42" fill="black"/>
+      <circle cx="860" cy="860" r="42" fill="black"/>
+    </mask>
+  </defs>
+</svg>
