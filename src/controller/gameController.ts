@@ -20,6 +20,7 @@ import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 import { endTurn } from "../game/endTurn.ts";
 import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
+import { ensureTurnIndicatorLayer, renderTurnIndicator } from "../render/turnIndicator.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
 import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
@@ -32,6 +33,7 @@ export class GameController {
   private inspector: ReturnType<typeof createStackInspector> | null;
   private overlayLayer: SVGGElement;
   private previewLayer: SVGGElement;
+  private turnIndicatorLayer: SVGGElement;
   private state: GameState;
   private selected: string | null = null;
   private currentTargets: string[] = [];
@@ -414,6 +416,7 @@ export class GameController {
     const countsLayer = ensureStackCountsLayer(this.svg);
     this.svg.appendChild(countsLayer);
     this.svg.appendChild(this.previewLayer);
+    this.svg.appendChild(this.turnIndicatorLayer);
   }
 
   private clearSelectionForInputLock(): void {
@@ -450,6 +453,7 @@ export class GameController {
     this.inspector = inspector;
     this.overlayLayer = ensureOverlayLayer(svg);
     this.previewLayer = ensurePreviewLayer(svg);
+    this.turnIndicatorLayer = ensureTurnIndicatorLayer(svg);
     this.state = state;
     this.history = history;
     this.driver = driver ?? new LocalDriver(state, history);
@@ -479,6 +483,22 @@ export class GameController {
     this.bindRoomIdCopyButton();
 
     this.startOnlinePolling();
+  }
+
+  /**
+   * Theme switching can change which piece symbol IDs exist (e.g. Wooden variants).
+   * Re-render the authoritative view so all <use href="#..."></use> references match the active theme.
+   */
+  refreshForThemeChange(): void {
+    if (this.isGameOver) {
+      // Still refresh so the final position renders under the new theme.
+      this.renderAuthoritative();
+      this.updatePanel();
+      return;
+    }
+
+    this.renderAuthoritative();
+    this.updatePanel();
   }
 
   setMoveHints(enabled: boolean): void {
@@ -916,6 +936,9 @@ export class GameController {
 
     if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
+
+    // Board HUD: show whose turn it is as a small icon in the board's upper-left.
+    renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, { hidden: this.isGameOver });
 
     if (elDeadPlayTimer) {
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";

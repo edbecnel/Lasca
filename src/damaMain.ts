@@ -3,7 +3,7 @@ import type { GameState } from "./game/state.ts";
 import { renderGameState } from "./render/renderGameState.ts";
 import { initSplitLayout } from "./ui/layout/splitLayout";
 import { loadSvgFileInto } from "./render/loadSvgFile";
-import { createThemeManager } from "./theme/themeManager";
+import { createThemeManager, THEME_CHANGE_EVENT } from "./theme/themeManager";
 import type { Player } from "./types";
 import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
@@ -147,6 +147,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
+
+  // Theme switching can change piece symbol IDs (Wooden variants), so re-render on change.
+  svg.addEventListener(THEME_CHANGE_EVENT, () => controller.refreshForThemeChange());
 
   const startupMsg = consumeStartupMessage();
   if (startupMsg) controller.showStartupMessage(startupMsg);
