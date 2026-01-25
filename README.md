@@ -53,6 +53,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
 - 🌐 Online multiplayer (2 players) via Start Page (Create/Join rooms)
+- 📋 Lobby list of open rooms (one-click Join)
 - 🆔 Room ID shown in-game (Info → Online) with one-click copy
 - 📱 Mobile board-height adjust button (tap to toggle; touch-hold + drag to move)
 
@@ -70,6 +71,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - Client: `http://localhost:8080/`
 - Server: `http://localhost:8788/`
 
+Note: if `8080` is already in use, Vite will pick another port (often `8081`). Use the URL printed in your terminal.
+
 2. On the Start Page, set **Play mode** to **Online**.
 3. Player 1 chooses **Create** and clicks **Launch**.
 4. In-game, copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
@@ -77,12 +80,20 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 
 Note: when joining, the Start Page will auto-open the correct variant page for that room.
 
+Alternative: use the Start Page **Lobby** section to see open rooms and click **Join** on a row (auto-fills the Room ID and launches).
+
+##### Leaving an online game
+
+- If you want to leave cleanly and release your seat, use the in-game **Leave room (forfeit)** button. It confirms first, then ends the game immediately (counts as resign) and returns you to the Start Page.
+- If you simply close the tab, the server starts a short disconnect grace period. If you don’t return in time, the server will end the game by disconnect timeout.
+
 ##### Online troubleshooting
 
 - **Ports already in use**: the online client uses `8080` and the online server uses `8788`. If `npm run online:dev` fails to start, stop anything else listening on those ports.
   - Windows PowerShell example:
     - `Get-NetTCPConnection -LocalPort 8788,8080 | Select-Object -ExpandProperty OwningProcess -Unique`
     - `Stop-Process -Id <PID> -Force`
+- **Client is on 8081 (or similar)**: Vite will automatically choose a new port if `8080` is busy. Check the terminal output for the actual client URL.
 - **Changes not taking effect**: make sure you restarted the online server (and client) after pulling new code; stale node processes can keep old behavior running.
 - **Room ID copy doesn’t work**: clipboard writes usually require a secure context (HTTPS or `http://localhost`) and may prompt for permission. If the button fails, you can still select/copy the Room ID text manually.
 - **Joined the wrong variant**: always join from the Start Page’s **Online → Join** flow. Opening a variant page directly (e.g. `src/lasca.html`) and then trying to “join” a room from another variant can cause confusing behavior.
