@@ -271,6 +271,10 @@ describe("GameController online opponent presence toasts", () => {
       return "p1";
     }
 
+    getPlayerColor(): any {
+      return "W";
+    }
+
     getPresence(): any {
       return this.presence;
     }

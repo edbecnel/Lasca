@@ -21,10 +21,15 @@ import { parseNodeId } from "../game/coords.ts";
 import { endTurn } from "../game/endTurn.ts";
 import { ensurePreviewLayer, clearPreviewLayer } from "../render/previewLayer.ts";
 import { ensureTurnIndicatorLayer, renderTurnIndicator } from "../render/turnIndicator.ts";
+import {
+  ensureOpponentPresenceIndicatorLayer,
+  renderOpponentPresenceIndicator,
+} from "../render/opponentPresenceIndicator.ts";
 import type { GameDriver } from "../driver/gameDriver.ts";
 import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
 import { deserializeWireGameState } from "../shared/wireState.ts";
+import type { PostRoomDebugReportResponse } from "../shared/onlineProtocol.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -35,6 +40,7 @@ export class GameController {
   private overlayLayer: SVGGElement;
   private previewLayer: SVGGElement;
   private turnIndicatorLayer: SVGGElement;
+  private opponentPresenceIndicatorLayer: SVGGElement;
   private state: GameState;
   private selected: string | null = null;
   private currentTargets: string[] = [];
@@ -59,6 +65,10 @@ export class GameController {
   private onlinePollTimer: number | null = null;
   private onlineRealtimeEnabled: boolean = false;
   private onlineTransportStatus: "connected" | "reconnecting" = "connected";
+  private onlineDidShowConnectingToast: boolean = false;
+  private onlineDidShowConnectedToast: boolean = false;
+  private reportIssueHintShownForRoomId: string | null = null;
+  private reportIssueHintLastShownAtMs: number = 0;
   private lastDeadPlayWarning: string | null = null;
   private lastGameOverToast: string | null = null;
   private lastToastToMove: GameState["toMove"] | null = null;
@@ -77,6 +87,8 @@ export class GameController {
   private replaySnapshots: Array<{ stateVersion: number; ts: string; state: GameState; summary: string }> = [];
   private replayIndex: number = 0;
   private replaySavedState: { state: GameState; isGameOver: boolean } | null = null;
+
+  private debugEl: HTMLDivElement | null = null;
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
     if (!text) return false;
@@ -133,13 +145,17 @@ export class GameController {
       if (this.driver.mode !== "online") return;
       const remote = this.driver as OnlineGameDriver;
 
+      const serverUrl = remote.getServerUrl();
+      const roomId = remote.getRoomId();
+      const playerId = remote.getPlayerId();
+
       const debug = {
         app: { name: "lasca", version: "0.1.0" },
         whenIso: new Date().toISOString(),
         online: {
-          serverUrl: remote.getServerUrl(),
-          roomId: remote.getRoomId(),
-          playerId: remote.getPlayerId(),
+          serverUrl,
+          roomId,
+          playerId,
           playerColor: remote.getPlayerColor(),
           transport: this.onlineTransportStatus,
           presence: remote.getPresence(),
@@ -157,9 +173,225 @@ export class GameController {
       };
 
       const text = JSON.stringify(debug, null, 2);
+
+      // Always show the text box so users can manually copy/paste if clipboard fails.
+      this.openDebugModal({ text, status: "Preparing debug info…" });
+
+      const copiedOk = await this.copyTextToClipboard(text);
+
+      // Keep the toast behavior stable: show copy outcome immediately.
+      this.showToast(copiedOk ? "Copied debug info" : "Failed to copy debug info", 1600);
+
+      // Fire-and-forget upload to server for per-room logging.
+      void (async () => {
+        let savedOk = false;
+        let savedFileName: string | null = null;
+        try {
+          if (serverUrl && roomId) {
+            const url = new URL(`/api/room/${encodeURIComponent(roomId)}/debug`, serverUrl);
+            const res = await fetch(url.toString(), {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ roomId, playerId, debug }),
+            });
+
+            const data = (await res.json()) as PostRoomDebugReportResponse;
+            if (res.ok && (data as any)?.ok) {
+              savedOk = true;
+              savedFileName = (data as any).fileName ?? null;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        const statusParts: string[] = [];
+        statusParts.push(copiedOk ? "Copied to clipboard" : "Clipboard copy failed");
+        statusParts.push(savedOk ? (savedFileName ? `Saved on server (${savedFileName})` : "Saved on server") : "Server save failed");
+        this.openDebugModal({ text, status: statusParts.join(" · ") });
+      })();
+    });
+  }
+
+  private ensureDebugEl(): HTMLDivElement | null {
+    if (typeof document === "undefined") return null;
+    if (this.debugEl && document.body.contains(this.debugEl)) return this.debugEl;
+
+    const styleId = "lasca-debug-style";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .lascaDebugBackdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.55);
+          z-index: 99999;
+          display: none;
+        }
+        .lascaDebugBackdrop.isOpen { display: block; }
+        .lascaDebugCard {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: min(92vw, 820px);
+          max-height: min(86vh, 760px);
+          overflow: hidden;
+          border-radius: 14px;
+          background: rgba(0, 0, 0, 0.90);
+          border: 1px solid rgba(255,255,255,0.16);
+          color: rgba(255,255,255,0.92);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+          padding: 14px;
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .lascaDebugTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .lascaDebugTitle { font-size: 14px; font-weight: 800; letter-spacing: 0.2px; }
+        .lascaDebugStatus { font-size: 12px; opacity: 0.85; }
+        .lascaDebugText {
+          width: 100%;
+          flex: 1;
+          min-height: 220px;
+          resize: none;
+          background: rgba(255,255,255,0.06);
+          color: rgba(255,255,255,0.92);
+          border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 10px;
+          padding: 10px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+          font-size: 12px;
+          line-height: 1.35;
+          outline: none;
+          overflow: auto;
+        }
+        .lascaDebugActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+        .lascaDebugBtn {
+          appearance: none;
+          border: 1px solid rgba(255,255,255,0.18);
+          background: rgba(255,255,255,0.06);
+          color: rgba(255,255,255,0.92);
+          border-radius: 10px;
+          padding: 8px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .lascaDebugBtn:hover { background: rgba(255,255,255,0.1); }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "lascaDebugBackdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+
+    const card = document.createElement("div");
+    card.className = "lascaDebugCard";
+
+    const top = document.createElement("div");
+    top.className = "lascaDebugTop";
+
+    const left = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "lascaDebugTitle";
+    title.textContent = "Debug info";
+    const status = document.createElement("div");
+    status.className = "lascaDebugStatus";
+    status.id = "lascaDebugStatus";
+    status.textContent = "";
+    left.appendChild(title);
+    left.appendChild(status);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "lascaDebugBtn";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => this.closeDebugModal());
+
+    top.appendChild(left);
+    top.appendChild(closeBtn);
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "lascaDebugText";
+    textarea.id = "lascaDebugText";
+    textarea.setAttribute("spellcheck", "false");
+    textarea.setAttribute("wrap", "off");
+
+    const actions = document.createElement("div");
+    actions.className = "lascaDebugActions";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "lascaDebugBtn";
+    copyBtn.textContent = "Copy";
+    copyBtn.addEventListener("click", async () => {
+      const text = textarea.value || "";
       const ok = await this.copyTextToClipboard(text);
       this.showToast(ok ? "Copied debug info" : "Failed to copy debug info", 1600);
+      if (!ok) {
+        try {
+          textarea.focus();
+          textarea.select();
+        } catch {
+          // ignore
+        }
+      }
     });
+
+    actions.appendChild(copyBtn);
+
+    card.appendChild(top);
+    card.appendChild(textarea);
+    card.appendChild(actions);
+    backdrop.appendChild(card);
+
+    backdrop.addEventListener("click", (ev) => {
+      if (ev.target === backdrop) this.closeDebugModal();
+    });
+
+    window.addEventListener("keydown", (ev) => {
+      if (!this.debugEl) return;
+      if (!this.debugEl.classList.contains("isOpen")) return;
+      if (ev.key === "Escape") this.closeDebugModal();
+    });
+
+    document.body.appendChild(backdrop);
+    this.debugEl = backdrop;
+    return backdrop;
+  }
+
+  private openDebugModal(args: { text: string; status?: string }): void {
+    const el = this.ensureDebugEl();
+    if (!el) return;
+
+    const ta = el.querySelector("#lascaDebugText") as HTMLTextAreaElement | null;
+    const statusEl = el.querySelector("#lascaDebugStatus") as HTMLDivElement | null;
+    if (ta) ta.value = args.text;
+    if (statusEl) statusEl.textContent = args.status ?? "";
+
+    el.classList.add("isOpen");
+    try {
+      ta?.focus();
+      ta?.select();
+    } catch {
+      // ignore
+    }
+  }
+
+  private closeDebugModal(): void {
+    if (!this.debugEl) return;
+    this.debugEl.classList.remove("isOpen");
   }
 
   private bindReplayButton(): void {
@@ -415,6 +647,12 @@ export class GameController {
     const remote = this.driver as OnlineGameDriver;
     if (this.onlinePollTimer || this.onlineRealtimeEnabled) return;
 
+    // Surface initial connection state.
+    if (!this.onlineDidShowConnectingToast && !this.isGameOver) {
+      this.onlineDidShowConnectingToast = true;
+      this.showToast("Connecting…", 1400);
+    }
+
     // Prefer realtime server push (WebSockets; falls back to SSE). Falls back to polling if unavailable.
     // Transport status events are emitted by the driver (WS primary).
     remote.onSseEvent("transport_status", (payload) => {
@@ -425,6 +663,13 @@ export class GameController {
       this.onlineTransportStatus = status;
       this.updatePanel();
 
+      if (status === "reconnecting") {
+        this.showToast("Reconnecting…", 2000);
+        this.maybeShowReportIssueHintToast("Connection problem");
+      } else if (prevStatus === "reconnecting" && status === "connected") {
+        this.showToast("Reconnected", 1400);
+      }
+
       // On reconnect, re-toast the current turn state.
       if (prevStatus === "reconnecting" && status === "connected") {
         this.lastToastToMove = null;
@@ -434,6 +679,11 @@ export class GameController {
 
     const startedRealtime = remote.startRealtime(() => {
       if (this.isGameOver) return;
+
+      if (!this.onlineDidShowConnectedToast) {
+        this.onlineDidShowConnectedToast = true;
+        this.showToast("Connected", 1100);
+      }
 
       this.state = remote.getState();
       // Any opponent update invalidates local in-progress UI selection/chain.
@@ -532,7 +782,7 @@ export class GameController {
           top: 50%;
           transform: translate(-50%, -50%);
           z-index: 99999;
-          pointer-events: none;
+          pointer-events: auto;
           display: none;
         }
         .lascaToast {
@@ -550,6 +800,7 @@ export class GameController {
           opacity: 0;
           transform: scale(0.98);
           transition: opacity 140ms ease, transform 140ms ease;
+          cursor: pointer;
         }
         .lascaToastWrap.isVisible { display: block; }
         .lascaToastWrap.isVisible .lascaToast {
@@ -568,6 +819,28 @@ export class GameController {
     const inner = document.createElement("div");
     inner.className = "lascaToast";
     inner.textContent = "";
+    inner.setAttribute("role", "button");
+    inner.tabIndex = 0;
+    const dismiss = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (this.stickyToastKey) {
+        this.clearStickyToast(this.stickyToastKey);
+        return;
+      }
+
+      // Non-sticky toast: allow click-to-dismiss.
+      const el = this.toastEl;
+      if (el) el.classList.remove("isVisible");
+      if (this.toastTimer) window.clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    };
+    inner.addEventListener("click", dismiss);
+    inner.addEventListener("keydown", (e) => {
+      const ke = e as KeyboardEvent;
+      if (ke.key === "Enter" || ke.key === " ") dismiss(e);
+    });
     wrap.appendChild(inner);
     document.body.appendChild(wrap);
     this.toastEl = wrap;
@@ -715,6 +988,35 @@ export class GameController {
     this.svg.appendChild(countsLayer);
     this.svg.appendChild(this.previewLayer);
     this.svg.appendChild(this.turnIndicatorLayer);
+    this.svg.appendChild(this.opponentPresenceIndicatorLayer);
+  }
+
+  private maybeShowReportIssueStickyToast(): void {
+    // Back-compat: older builds used a sticky toast for this.
+    // Keep the method name to avoid churn, but use a non-sticky, rate-limited hint.
+    this.maybeShowReportIssueHintToast();
+  }
+
+  private maybeShowReportIssueHintToast(reason?: string): void {
+    if (this.driver.mode !== "online") return;
+    if (!this.readToastPref()) return;
+
+    // Only show this hint on pages that actually include the "Copy Debug" affordance.
+    const copyDebugBtn = document.getElementById("copyDebugBtn") as HTMLButtonElement | null;
+    if (!copyDebugBtn) return;
+
+    const remote = this.driver as OnlineGameDriver;
+    const roomId = remote.getRoomId();
+    if (!roomId) return;
+
+    // Avoid spamming: at most once per room per minute.
+    const now = Date.now();
+    if (this.reportIssueHintShownForRoomId === roomId && now - this.reportIssueHintLastShownAtMs < 60_000) return;
+    this.reportIssueHintShownForRoomId = roomId;
+    this.reportIssueHintLastShownAtMs = now;
+
+    const prefix = reason ? `${reason}. ` : "";
+    this.showToast(`${prefix}Tip: reporting a bug? Online panel → ⓘ (Copy debug info)`, 4200);
   }
 
   private clearSelectionForInputLock(): void {
@@ -752,6 +1054,7 @@ export class GameController {
     this.overlayLayer = ensureOverlayLayer(svg);
     this.previewLayer = ensurePreviewLayer(svg);
     this.turnIndicatorLayer = ensureTurnIndicatorLayer(svg);
+    this.opponentPresenceIndicatorLayer = ensureOpponentPresenceIndicatorLayer(svg);
     this.state = state;
     this.history = history;
     this.driver = driver ?? new LocalDriver(state, history);
@@ -1245,6 +1548,58 @@ export class GameController {
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
     renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, { hidden: this.isGameOver });
 
+    // Board HUD: show opponent presence under the turn indicator.
+    if (this.driver.mode !== "online" || this.isGameOver) {
+      renderOpponentPresenceIndicator(this.svg, this.opponentPresenceIndicatorLayer, {
+        opponentColor: "B",
+        status: "waiting",
+        hidden: true,
+      });
+    } else {
+      const remote = this.driver as OnlineGameDriver;
+      const selfId = remote.getPlayerId();
+      const presence = remote.getPresence();
+      const localColor = remote.getPlayerColor();
+
+      const opponentColor = localColor === "B" ? "W" : "B";
+
+      let status: "connected" | "in_grace" | "disconnected" | "waiting" = "waiting";
+      let graceUntil: string | null = null;
+
+      if (!presence || !selfId || selfId === "spectator") {
+        status = "waiting";
+      } else {
+        const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+        const opp = opponentId ? (presence as any)[opponentId] : null;
+
+        if (!opp) {
+          status = "waiting";
+        } else if (opp.connected) {
+          status = "connected";
+        } else if (opp.inGrace) {
+          status = "in_grace";
+          graceUntil = typeof opp.graceUntil === "string" ? opp.graceUntil : null;
+          if (graceUntil) {
+            try {
+              const d = new Date(graceUntil);
+              if (!Number.isNaN(d.getTime())) graceUntil = d.toLocaleTimeString();
+            } catch {
+              // ignore
+            }
+          }
+        } else {
+          status = "disconnected";
+        }
+      }
+
+      renderOpponentPresenceIndicator(this.svg, this.opponentPresenceIndicatorLayer, {
+        opponentColor,
+        status,
+        graceUntil,
+        hidden: false,
+      });
+    }
+
     if (elDeadPlayTimer) {
       const rulesetId = this.state.meta?.rulesetId ?? "lasca";
       const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
@@ -1370,6 +1725,7 @@ export class GameController {
         }
       }
     }
+
   }
 
   private maybeToastOpponentPresence(args: { selfId: string | null; opponentId: string | null; opp: any | null }): void {
@@ -1405,6 +1761,7 @@ export class GameController {
     // Opponent no longer in room (seat missing).
     if (this.lastOpponentPresent === true && opponentPresent === false) {
       this.showStickyToast(key, "Opponent left the room");
+      this.maybeShowReportIssueHintToast("Opponent left");
     }
 
     // Opponent (re)joins the room (seat appears).
@@ -1432,6 +1789,7 @@ export class GameController {
       }
 
       this.showStickyToast(key, msg);
+      this.maybeShowReportIssueHintToast("Opponent disconnected");
     }
 
     // Opponent rejoined.

@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { createServer, type Server } from "node:http";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import WebSocket, { WebSocketServer, type RawData } from "ws";
 
@@ -30,6 +31,8 @@ import type {
   EndTurnResponse,
   GetReplayResponse,
   GetRoomSnapshotResponse,
+  PostRoomDebugReportRequest,
+  PostRoomDebugReportResponse,
   ReplayEvent,
   ResignRequest,
   ResignResponse,
@@ -1080,6 +1083,79 @@ export function createLascaApp(opts: ServerOpts = {}): {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Snapshot failed";
       const response: GetRoomSnapshotResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  // Debug report endpoint: persist client-provided debug JSON under this room's folder.
+  // Files are written to: <gamesDir>/<roomId>/debug/debug.<n>.json
+  app.post("/api/room/:roomId/debug", async (req, res) => {
+    try {
+      const roomId = req.params.roomId as RoomId;
+      const room = await requireRoom(roomId);
+
+      const body = req.body as PostRoomDebugReportRequest;
+      if (!body || typeof body !== "object") throw new Error("Missing body");
+      const debug = (body as any).debug;
+      if (!debug || typeof debug !== "object") throw new Error("Missing debug object");
+
+      const response = await queueRoomAction(room, async () => {
+        // Ensure we don't race with any in-flight persistence.
+        await room.persistChain;
+
+        const debugDir = path.join(gamesDir, roomId, "debug");
+        await fs.mkdir(debugDir, { recursive: true });
+
+        let existing: string[] = [];
+        try {
+          existing = await fs.readdir(debugDir);
+        } catch {
+          existing = [];
+        }
+
+        let maxN = 0;
+        for (const name of existing) {
+          const m = /^debug\.(\d+)\.json$/i.exec(name);
+          if (!m) continue;
+          const n = Number.parseInt(m[1], 10);
+          if (Number.isFinite(n) && n > maxN) maxN = n;
+        }
+
+        // Best-effort unique counter even under unexpected concurrency.
+        let n = maxN + 1;
+        let fileName = `debug.${n}.json`;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          fileName = `debug.${n}.json`;
+          const filePath = path.join(debugDir, fileName);
+          const payload = {
+            receivedAtIso: nowIso(),
+            roomId,
+            playerId: (body as any).playerId ?? null,
+            ip: (req as any).ip ?? null,
+            debug,
+          };
+
+          try {
+            await fs.writeFile(filePath, JSON.stringify(payload, null, 2), { encoding: "utf8", flag: "wx" });
+            const resp: PostRoomDebugReportResponse = { ok: true, fileName };
+            return resp;
+          } catch (err: any) {
+            // If a collision happens, bump counter and retry.
+            if (err && err.code === "EEXIST") {
+              n++;
+              continue;
+            }
+            throw err;
+          }
+        }
+
+        throw new Error("Failed to allocate debug filename");
+      });
+
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Debug report failed";
+      const response: PostRoomDebugReportResponse = { error: msg };
       res.status(400).json(response);
     }
   });

@@ -210,13 +210,15 @@ Regression/tests to keep green
 ## MP7 — UX / Product Polish (Online)
 
 - [x] “Connecting / Reconnecting” UI states
-  - Controller shows “Reconnecting…” and suppresses turn-toasts while reconnecting.
+  - Controller shows “Reconnecting…” in status and also emits toast notifications for Connecting/Reconnecting/Reconnected.
 - [x] Opponent presence indicator
   - Online panel shows “Opponent: Connected/Disconnected (grace until …)” and emits toasts for disconnect/leave/rejoin.
+  - On-board presence badge (beneath turn indicator) shows opponent online/grace/offline.
 - [x] Latency-safe move UX (authoritative settle)
 - [x] Post-game summary + replay viewer from event log
 - [x] Report issue / copy debug info
-  - Room ID + debug blob copy exists (Online panel).
+  - Online panel ⓘ generates debug JSON, copies it to clipboard, and POSTs it to the server for per-room logging.
+  - Server persists under `server/data/games/<roomId>/debug/debug.<n>.json`.
 
 ---
 

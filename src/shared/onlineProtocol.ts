@@ -185,3 +185,18 @@ export type GetReplayResponse =
       events: ReplayEvent[];
     }
   | OnlineError;
+
+// --- Debug reports ---
+
+export type PostRoomDebugReportRequest = {
+  roomId: RoomId;
+  playerId?: PlayerId;
+  debug: any;
+};
+
+export type PostRoomDebugReportResponse =
+  | {
+      ok: true;
+      fileName: string;
+    }
+  | OnlineError;
