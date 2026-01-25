@@ -11,6 +11,7 @@ import type {
   JoinRoomResponse,
   ResignRequest,
   ResignResponse,
+  SubmitMoveRequest,
   SubmitMoveResponse,
 } from "../shared/onlineProtocol.ts";
 import { hashGameState } from "../game/hashState.ts";
@@ -51,6 +52,16 @@ export class RemoteDriver implements GameDriver {
   private transportStatus: "connected" | "reconnecting" = "connected";
   private onRealtimeUpdate: (() => void) | null = null;
   private realtimeListeners = new Map<string, Set<(payload: any) => void>>();
+  private resyncInFlight: Promise<void> | null = null;
+
+  // Burst/backpressure handling for realtime snapshots.
+  // Strategy: coalesce snapshots (keep only the latest), apply at most once per tick.
+  // If we detect a burst, prefer drop-to-resync over trying to process every frame.
+  private pendingRealtimeSnapshot: WireSnapshot | null = null;
+  private realtimeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private ignoreRealtimeSnapshotsUntilResync: boolean = false;
+  private burstWindowStartMs: number = 0;
+  private burstCount: number = 0;
 
   constructor(state: GameState) {
     this.state = state;
@@ -181,8 +192,7 @@ export class RemoteDriver implements GameDriver {
     listen("snapshot", (payload) => {
       const snap = payload?.snapshot as WireSnapshot | undefined;
       if (!snap) return;
-      const applied = this.applySnapshot(snap);
-      if (applied.changed) this.onRealtimeUpdate?.();
+      this.enqueueRealtimeSnapshot(snap);
     });
 
     // Reserved for MP2+; wiring here avoids transport changes later.
@@ -257,8 +267,7 @@ export class RemoteDriver implements GameDriver {
         if (eventName === "snapshot") {
           const snap = payload?.snapshot as WireSnapshot | undefined;
           if (!snap) return;
-          const applied = this.applySnapshot(snap);
-          if (applied.changed) this.onRealtimeUpdate?.();
+          this.enqueueRealtimeSnapshot(snap);
           this.emitSseEvent("snapshot", payload);
           return;
         }
@@ -369,9 +378,99 @@ export class RemoteDriver implements GameDriver {
     return json as TRes;
   }
 
+  private nowMs(): number {
+    // Prefer a monotonic timer when available.
+    try {
+      const p = (globalThis as any)?.performance;
+      if (p && typeof p.now === "function") return p.now();
+    } catch {
+      // ignore
+    }
+    return Date.now();
+  }
+
+  private isStaleCasErrorMessage(msg: unknown): boolean {
+    if (typeof msg !== "string") return false;
+    return msg.startsWith("Stale request (") || msg.includes("STALE_STATE_VERSION");
+  }
+
+  private triggerResync(reason: string): void {
+    void reason;
+    if (this.resyncInFlight) return;
+
+    this.setTransportStatus("reconnecting");
+    this.resyncInFlight = (async () => {
+      try {
+        const changed = await this.fetchLatest();
+        if (changed) this.onRealtimeUpdate?.();
+      } catch {
+        // ignore; controller layer can surface error if needed
+      } finally {
+        this.ignoreRealtimeSnapshotsUntilResync = false;
+        this.resyncInFlight = null;
+      }
+    })();
+  }
+
+  private enqueueRealtimeSnapshot(snapshot: WireSnapshot): void {
+    if (this.ignoreRealtimeSnapshotsUntilResync) return;
+    if (this.resyncInFlight) return;
+
+    const now = this.nowMs();
+    if (this.burstWindowStartMs === 0 || now - this.burstWindowStartMs > 200) {
+      this.burstWindowStartMs = now;
+      this.burstCount = 0;
+    }
+    this.burstCount += 1;
+
+    // If snapshots are arriving very quickly, prefer drop-to-resync.
+    if (this.burstCount >= 25) {
+      this.pendingRealtimeSnapshot = null;
+      if (this.realtimeFlushTimer) {
+        clearTimeout(this.realtimeFlushTimer);
+        this.realtimeFlushTimer = null;
+      }
+      this.ignoreRealtimeSnapshotsUntilResync = true;
+      this.triggerResync("burst");
+      return;
+    }
+
+    // Coalesce: keep only latest snapshot.
+    this.pendingRealtimeSnapshot = snapshot;
+    if (this.realtimeFlushTimer) return;
+
+    // Flush on next tick.
+    this.realtimeFlushTimer = setTimeout(() => {
+      this.realtimeFlushTimer = null;
+      const snap = this.pendingRealtimeSnapshot;
+      this.pendingRealtimeSnapshot = null;
+      if (!snap) return;
+      const applied = this.applySnapshot(snap);
+      if (applied.changed) this.onRealtimeUpdate?.();
+    }, 0);
+  }
+
   private applySnapshot(snapshot: WireSnapshot): { next: GameState & { didPromote?: boolean }; changed: boolean } {
     const prevHash = this.lastStateHash;
     const prevVersion = this.lastStateVersion;
+
+    const incomingVersion = Number.isFinite((snapshot as any).stateVersion)
+      ? Number((snapshot as any).stateVersion)
+      : null;
+
+    // Gap/out-of-order handling for versioned snapshots.
+    // - Duplicate/out-of-order: ignore
+    // - Gap: trigger resync and ignore the snapshot (avoid applying a potentially inconsistent jump)
+    if (incomingVersion != null) {
+      if (incomingVersion <= prevVersion) {
+        return { next: this.state as any, changed: false };
+      }
+      if (prevVersion >= 0 && incomingVersion > prevVersion + 1) {
+        this.triggerResync(`gap ${prevVersion} -> ${incomingVersion}`);
+        return { next: this.state as any, changed: false };
+      }
+    }
+
     const nextState = deserializeWireGameState(snapshot.state) as GameState & { didPromote?: boolean };
     const h = deserializeWireHistory(snapshot.history);
     this.history.replaceAll(h.states as any, h.notation, h.currentIndex);
@@ -380,7 +479,7 @@ export class RemoteDriver implements GameDriver {
 
     // Server-provided monotonic version is the authoritative change detector.
     // Hash is retained as a fallback for legacy snapshots.
-    const nextVersion = Number.isFinite((snapshot as any).stateVersion) ? Number((snapshot as any).stateVersion) : prevVersion;
+    const nextVersion = incomingVersion != null ? incomingVersion : prevVersion;
     this.lastStateVersion = nextVersion;
 
     const changed = nextVersion !== prevVersion || this.lastStateHash !== prevHash;
@@ -403,10 +502,24 @@ export class RemoteDriver implements GameDriver {
 
   async submitMove(_move: Move): Promise<GameState & { didPromote?: boolean }> {
     const ids = this.requireIds();
-    const res = await this.postJson<{ roomId: string; playerId: string; move: Move }, SubmitMoveResponse>(
-      "/api/submitMove",
-      { roomId: ids.roomId, playerId: ids.playerId, move: _move }
-    );
+    let res: SubmitMoveResponse;
+    try {
+      res = await this.postJson<SubmitMoveRequest, SubmitMoveResponse>("/api/submitMove", {
+        roomId: ids.roomId,
+        playerId: ids.playerId,
+        move: _move,
+        expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
+      });
+    } catch (e) {
+      if (this.isStaleCasErrorMessage((e as any)?.message)) {
+        try {
+          await this.fetchLatest();
+        } catch {
+          // ignore
+        }
+      }
+      throw e;
+    }
     const next = this.applySnapshot((res as any).snapshot).next;
     (next as any).didPromote = (res as any).didPromote;
     return next;
@@ -436,18 +549,32 @@ export class RemoteDriver implements GameDriver {
             rulesetId: "dama",
             landing: args.landing,
             jumpedSquares: Array.from(args.jumpedSquares),
+            expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
           }
         : {
             roomId: ids.roomId,
             playerId: ids.playerId,
             rulesetId: args.rulesetId,
             landing: args.landing,
+            expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
           };
 
-    const res = await this.postJson<FinalizeCaptureChainRequest, FinalizeCaptureChainResponse>(
-      "/api/finalizeCaptureChain",
-      req
-    );
+    let res: FinalizeCaptureChainResponse;
+    try {
+      res = await this.postJson<FinalizeCaptureChainRequest, FinalizeCaptureChainResponse>(
+        "/api/finalizeCaptureChain",
+        req
+      );
+    } catch (e) {
+      if (this.isStaleCasErrorMessage((e as any)?.message)) {
+        try {
+          await this.fetchLatest();
+        } catch {
+          // ignore
+        }
+      }
+      throw e;
+    }
     const next = this.applySnapshot((res as any).snapshot).next;
     (next as any).didPromote = (res as any).didPromote;
     return next;
@@ -459,8 +586,21 @@ export class RemoteDriver implements GameDriver {
       roomId: ids.roomId,
       playerId: ids.playerId,
       ...(notation ? { notation } : {}),
+      expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
     };
-    const res = await this.postJson<EndTurnRequest, EndTurnResponse>("/api/endTurn", req);
+    let res: EndTurnResponse;
+    try {
+      res = await this.postJson<EndTurnRequest, EndTurnResponse>("/api/endTurn", req);
+    } catch (e) {
+      if (this.isStaleCasErrorMessage((e as any)?.message)) {
+        try {
+          await this.fetchLatest();
+        } catch {
+          // ignore
+        }
+      }
+      throw e;
+    }
     return this.applySnapshot((res as any).snapshot).next;
   }
 
@@ -469,8 +609,21 @@ export class RemoteDriver implements GameDriver {
     const req: ResignRequest = {
       roomId: ids.roomId,
       playerId: ids.playerId,
+      expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
     };
-    const res = await this.postJson<ResignRequest, ResignResponse>("/api/resign", req);
+    let res: ResignResponse;
+    try {
+      res = await this.postJson<ResignRequest, ResignResponse>("/api/resign", req);
+    } catch (e) {
+      if (this.isStaleCasErrorMessage((e as any)?.message)) {
+        try {
+          await this.fetchLatest();
+        } catch {
+          // ignore
+        }
+      }
+      throw e;
+    }
     return this.applySnapshot((res as any).snapshot).next;
   }
 

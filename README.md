@@ -168,6 +168,10 @@ This format is useful for:
 
 ## Development
 
+### Multiplayer checklist
+
+For the current online-multiplayer implementation status and next milestones, see [docs/multiplayer-checklist.md](docs/multiplayer-checklist.md).
+
 ### Prerequisites
 
 - Node.js 18+

@@ -79,6 +79,12 @@ export type SubmitMoveRequest = {
   roomId: RoomId;
   playerId: PlayerId;
   move: Move;
+  /**
+   * Optional optimistic concurrency control.
+   * When provided, the server rejects the request unless it matches the current room.stateVersion.
+   * Back-compat: older clients may omit this.
+   */
+  expectedStateVersion?: number;
 };
 
 export type SubmitMoveResponse =
@@ -98,12 +104,14 @@ export type FinalizeCaptureChainRequest =
       rulesetId: "dama";
       landing: string;
       jumpedSquares: string[];
+      expectedStateVersion?: number;
     }
   | {
       roomId: RoomId;
       playerId: PlayerId;
       rulesetId: "damasca" | "damasca_classic";
       landing: string;
+      expectedStateVersion?: number;
     };
 
 export type FinalizeCaptureChainResponse =
@@ -120,6 +128,7 @@ export type EndTurnRequest = {
   roomId: RoomId;
   playerId: PlayerId;
   notation?: string;
+  expectedStateVersion?: number;
 };
 
 export type EndTurnResponse =
@@ -134,6 +143,7 @@ export type EndTurnResponse =
 export type ResignRequest = {
   roomId: RoomId;
   playerId: PlayerId;
+  expectedStateVersion?: number;
 };
 
 export type ResignResponse =

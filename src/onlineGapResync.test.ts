@@ -1,0 +1,98 @@
+// @vitest-environment node
+import { describe, it, expect, vi, afterEach } from "vitest";
+
+import { RemoteDriver } from "./driver/remoteDriver.ts";
+import { createInitialGameStateForVariant } from "./game/state.ts";
+import { HistoryManager } from "./game/historyManager.ts";
+import { serializeWireGameState, serializeWireHistory } from "./shared/wireState.ts";
+
+describe("MP6 hardening (client)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("detects snapshot version gaps and triggers a resync", async () => {
+    const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+    const history = new HistoryManager();
+    history.push(initial);
+
+    const driver = new RemoteDriver(initial);
+    await driver.connectFromSnapshot(
+      { serverUrl: "http://example.invalid", roomId: "room-1", playerId: "p1" },
+      {
+        state: serializeWireGameState(initial),
+        history: serializeWireHistory(history.exportSnapshots()),
+        stateVersion: 1,
+      } as any
+    );
+
+    const getJson = vi.fn(async () => {
+      return {
+        snapshot: {
+          state: serializeWireGameState(initial),
+          history: serializeWireHistory(history.exportSnapshots()),
+          stateVersion: 3,
+        },
+      };
+    });
+
+    (driver as any).getJson = getJson;
+
+    // Inject a version gap: 1 -> 3
+    (driver as any).applySnapshot({
+      state: serializeWireGameState(initial),
+      history: serializeWireHistory(history.exportSnapshots()),
+      stateVersion: 3,
+    });
+
+    // allow triggerResync() to schedule + run
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1");
+  });
+
+  it("coalesces realtime snapshot bursts and drops to resync", async () => {
+    vi.useFakeTimers();
+
+    const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+    const history = new HistoryManager();
+    history.push(initial);
+
+    const driver = new RemoteDriver(initial);
+    await driver.connectFromSnapshot(
+      { serverUrl: "http://example.invalid", roomId: "room-1", playerId: "p1" },
+      {
+        state: serializeWireGameState(initial),
+        history: serializeWireHistory(history.exportSnapshots()),
+        stateVersion: 1,
+      } as any
+    );
+
+    const getJson = vi.fn(async () => {
+      return {
+        snapshot: {
+          state: serializeWireGameState(initial),
+          history: serializeWireHistory(history.exportSnapshots()),
+          stateVersion: 999,
+        },
+      };
+    });
+    (driver as any).getJson = getJson;
+
+    // Simulate a burst that exceeds the threshold.
+    for (let i = 0; i < 30; i++) {
+      (driver as any).enqueueRealtimeSnapshot({
+        state: serializeWireGameState(initial),
+        history: serializeWireHistory(history.exportSnapshots()),
+        stateVersion: 2 + i,
+      });
+    }
+
+    // allow scheduled resync to run
+    await vi.runAllTimersAsync();
+
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1");
+  });
+});

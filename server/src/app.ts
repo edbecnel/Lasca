@@ -73,6 +73,8 @@ type Room = {
   disconnectGrace: Map<PlayerId, { graceUntilIso: string; graceUntilMs: number; timer: NodeJS.Timeout }>;
   timeControl: TimeControl;
   clock: ClockState | null;
+  /** Serialize all room mutations to avoid races across concurrent HTTP/WS/timer actions. */
+  actionChain: Promise<void>;
   persistChain: Promise<void>;
 };
 
@@ -157,6 +159,13 @@ function snapshotForRoom(room: Room): WireSnapshot {
     history: serializeWireHistory(room.history.exportSnapshots()),
     stateVersion: room.stateVersion,
   };
+}
+
+function parseExpectedVersion(raw: any): number | null {
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
 }
 
 async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
@@ -325,6 +334,28 @@ export function createLascaApp(opts: ServerOpts = {}): {
     return room.persistChain;
   }
 
+  function queueRoomAction<T>(room: Room, fn: () => Promise<T>): Promise<T> {
+    if (isShuttingDown) return Promise.reject(new Error("Server shutting down"));
+
+    // Chain actions so at most one runs at a time per room.
+    const prev = room.actionChain;
+    let resolveNext: (() => void) | null = null;
+    room.actionChain = new Promise<void>((resolve) => {
+      resolveNext = resolve;
+    });
+
+    return prev
+      .catch(() => undefined)
+      .then(fn)
+      .finally(() => {
+        try {
+          resolveNext?.();
+        } catch {
+          // ignore
+        }
+      });
+  }
+
   function streamWrite(res: express.Response, eventName: string, payload: unknown): void {
     // SSE format: each message ends with a blank line
     res.write(`event: ${eventName}\n`);
@@ -419,12 +450,15 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
             const prevRoom = rooms.get(state.roomId);
             if (prevRoom && state.playerId && prevRoom.players.has(state.playerId)) {
+              const prevPlayerId = state.playerId;
               // Only mark disconnected if this was the last connection.
               if (!isPlayerConnectedByAnyTransport(state.roomId, state.playerId)) {
-                touchClock(prevRoom);
-                void maybeForceClockTimeout(prevRoom);
-                setPresence(prevRoom, state.playerId, { connected: false, lastSeenAt: nowIso() });
-                void startGraceIfNeeded(prevRoom, state.playerId);
+                void queueRoomAction(prevRoom, async () => {
+                  touchClock(prevRoom);
+                  await maybeForceClockTimeout(prevRoom);
+                  setPresence(prevRoom, prevPlayerId, { connected: false, lastSeenAt: nowIso() });
+                  await startGraceIfNeeded(prevRoom, prevPlayerId);
+                });
               }
             }
           }
@@ -442,12 +476,14 @@ export function createLascaApp(opts: ServerOpts = {}): {
           // Presence/clock behavior mirrors SSE stream behavior.
           if (playerId && room.players.has(playerId)) {
             addWsPlayerClient(roomId, playerId, ws);
-            touchClock(room);
-            await maybeForceClockTimeout(room);
-            setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
-            clearGrace(room, playerId);
-            updateClockPause(room);
-            await persistSnapshot(gamesDir, room);
+            await queueRoomAction(room, async () => {
+              touchClock(room);
+              await maybeForceClockTimeout(room);
+              setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+              clearGrace(room, playerId);
+              updateClockPause(room);
+              await persistSnapshot(gamesDir, room);
+            });
           }
 
           // Send initial snapshot (authoritative) to this socket.
@@ -492,10 +528,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
         // do NOT mark them disconnected or start grace.
         if (isPlayerConnectedByAnyTransport(roomId, playerId)) return;
 
-        touchClock(room);
-        void maybeForceClockTimeout(room);
-        setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
-        void startGraceIfNeeded(room, playerId);
+        void queueRoomAction(room, async () => {
+          touchClock(room);
+          await maybeForceClockTimeout(room);
+          setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
+          await startGraceIfNeeded(room, playerId);
+        });
       });
 
       ws.on("error", () => {
@@ -562,6 +600,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       disconnectGrace: new Map(),
       timeControl: loadedTimeControl,
       clock: loadedTimeControl.mode === "clock" ? loadedClock : null,
+      actionChain: Promise.resolve(),
       persistChain: Promise.resolve(),
     };
 
@@ -596,7 +635,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
             return;
           }
           clearGrace(room, pid as any);
-          void forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: pid as any });
+          void queueRoomAction(room, () => forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: pid as any }));
         }, delay);
         room.disconnectGrace.set(pid as any, { graceUntilIso: g.graceUntilIso, graceUntilMs, timer });
       }
@@ -770,7 +809,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         return;
       }
       clearGrace(room, playerId);
-      void forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: playerId });
+      void queueRoomAction(room, () => forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: playerId }));
     }, disconnectGraceMs);
 
     room.disconnectGrace.set(playerId, { graceUntilIso, graceUntilMs, timer });
@@ -803,12 +842,14 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
       const playerId = typeof req.query.playerId === "string" ? (req.query.playerId as PlayerId) : null;
       if (playerId && room.players.has(playerId)) {
-        touchClock(room);
-        await maybeForceClockTimeout(room);
-        setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
-        clearGrace(room, playerId);
-        updateClockPause(room);
-        await persistSnapshot(gamesDir, room);
+        await queueRoomAction(room, async () => {
+          touchClock(room);
+          await maybeForceClockTimeout(room);
+          setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+          clearGrace(room, playerId);
+          updateClockPause(room);
+          await persistSnapshot(gamesDir, room);
+        });
       }
 
       res.status(200);
@@ -868,10 +909,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
           // do NOT mark disconnected or start grace.
           if (isPlayerConnectedByAnyTransport(roomId, playerId)) return;
 
-          touchClock(room);
-          void maybeForceClockTimeout(room);
-          setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
-          void startGraceIfNeeded(room, playerId);
+          void queueRoomAction(room, async () => {
+            touchClock(room);
+            await maybeForceClockTimeout(room);
+            setPresence(room, playerId, { connected: false, lastSeenAt: nowIso() });
+            await startGraceIfNeeded(room, playerId);
+          });
         }
       });
     } catch (err) {
@@ -925,6 +968,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
                 lastTickMs: Date.now(),
               }
             : null,
+        actionChain: Promise.resolve(),
         persistChain: Promise.resolve(),
       };
       setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
@@ -966,42 +1010,46 @@ export function createLascaApp(opts: ServerOpts = {}): {
       if (!roomId) throw new Error("Missing roomId");
 
       const room = await requireRoom(roomId);
-      touchClock(room);
-      await maybeForceClockTimeout(room);
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
 
-      const preferredColor = (body as any)?.preferredColor;
-      let color: PlayerColor | null = null;
-      if (preferredColor === "W" || preferredColor === "B") {
-        // Enforce explicit seat choice.
-        const taken = new Set<PlayerColor>(Array.from(room.players.values()));
-        if (taken.has(preferredColor)) throw new Error("Color taken");
-        color = preferredColor;
-      } else {
-        color = nextColor(room);
-      }
-      if (!color) throw new Error("Room full");
+        const preferredColor = (body as any)?.preferredColor;
+        let color: PlayerColor | null = null;
+        if (preferredColor === "W" || preferredColor === "B") {
+          // Enforce explicit seat choice.
+          const taken = new Set<PlayerColor>(Array.from(room.players.values()));
+          if (taken.has(preferredColor)) throw new Error("Color taken");
+          color = preferredColor;
+        } else {
+          color = nextColor(room);
+        }
+        if (!color) throw new Error("Room full");
 
-      const playerId: PlayerId = randId();
-      room.players.set(playerId, color);
-      room.colorsTaken.add(color);
-      setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
-      clearGrace(room, playerId);
-      updateClockPause(room);
+        const playerId: PlayerId = randId();
+        room.players.set(playerId, color);
+        room.colorsTaken.add(color);
+        setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+        clearGrace(room, playerId);
+        updateClockPause(room);
 
-      // Persist join as a snapshot-only update (no gameplay change).
-      // This keeps reconnection (roomId+playerId) working across server restarts.
-      await persistSnapshot(gamesDir, room);
+        // Persist join as a snapshot-only update (no gameplay change).
+        // This keeps reconnection (roomId+playerId) working across server restarts.
+        await persistSnapshot(gamesDir, room);
 
-      const response: JoinRoomResponse = {
-        roomId,
-        playerId,
-        color,
-        snapshot: snapshotForRoom(room),
-        presence: presenceForRoom(room),
-        timeControl: room.timeControl,
-        clock: room.clock ?? undefined,
-      };
-      broadcastRoomSnapshot(room);
+        const resp: JoinRoomResponse = {
+          roomId,
+          playerId,
+          color,
+          snapshot: snapshotForRoom(room),
+          presence: presenceForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Join failed";
@@ -1036,50 +1084,60 @@ export function createLascaApp(opts: ServerOpts = {}): {
     try {
       const body = req.body as SubmitMoveRequest;
       const room = await requireRoom(body.roomId);
-      touchClock(room);
-      await maybeForceClockTimeout(room);
-      const color = requirePlayer(room, body.playerId);
-      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
 
-      if (isRoomOver(room)) throw new Error("Game over");
+        const expected = parseExpectedVersion((body as any).expectedStateVersion);
+        if (expected != null && expected !== room.stateVersion) {
+          throw new Error(`Stale request (expected v${expected}, current v${room.stateVersion})`);
+        }
 
-      if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
+        const color = requirePlayer(room, body.playerId);
+        setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
-      const move = body.move as Move;
-      if (!move || typeof (move as any).from !== "string" || typeof (move as any).to !== "string") {
-        throw new Error("Invalid move");
-      }
+        if (isRoomOver(room)) throw new Error("Game over");
 
-      const prevToMove = (room.state as any).toMove as PlayerColor;
-      const next = applyMove(room.state as any, move as any) as any;
-      room.state = next;
+        if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
-      // Record history for every applied move so capture-chain steps are visible in the UI.
-      const boardSize = Number((next as any)?.meta?.boardSize ?? 7);
-      const from = nodeIdToA1(move.from, boardSize);
-      const to = nodeIdToA1(move.to, boardSize);
-      const sep = move.kind === "capture" ? " × " : " → ";
-      const notation = `${from}${sep}${to}`;
-      room.history.push(room.state, notation);
+        const move = body.move as Move;
+        if (!move || typeof (move as any).from !== "string" || typeof (move as any).to !== "string") {
+          throw new Error("Invalid move");
+        }
 
-      // Damasca: adjudicate and end on threefold repetition.
-      maybeApplyDamascaThreefold(room);
+        const prevToMove = (room.state as any).toMove as PlayerColor;
+        const next = applyMove(room.state as any, move as any) as any;
+        room.state = next;
 
-      const nextToMove = (room.state as any).toMove as PlayerColor;
-      onTurnSwitch(room, prevToMove, nextToMove);
+        // Record history for every applied move so capture-chain steps are visible in the UI.
+        const boardSize = Number((next as any)?.meta?.boardSize ?? 7);
+        const from = nodeIdToA1(move.from, boardSize);
+        const to = nodeIdToA1(move.to, boardSize);
+        const sep = move.kind === "capture" ? " × " : " → ";
+        const notation = `${from}${sep}${to}`;
+        room.history.push(room.state, notation);
 
-      room.stateVersion += 1;
-      await persistMoveApplied({ gamesDir, room, action: "SUBMIT_MOVE", move, snapshotEvery });
-      await maybePersistGameOver(gamesDir, room);
+        // Damasca: adjudicate and end on threefold repetition.
+        maybeApplyDamascaThreefold(room);
 
-      const response: SubmitMoveResponse = {
-        snapshot: snapshotForRoom(room),
-        didPromote: Boolean(next.didPromote) || undefined,
-        presence: presenceForRoom(room),
-        timeControl: room.timeControl,
-        clock: room.clock ?? undefined,
-      };
-      broadcastRoomSnapshot(room);
+        const nextToMove = (room.state as any).toMove as PlayerColor;
+        onTurnSwitch(room, prevToMove, nextToMove);
+
+        room.stateVersion += 1;
+        await persistMoveApplied({ gamesDir, room, action: "SUBMIT_MOVE", move, snapshotEvery });
+        await maybePersistGameOver(gamesDir, room);
+
+        const resp: SubmitMoveResponse = {
+          snapshot: snapshotForRoom(room),
+          didPromote: Boolean(next.didPromote) || undefined,
+          presence: presenceForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Move failed";
@@ -1094,41 +1152,51 @@ export function createLascaApp(opts: ServerOpts = {}): {
     try {
       const body = req.body as FinalizeCaptureChainRequest;
       const room = await requireRoom(body.roomId);
-      touchClock(room);
-      await maybeForceClockTimeout(room);
-      const color = requirePlayer(room, body.playerId);
-      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
 
-      if (isRoomOver(room)) throw new Error("Game over");
+        const expected = parseExpectedVersion((body as any).expectedStateVersion);
+        if (expected != null && expected !== room.stateVersion) {
+          throw new Error(`Stale request (expected v${expected}, current v${room.stateVersion})`);
+        }
 
-      if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
+        const color = requirePlayer(room, body.playerId);
+        setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
-      let next: any;
-      if (body.rulesetId === "dama") {
-        next = finalizeDamaCaptureChain(room.state as any, body.landing, new Set(body.jumpedSquares));
-      } else {
-        next = finalizeDamascaCaptureChain(room.state as any, body.landing);
-      }
+        if (isRoomOver(room)) throw new Error("Game over");
 
-      const prevToMove = (room.state as any).toMove as PlayerColor;
-      room.state = next;
-      // Turn does not switch here; client will call /api/endTurn when the capture turn ends.
+        if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
 
-      const nextToMove = (room.state as any).toMove as PlayerColor;
-      onTurnSwitch(room, prevToMove, nextToMove);
+        let next: any;
+        if (body.rulesetId === "dama") {
+          next = finalizeDamaCaptureChain(room.state as any, body.landing, new Set(body.jumpedSquares));
+        } else {
+          next = finalizeDamascaCaptureChain(room.state as any, body.landing);
+        }
 
-      room.stateVersion += 1;
-      await persistMoveApplied({ gamesDir, room, action: "FINALIZE_CAPTURE_CHAIN", snapshotEvery });
-      await maybePersistGameOver(gamesDir, room);
+        const prevToMove = (room.state as any).toMove as PlayerColor;
+        room.state = next;
+        // Turn does not switch here; client will call /api/endTurn when the capture turn ends.
 
-      const response: FinalizeCaptureChainResponse = {
-        snapshot: snapshotForRoom(room),
-        didPromote: Boolean(next.didPromote) || undefined,
-        presence: presenceForRoom(room),
-        timeControl: room.timeControl,
-        clock: room.clock ?? undefined,
-      };
-      broadcastRoomSnapshot(room);
+        const nextToMove = (room.state as any).toMove as PlayerColor;
+        onTurnSwitch(room, prevToMove, nextToMove);
+
+        room.stateVersion += 1;
+        await persistMoveApplied({ gamesDir, room, action: "FINALIZE_CAPTURE_CHAIN", snapshotEvery });
+        await maybePersistGameOver(gamesDir, room);
+
+        const resp: FinalizeCaptureChainResponse = {
+          snapshot: snapshotForRoom(room),
+          didPromote: Boolean(next.didPromote) || undefined,
+          presence: presenceForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Finalize failed";
@@ -1143,50 +1211,60 @@ export function createLascaApp(opts: ServerOpts = {}): {
     try {
       const body = req.body as EndTurnRequest;
       const room = await requireRoom(body.roomId);
-      touchClock(room);
-      await maybeForceClockTimeout(room);
-      const color = requirePlayer(room, body.playerId);
-      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
 
-      if (isRoomOver(room)) throw new Error("Game over");
-
-      if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
-
-      const prevToMove = (room.state as any).toMove as PlayerColor;
-      room.state = endTurn(room.state as any);
-
-      const nextToMove = (room.state as any).toMove as PlayerColor;
-      onTurnSwitch(room, prevToMove, nextToMove);
-
-      // END_TURN is not a move by itself. The move/capture steps were already recorded via /api/submitMove.
-      // We still need history's *current* entry to reflect the authoritative state (esp. toMove),
-      // otherwise the UI can highlight the wrong row.
-      const notation = typeof (body as any).notation === "string" ? (body as any).notation : undefined;
-      const snap = room.history.exportSnapshots();
-      if (snap.states.length === 0) {
-        room.history.push(room.state as any, notation);
-      } else {
-        snap.states[snap.states.length - 1] = room.state as any;
-        if (typeof notation === "string") {
-          snap.notation[snap.notation.length - 1] = notation;
+        const expected = parseExpectedVersion((body as any).expectedStateVersion);
+        if (expected != null && expected !== room.stateVersion) {
+          throw new Error(`Stale request (expected v${expected}, current v${room.stateVersion})`);
         }
-        room.history.replaceAll(snap.states as any, snap.notation, snap.states.length - 1);
-      }
 
-      // Damasca: adjudicate and end on threefold repetition.
-      maybeApplyDamascaThreefold(room);
+        const color = requirePlayer(room, body.playerId);
+        setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
-      room.stateVersion += 1;
-      await persistMoveApplied({ gamesDir, room, action: "END_TURN", snapshotEvery });
-      await maybePersistGameOver(gamesDir, room);
+        if (isRoomOver(room)) throw new Error("Game over");
 
-      const response: EndTurnResponse = {
-        snapshot: snapshotForRoom(room),
-        presence: presenceForRoom(room),
-        timeControl: room.timeControl,
-        clock: room.clock ?? undefined,
-      };
-      broadcastRoomSnapshot(room);
+        if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
+
+        const prevToMove = (room.state as any).toMove as PlayerColor;
+        room.state = endTurn(room.state as any);
+
+        const nextToMove = (room.state as any).toMove as PlayerColor;
+        onTurnSwitch(room, prevToMove, nextToMove);
+
+        // END_TURN is not a move by itself. The move/capture steps were already recorded via /api/submitMove.
+        // We still need history's *current* entry to reflect the authoritative state (esp. toMove),
+        // otherwise the UI can highlight the wrong row.
+        const notation = typeof (body as any).notation === "string" ? (body as any).notation : undefined;
+        const snap = room.history.exportSnapshots();
+        if (snap.states.length === 0) {
+          room.history.push(room.state as any, notation);
+        } else {
+          snap.states[snap.states.length - 1] = room.state as any;
+          if (typeof notation === "string") {
+            snap.notation[snap.notation.length - 1] = notation;
+          }
+          room.history.replaceAll(snap.states as any, snap.notation, snap.states.length - 1);
+        }
+
+        // Damasca: adjudicate and end on threefold repetition.
+        maybeApplyDamascaThreefold(room);
+
+        room.stateVersion += 1;
+        await persistMoveApplied({ gamesDir, room, action: "END_TURN", snapshotEvery });
+        await maybePersistGameOver(gamesDir, room);
+
+        const resp: EndTurnResponse = {
+          snapshot: snapshotForRoom(room),
+          presence: presenceForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "End turn failed";
@@ -1201,47 +1279,57 @@ export function createLascaApp(opts: ServerOpts = {}): {
     try {
       const body = req.body as ResignRequest;
       const room = await requireRoom(body.roomId);
-      touchClock(room);
-      await maybeForceClockTimeout(room);
-      const color = requirePlayer(room, body.playerId);
-      setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
 
-      if (isRoomOver(room)) throw new Error("Game over");
+        const expected = parseExpectedVersion((body as any).expectedStateVersion);
+        if (expected != null && expected !== room.stateVersion) {
+          throw new Error(`Stale request (expected v${expected}, current v${room.stateVersion})`);
+        }
 
-      const winner: PlayerColor = color === "W" ? "B" : "W";
-      const winnerName = winner === "W" ? "White" : "Black";
-      const loserName = color === "W" ? "White" : "Black";
+        const color = requirePlayer(room, body.playerId);
+        setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
-      room.state = {
-        ...(room.state as any),
-        forcedGameOver: {
-          winner,
-          reasonCode: "RESIGN",
-          message: `${loserName} resigned — ${winnerName} wins!`,
-        },
-      };
+        if (isRoomOver(room)) throw new Error("Game over");
 
-      room.stateVersion += 1;
-      room.lastGameOverVersion = room.stateVersion;
-      await appendEvent(
-        gamesDir,
-        room.roomId,
-        makeGameOverEvent({
-          roomId: room.roomId,
-          stateVersion: room.stateVersion,
-          winner,
-          reason: "RESIGN",
-        })
-      );
-      await persistSnapshot(gamesDir, room);
+        const winner: PlayerColor = color === "W" ? "B" : "W";
+        const winnerName = winner === "W" ? "White" : "Black";
+        const loserName = color === "W" ? "White" : "Black";
 
-      const response: ResignResponse = {
-        snapshot: snapshotForRoom(room),
-        presence: presenceForRoom(room),
-        timeControl: room.timeControl,
-        clock: room.clock ?? undefined,
-      };
-      broadcastRoomSnapshot(room);
+        room.state = {
+          ...(room.state as any),
+          forcedGameOver: {
+            winner,
+            reasonCode: "RESIGN",
+            message: `${loserName} resigned — ${winnerName} wins!`,
+          },
+        };
+
+        room.stateVersion += 1;
+        room.lastGameOverVersion = room.stateVersion;
+        await appendEvent(
+          gamesDir,
+          room.roomId,
+          makeGameOverEvent({
+            roomId: room.roomId,
+            stateVersion: room.stateVersion,
+            winner,
+            reason: "RESIGN",
+          })
+        );
+        await persistSnapshot(gamesDir, room);
+
+        const resp: ResignResponse = {
+          snapshot: snapshotForRoom(room),
+          presence: presenceForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Resign failed";
