@@ -24,6 +24,7 @@ import { ensureTurnIndicatorLayer, renderTurnIndicator } from "../render/turnInd
 import type { GameDriver } from "../driver/gameDriver.ts";
 import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
+import { deserializeWireGameState } from "../shared/wireState.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -72,6 +73,11 @@ export class GameController {
 
   private static readonly TOAST_PREF_KEY = "lasca.opt.toasts";
 
+  private replayEl: HTMLDivElement | null = null;
+  private replaySnapshots: Array<{ stateVersion: number; ts: string; state: GameState; summary: string }> = [];
+  private replayIndex: number = 0;
+  private replaySavedState: { state: GameState; isGameOver: boolean } | null = null;
+
   private async copyTextToClipboard(text: string): Promise<boolean> {
     if (!text) return false;
 
@@ -117,6 +123,247 @@ export class GameController {
       if (!roomId) return;
       await this.copyTextToClipboard(roomId);
     });
+  }
+
+  private bindReplayButton(): void {
+    const btn = document.getElementById("openReplayBtn") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    btn.addEventListener("click", async () => {
+      if (this.driver.mode !== "online") return;
+      if (!this.isGameOver) {
+        this.showToast("Replay is available after game over", 1600);
+        return;
+      }
+      await this.openReplayViewer();
+    });
+  }
+
+  private ensureReplayEl(): HTMLDivElement | null {
+    if (typeof document === "undefined") return null;
+    if (this.replayEl && document.body.contains(this.replayEl)) return this.replayEl;
+
+    const styleId = "lasca-replay-style";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `
+        .lascaReplayBackdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.55);
+          z-index: 99998;
+          display: none;
+        }
+        .lascaReplayBackdrop.isOpen { display: block; }
+        .lascaReplayCard {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          width: min(92vw, 720px);
+          max-height: min(86vh, 720px);
+          overflow: auto;
+          border-radius: 14px;
+          background: rgba(0, 0, 0, 0.86);
+          border: 1px solid rgba(255,255,255,0.16);
+          color: rgba(255,255,255,0.92);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+          padding: 14px;
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+        .lascaReplayTop {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .lascaReplayTitle { font-size: 14px; font-weight: 800; letter-spacing: 0.2px; }
+        .lascaReplayBtn {
+          appearance: none;
+          border: 1px solid rgba(255,255,255,0.18);
+          background: rgba(255,255,255,0.06);
+          color: rgba(255,255,255,0.92);
+          border-radius: 10px;
+          padding: 8px 10px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .lascaReplayBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .lascaReplayBtn:hover { background: rgba(255,255,255,0.1); }
+        .lascaReplayRow { display:flex; align-items:center; gap:8px; margin: 10px 0; }
+        .lascaReplayMeta { color: rgba(255,255,255,0.7); font-size: 12px; }
+        .lascaReplayList {
+          margin-top: 10px;
+          border-top: 1px solid rgba(255,255,255,0.12);
+          padding-top: 10px;
+        }
+        .lascaReplayItem {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 12px;
+          color: rgba(255,255,255,0.88);
+          padding: 6px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "lascaReplayBackdrop";
+
+    const card = document.createElement("div");
+    card.className = "lascaReplayCard";
+    card.innerHTML = `
+      <div class="lascaReplayTop">
+        <div class="lascaReplayTitle">Replay</div>
+        <button class="lascaReplayBtn" type="button" data-action="close">Close</button>
+      </div>
+      <div class="lascaReplayMeta" data-el="summary">Loading…</div>
+      <div class="lascaReplayRow">
+        <button class="lascaReplayBtn" type="button" data-action="prev">Prev</button>
+        <button class="lascaReplayBtn" type="button" data-action="next">Next</button>
+        <span class="lascaReplayMeta" data-el="pos">—</span>
+      </div>
+      <div class="lascaReplayList" data-el="list"></div>
+    `;
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    backdrop.addEventListener("click", (ev) => {
+      if (ev.target === backdrop) this.closeReplayViewer();
+    });
+
+    card.addEventListener("click", (ev) => {
+      const el = ev.target as HTMLElement | null;
+      const act = el?.getAttribute("data-action");
+      if (act === "close") this.closeReplayViewer();
+      if (act === "prev") this.replayStep(-1);
+      if (act === "next") this.replayStep(1);
+    });
+
+    this.replayEl = backdrop;
+    return backdrop;
+  }
+
+  private renderReplayUi(): void {
+    const el = this.replayEl;
+    if (!el) return;
+
+    const summaryEl = el.querySelector('[data-el="summary"]') as HTMLElement | null;
+    const posEl = el.querySelector('[data-el="pos"]') as HTMLElement | null;
+    const listEl = el.querySelector('[data-el="list"]') as HTMLElement | null;
+    const prevBtn = el.querySelector('[data-action="prev"]') as HTMLButtonElement | null;
+    const nextBtn = el.querySelector('[data-action="next"]') as HTMLButtonElement | null;
+
+    if (prevBtn) prevBtn.disabled = this.replayIndex <= 0;
+    if (nextBtn) nextBtn.disabled = this.replayIndex >= this.replaySnapshots.length - 1;
+
+    if (posEl) {
+      posEl.textContent = this.replaySnapshots.length
+        ? `${this.replayIndex + 1} / ${this.replaySnapshots.length}`
+        : "—";
+    }
+
+    if (summaryEl) {
+      if (this.replaySnapshots.length === 0) summaryEl.textContent = "No replay snapshots found.";
+      else {
+        const cur = this.replaySnapshots[this.replayIndex];
+        summaryEl.textContent = `Showing v${cur.stateVersion} • ${cur.ts}`;
+      }
+    }
+
+    if (listEl) {
+      listEl.innerHTML = "";
+      for (let i = 0; i < this.replaySnapshots.length; i++) {
+        const s = this.replaySnapshots[i];
+        const div = document.createElement("div");
+        div.className = "lascaReplayItem";
+        div.textContent = `${i === this.replayIndex ? ">" : " "} v${s.stateVersion} ${s.summary}`;
+        listEl.appendChild(div);
+      }
+    }
+  }
+
+  private replayStep(delta: number): void {
+    if (this.replaySnapshots.length === 0) return;
+    const next = Math.max(0, Math.min(this.replaySnapshots.length - 1, this.replayIndex + delta));
+    if (next === this.replayIndex) return;
+    this.replayIndex = next;
+    const snap = this.replaySnapshots[this.replayIndex];
+    this.state = snap.state;
+    this.renderAuthoritative();
+    this.renderReplayUi();
+  }
+
+  private async openReplayViewer(): Promise<void> {
+    if (this.driver.mode !== "online") return;
+    const remote = this.driver as OnlineGameDriver;
+    const el = this.ensureReplayEl();
+    if (!el) return;
+
+    this.replaySavedState = { state: this.state, isGameOver: this.isGameOver };
+    this.setInputEnabled(false);
+
+    el.classList.add("isOpen");
+
+    let events: any[] = [];
+    try {
+      events = await remote.fetchReplayEvents({ limit: 5000 });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Replay fetch failed";
+      this.showToast(msg, 2000);
+      this.closeReplayViewer();
+      return;
+    }
+
+    const snaps: Array<{ stateVersion: number; ts: string; state: GameState; summary: string }> = [];
+    for (const ev of events) {
+      const w = (ev as any)?.snapshot;
+      if (!w) continue;
+      const st = deserializeWireGameState(w.state) as any;
+      const stateVersion = Number(w.stateVersion ?? (ev as any)?.stateVersion ?? -1);
+      const ts = typeof (ev as any)?.ts === "string" ? (ev as any).ts : "";
+      const t = String((ev as any)?.type ?? "EVENT");
+      const action = (ev as any)?.action ? ` ${String((ev as any).action)}` : "";
+      const summary = `${t}${action}`;
+      snaps.push({ stateVersion, ts, state: st as GameState, summary });
+    }
+
+    // Sort by stateVersion for deterministic stepping.
+    snaps.sort((a, b) => a.stateVersion - b.stateVersion);
+
+    this.replaySnapshots = snaps;
+    this.replayIndex = Math.max(0, this.replaySnapshots.length - 1);
+
+    if (this.replaySnapshots.length > 0) {
+      const cur = this.replaySnapshots[this.replayIndex];
+      this.state = cur.state;
+      this.renderAuthoritative();
+    }
+
+    this.renderReplayUi();
+  }
+
+  private closeReplayViewer(): void {
+    const el = this.replayEl;
+    if (el) el.classList.remove("isOpen");
+
+    const saved = this.replaySavedState;
+    this.replaySavedState = null;
+    this.replaySnapshots = [];
+    this.replayIndex = 0;
+
+    this.setInputEnabled(true);
+
+    if (saved) {
+      this.state = saved.state;
+      this.isGameOver = saved.isGameOver;
+      this.renderAuthoritative();
+      this.updatePanel();
+    }
   }
 
   private isLocalPlayersTurn(): boolean {
@@ -495,6 +742,7 @@ export class GameController {
     this.maybeToastTurnChange();
 
     this.bindRoomIdCopyButton();
+    this.bindReplayButton();
 
     this.startOnlinePolling();
   }
@@ -938,12 +1186,15 @@ export class GameController {
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
     const elOpponent = document.getElementById("onlineOpponentStatus") as HTMLDivElement | null;
+    const elReplayBtn = document.getElementById("openReplayBtn") as HTMLButtonElement | null;
     const elNewGame = document.getElementById("newGameBtn") as HTMLButtonElement | null;
     const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
     const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
     const isOnline = this.driver.mode === "online";
 
     if (elOnlineInfoPanel) elOnlineInfoPanel.hidden = !isOnline;
+
+    if (elReplayBtn) elReplayBtn.disabled = !(isOnline && this.isGameOver);
 
     if (elNewGame) elNewGame.disabled = isOnline;
     if (elLoadGame) elLoadGame.disabled = isOnline;

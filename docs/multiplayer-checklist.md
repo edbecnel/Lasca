@@ -48,9 +48,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
   - Exposes server `presence` + grace info in the Online panel.
   - Shows “Opponent: Connected / Disconnected (grace until …)”.
   - UI: `#onlineOpponentStatus` in the game HTML; render logic in `GameController.updatePanel()`.
-- [ ] **Replay viewer / post-game summary (from JSONL)**
-  - Add a server endpoint to fetch the room event log (or a summarized replay payload).
-  - Build a simple UI: list moves + allow stepping through snapshots.
+- [x] **Replay viewer / post-game summary (from JSONL)**
+  - Server endpoint: `GET /api/room/:roomId/replay`.
+  - UI: Online panel “Replay → Open” overlay with prev/next stepping through snapshots.
 
 ### MP3 — Lobby / Matchmaking
 
@@ -84,9 +84,8 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
   - Broadcasts a full `snapshot` payload to connected clients.
 - [x] `stateVersion` (monotonic) included in every state update
   - Included on `WireSnapshot` (`snapshot.stateVersion`).
-- [~] Client detects gaps (missed versions) and requests RESYNC
-  - Client tracks `lastStateVersion`, but does not explicitly detect gaps and force resync.
-  - Current behavior relies on full snapshots (so a single message is sufficient to catch up).
+- [x] Client detects gaps (missed versions) and requests RESYNC
+  - Detects version gaps and forces resync via `GET /api/room/:roomId`.
 - [x] RESYNC returns latest full authoritative state
   - Implemented as `GET /api/room/:roomId` (no dedicated `/api/resync` route).
 - [x] Persistence of game state (snapshots)
@@ -96,9 +95,8 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
   - Contains `MOVE_APPLIED` events and `GAME_CREATED` and `GAME_OVER` metadata.
 - [x] Server can rebuild game state by replaying snapshot + event log
   - `tryLoadRoom()` reconstructs the room.
-- [~] Deterministic rules engine requirement documented/tested
+- [x] Deterministic rules engine requirement documented/tested
   - Replay safety is enforced via `SUPPORTED_RULES_VERSION` and tested via restart/persistence tests.
-  - Explicit “determinism contract” is not yet documented.
   - Determinism contract (server + client): The shared rules engine must be strictly deterministic. Given the same starting snapshot and the same ordered sequence of MOVE INTENT inputs, the server must always produce the exact same resulting snapshots (including stateVersion progression and any derived fields). No rule or state transition may depend on client time, local randomness, iteration-order side effects, or any non-deterministic data source; any timestamps or IDs used for clocks/logging must be server-supplied and never influence legal-move generation or applyMove outcomes.
 - [~] Basic anti-cheat: reject illegal moves, wrong-turn moves, stale intents
   - Illegal/invalid moves and wrong-turn moves are rejected server-side.
@@ -213,10 +211,10 @@ Regression/tests to keep green
 
 - [x] “Connecting / Reconnecting” UI states
   - Controller shows “Reconnecting…” and suppresses turn-toasts while reconnecting.
-- [ ] Opponent presence indicator
-  - Presence is computed/sent by server, but UI doesn’t yet present an explicit opponent status widget.
+- [x] Opponent presence indicator
+  - Online panel shows “Opponent: Connected/Disconnected (grace until …)” and emits toasts for disconnect/leave/rejoin.
 - [x] Latency-safe move UX (authoritative settle)
-- [ ] Post-game summary + replay viewer from event log
+- [x] Post-game summary + replay viewer from event log
 - [~] Report issue / copy debug info
   - Room ID copy exists; no consolidated “copy debug blob” yet.
 

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { createServer, type Server } from "node:http";
+import fs from "node:fs/promises";
 
 import WebSocket, { WebSocketServer, type RawData } from "ws";
 
@@ -27,7 +28,9 @@ import type {
   FinalizeCaptureChainResponse,
   EndTurnRequest,
   EndTurnResponse,
+  GetReplayResponse,
   GetRoomSnapshotResponse,
+  ReplayEvent,
   ResignRequest,
   ResignResponse,
   RoomId,
@@ -49,6 +52,7 @@ import {
 import {
   appendEvent,
   ensureGamesDir,
+  eventsPath,
   makeCreatedEvent,
   makeGameOverEvent,
   makeMoveAppliedEvent,
@@ -1076,6 +1080,51 @@ export function createLascaApp(opts: ServerOpts = {}): {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Snapshot failed";
       const response: GetRoomSnapshotResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  // Replay/event log fetch (post-game summary / replay viewer).
+  // Returns the persisted JSONL event log as an array of objects.
+  app.get("/api/room/:roomId/replay", async (req, res) => {
+    try {
+      const roomId = req.params.roomId as RoomId;
+      const room = await requireRoom(roomId);
+
+      // Ensure any in-flight persistence (e.g. recent moves) is flushed before reading.
+      await room.persistChain;
+
+      const limitRaw = typeof req.query.limit === "string" ? req.query.limit : "";
+      const limit = Math.max(1, Math.min(10_000, Number.parseInt(limitRaw || "5000", 10) || 5000));
+
+      const p = eventsPath(gamesDir, roomId);
+      let raw = "";
+      try {
+        raw = await fs.readFile(p, "utf8");
+      } catch {
+        raw = "";
+      }
+
+      const lines = raw
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const sliced = lines.length > limit ? lines.slice(lines.length - limit) : lines;
+
+      const events: ReplayEvent[] = [];
+      for (const line of sliced) {
+        try {
+          events.push(JSON.parse(line) as any);
+        } catch {
+          // ignore malformed log lines
+        }
+      }
+
+      const response: GetReplayResponse = { events };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Replay failed";
+      const response: GetReplayResponse = { error: msg };
       res.status(400).json(response);
     }
   });

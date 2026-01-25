@@ -163,3 +163,25 @@ export type GetRoomSnapshotResponse =
       clock?: ClockState;
     }
   | OnlineError;
+
+// --- Replay / post-game summary ---
+
+export type ReplayEvent = {
+  type: "GAME_CREATED" | "MOVE_APPLIED" | "GAME_OVER";
+  ts: string;
+  roomId: RoomId;
+  rulesVersion: string;
+  stateVersion: number;
+  variantId?: any;
+  action?: "SUBMIT_MOVE" | "FINALIZE_CAPTURE_CHAIN" | "END_TURN";
+  move?: any;
+  snapshot?: WireSnapshot;
+  winner?: PlayerColor | null;
+  reason?: string;
+};
+
+export type GetReplayResponse =
+  | {
+      events: ReplayEvent[];
+    }
+  | OnlineError;

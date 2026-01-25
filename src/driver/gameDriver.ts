@@ -80,4 +80,7 @@ export interface OnlineGameDriver extends GameDriver {
 
   /** Online-only: resign the game on the server. */
   resignRemote(): Promise<GameState>;
+
+  /** Online-only: fetch replay/event log for the current room. */
+  fetchReplayEvents(args?: { limit?: number }): Promise<import("../shared/onlineProtocol.ts").ReplayEvent[]>;
 }

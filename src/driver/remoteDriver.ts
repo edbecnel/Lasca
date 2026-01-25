@@ -7,9 +7,11 @@ import type {
   EndTurnResponse,
   FinalizeCaptureChainRequest,
   FinalizeCaptureChainResponse,
+  GetReplayResponse,
   GetRoomSnapshotResponse,
   JoinRoomResponse,
   PresenceByPlayerId,
+  ReplayEvent,
   ResignRequest,
   ResignResponse,
   SubmitMoveRequest,
@@ -102,6 +104,17 @@ export class RemoteDriver implements GameDriver {
 
   getPresence(): PresenceByPlayerId | null {
     return this.lastPresence;
+  }
+
+  async fetchReplayEvents(args?: { limit?: number }): Promise<ReplayEvent[]> {
+    const ids = this.requireIds();
+    const limit = args?.limit;
+    const qs = typeof limit === "number" && Number.isFinite(limit) ? `?limit=${encodeURIComponent(String(limit))}` : "";
+    const res = await this.getJson<GetReplayResponse>(`/api/room/${encodeURIComponent(ids.roomId)}/replay${qs}`);
+    if ((res as any)?.error) throw new Error(String((res as any).error));
+    const events = (res as any)?.events;
+    if (!Array.isArray(events)) return [];
+    return events as ReplayEvent[];
   }
 
   private requireIds(): RemoteIds {
