@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { WireSnapshot } from "../../src/shared/wireState.ts";
 import { deserializeWireGameState, deserializeWireHistory } from "../../src/shared/wireState.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
-import type { ClockState, PlayerColor, PlayerId, RoomId, TimeControl } from "../../src/shared/onlineProtocol.ts";
+import type { ClockState, PlayerColor, PlayerId, RoomId, RoomVisibility, TimeControl } from "../../src/shared/onlineProtocol.ts";
 
 export const SUPPORTED_RULES_VERSION = "v1" as const;
 
@@ -18,6 +18,9 @@ export type PersistedRoomMeta = {
   colorsTaken: PlayerColor[];
 
   // Optional extensions (back-compat):
+  visibility?: RoomVisibility;
+  watchToken?: string;
+
   presence?: Record<PlayerId, { connected: boolean; lastSeenAt: string }>;
   disconnectGrace?: Record<PlayerId, { graceUntilIso: string }>; // only when in grace
   timeControl?: TimeControl;
@@ -241,8 +244,10 @@ export async function tryLoadRoom(gamesDir: string, roomId: RoomId): Promise<Loa
     return null;
   }
 
-  const optionalFromSnapshot: Pick<PersistedRoomMeta, "presence" | "disconnectGrace" | "timeControl" | "clock"> = snapshotFile
+  const optionalFromSnapshot: Pick<PersistedRoomMeta, "visibility" | "watchToken" | "presence" | "disconnectGrace" | "timeControl" | "clock"> = snapshotFile
     ? {
+        visibility: snapshotFile.meta.visibility,
+        watchToken: snapshotFile.meta.watchToken,
         presence: snapshotFile.meta.presence,
         disconnectGrace: snapshotFile.meta.disconnectGrace,
         timeControl: snapshotFile.meta.timeControl,

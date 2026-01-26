@@ -37,6 +37,8 @@ type RemoteIds = {
   serverUrl: string;
   roomId: string;
   playerId: string;
+  /** Secret spectator token for private rooms (optional). */
+  watchToken?: string;
 };
 
 export class RemoteDriver implements GameDriver {
@@ -113,8 +115,8 @@ export class RemoteDriver implements GameDriver {
   async fetchReplayEvents(args?: { limit?: number }): Promise<ReplayEvent[]> {
     const ids = this.requireIds();
     const limit = args?.limit;
-    const qs = typeof limit === "number" && Number.isFinite(limit) ? `?limit=${encodeURIComponent(String(limit))}` : "";
-    const res = await this.getJson<GetReplayResponse>(`/api/room/${encodeURIComponent(ids.roomId)}/replay${qs}`);
+    const qs = this.toAccessQuery(ids, { limit });
+    const res = await this.getJson<GetReplayResponse>(`/api/room/${encodeURIComponent(ids.roomId)}/replay?${qs}`);
     if ((res as any)?.error) throw new Error(String((res as any).error));
     const events = (res as any)?.events;
     if (!Array.isArray(events)) return [];
@@ -126,10 +128,19 @@ export class RemoteDriver implements GameDriver {
     return this.ids;
   }
 
-  private toStreamUrl(serverUrl: string, roomId: string, playerId: string): string {
-    const base = serverUrl.replace(/\/$/, "");
-    const qs = new URLSearchParams({ playerId });
-    return `${base}/api/stream/${encodeURIComponent(roomId)}?${qs.toString()}`;
+  private toAccessQuery(ids: RemoteIds, opts?: { limit?: number }): string {
+    const qs = new URLSearchParams();
+    qs.set("playerId", ids.playerId);
+    if (ids.watchToken) qs.set("watchToken", ids.watchToken);
+    if (typeof opts?.limit === "number" && Number.isFinite(opts.limit)) qs.set("limit", String(opts.limit));
+    return qs.toString();
+  }
+
+  private toStreamUrl(ids: RemoteIds): string {
+    const base = ids.serverUrl.replace(/\/$/, "");
+    const qs = new URLSearchParams({ playerId: ids.playerId });
+    if (ids.watchToken) qs.set("watchToken", ids.watchToken);
+    return `${base}/api/stream/${encodeURIComponent(ids.roomId)}?${qs.toString()}`;
   }
 
   private toWsUrl(serverUrl: string): string {
@@ -199,7 +210,7 @@ export class RemoteDriver implements GameDriver {
     const ids = this.requireIds();
     this.onRealtimeUpdate = onUpdated;
 
-    const url = this.toStreamUrl(ids.serverUrl, ids.roomId, ids.playerId);
+    const url = this.toStreamUrl(ids);
     const es = new EventSource(url);
     this.eventSource = es;
 
@@ -516,15 +527,15 @@ export class RemoteDriver implements GameDriver {
     return { next: nextState, changed };
   }
 
-  async connectFromSnapshot(ids: RemoteIds, snapshot: WireSnapshot): Promise<void> {
+  async connectFromSnapshot(ids: RemoteIds, snapshot: WireSnapshot, presence?: PresenceByPlayerId | null): Promise<void> {
     this.ids = ids;
-    this.lastPresence = null;
+    this.lastPresence = presence ?? null;
     this.applySnapshot(snapshot);
   }
 
   async fetchLatest(): Promise<boolean> {
-    const { roomId } = this.requireIds();
-    const res = await this.getJson<GetRoomSnapshotResponse>(`/api/room/${encodeURIComponent(roomId)}`);
+    const ids = this.requireIds();
+    const res = await this.getJson<GetRoomSnapshotResponse>(`/api/room/${encodeURIComponent(ids.roomId)}?${this.toAccessQuery(ids)}`);
     if ((res as any).error) throw new Error((res as any).error);
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
     const applied = this.applySnapshot((res as any).snapshot);

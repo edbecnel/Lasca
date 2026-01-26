@@ -1,7 +1,7 @@
 import { DEFAULT_THEME_ID, getThemeById, THEMES } from "./theme/themes";
 import { DEFAULT_VARIANT_ID, VARIANTS, getVariantById, isVariantId } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
-import type { GetLobbyResponse, LobbyRoomSummary } from "./shared/onlineProtocol.ts";
+import type { GetLobbyResponse, GetRoomMetaResponse, LobbyRoomSummary, RoomVisibility } from "./shared/onlineProtocol.ts";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -24,13 +24,14 @@ const LS_KEYS = {
   onlineAction: "lasca.online.action",
   onlineRoomId: "lasca.online.roomId",
   onlinePrefColor: "lasca.online.prefColor",
+  onlineVisibility: "lasca.online.visibility",
 } as const;
 
 type PreferredColor = "auto" | "W" | "B";
 
 type Difficulty = "human" | "easy" | "medium" | "advanced";
 type PlayMode = "local" | "online";
-type OnlineAction = "create" | "join" | "rejoin";
+type OnlineAction = "create" | "join" | "spectate" | "rejoin";
 
 type OnlineResumeRecord = {
   serverUrl: string;
@@ -167,7 +168,13 @@ function readPlayMode(key: string, fallback: PlayMode): PlayMode {
 
 function readOnlineAction(key: string, fallback: OnlineAction): OnlineAction {
   const raw = localStorage.getItem(key);
-  if (raw === "create" || raw === "join" || raw === "rejoin") return raw;
+  if (raw === "create" || raw === "join" || raw === "spectate" || raw === "rejoin") return raw;
+  return fallback;
+}
+
+function readVisibility(key: string, fallback: RoomVisibility): RoomVisibility {
+  const raw = localStorage.getItem(key);
+  if (raw === "public" || raw === "private") return raw;
   return fallback;
 }
 
@@ -215,6 +222,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const elOnlineActionLabel =
     (document.querySelector('label[for="launchOnlineAction"]') as HTMLElement | null) ?? null;
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
+  const elOnlineVisibilityLabel = byId<HTMLElement>("launchOnlineVisibilityLabel");
+  const elOnlineVisibility = byId<HTMLSelectElement>("launchOnlineVisibility");
   const elOnlineHint = (document.getElementById("launchOnlineHint") as HTMLElement | null) ?? null;
   const elOnlinePrefColorLabel = byId<HTMLElement>("launchOnlinePrefColorLabel");
   const elOnlinePrefColor = byId<HTMLSelectElement>("launchOnlinePrefColor");
@@ -266,7 +275,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const el = document.createElement("div");
       el.className = "hint";
       el.style.marginLeft = "0";
-      el.textContent = "No open rooms.";
+      el.textContent = "No public rooms.";
       elLobbyList.appendChild(el);
       return;
     }
@@ -292,7 +301,7 @@ window.addEventListener("DOMContentLoaded", () => {
       sub.className = "lobbyItemSub";
       const open = r.seatsOpen.length ? `Open: ${r.seatsOpen.join("/")}` : "Open: —";
       const taken = r.seatsTaken.length ? `Taken: ${r.seatsTaken.join("/")}` : "Taken: —";
-      sub.textContent = `${open} · ${taken}`;
+      sub.textContent = `${open} · ${taken} · ${r.visibility === "public" ? "Public" : "Private"}`;
 
       left.appendChild(title);
       left.appendChild(sub);
@@ -306,6 +315,7 @@ window.addEventListener("DOMContentLoaded", () => {
       joinBtn.type = "button";
       joinBtn.className = "panelBtn";
       joinBtn.textContent = "Join";
+      joinBtn.disabled = r.seatsOpen.length === 0;
       joinBtn.addEventListener("click", () => {
         // Fill the existing Join fields.
         elPlayMode.value = "online";
@@ -330,6 +340,36 @@ window.addEventListener("DOMContentLoaded", () => {
       });
 
       right.appendChild(joinBtn);
+
+      const spectateBtn = document.createElement("button");
+      spectateBtn.type = "button";
+      spectateBtn.className = "panelBtn";
+      spectateBtn.textContent = "Spectate";
+      if (r.visibility === "private") {
+        spectateBtn.disabled = true;
+        spectateBtn.title = "Private rooms require a secret watch link/token to spectate.";
+      }
+      spectateBtn.addEventListener("click", () => {
+        if (r.visibility === "private") return;
+        elPlayMode.value = "online";
+        localStorage.setItem(LS_KEYS.playMode, "online");
+
+        elOnlineAction.value = "spectate";
+        localStorage.setItem(LS_KEYS.onlineAction, "spectate");
+
+        elOnlineRoomId.value = r.roomId;
+        localStorage.setItem(LS_KEYS.onlineRoomId, r.roomId);
+
+        setRoomIdError(false);
+        syncOnlineVisibility();
+        syncAvailability();
+
+        if (!elLaunch.disabled) {
+          elLaunch.click();
+        }
+      });
+
+      right.appendChild(spectateBtn);
 
       item.appendChild(left);
       item.appendChild(right);
@@ -357,7 +397,7 @@ window.addEventListener("DOMContentLoaded", () => {
     setLobbyStatus("Lobby: loading…");
 
     try {
-      const res = await fetch(`${serverUrl}/api/lobby?limit=200`);
+      const res = await fetch(`${serverUrl}/api/lobby?limit=200&includeFull=1`);
       const raw = await res.text();
       let json: GetLobbyResponse | null = null;
       try {
@@ -380,7 +420,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const rooms = Array.isArray((json as any)?.rooms) ? (((json as any).rooms as any[]) as LobbyRoomSummary[]) : [];
       renderLobby(rooms);
-      setLobbyStatus(`Lobby: ${rooms.length} open room${rooms.length === 1 ? "" : "s"}.`);
+      setLobbyStatus(`Lobby: ${rooms.length} room${rooms.length === 1 ? "" : "s"}.`);
       lobbyLastKey = key;
     } catch {
       setLobbyStatus(`Lobby: network error — server: ${serverUrl}`);
@@ -429,6 +469,7 @@ window.addEventListener("DOMContentLoaded", () => {
     localStorage.getItem(LS_KEYS.onlineServerUrl) ??
     (typeof envServerUrl === "string" && envServerUrl.trim() ? envServerUrl.trim() : "http://localhost:8788");
   elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, "create");
+  elOnlineVisibility.value = readVisibility(LS_KEYS.onlineVisibility, "public");
   elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
   elOnlinePrefColor.value = readPreferredColor(LS_KEYS.onlinePrefColor, "auto");
 
@@ -476,7 +517,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const onlineAction =
-      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
+      elOnlineAction.value === "rejoin"
+        ? "rejoin"
+        : (elOnlineAction.value === "join" ? "join" : (elOnlineAction.value === "spectate" ? "spectate" : "create"));
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
 
@@ -489,9 +532,12 @@ window.addEventListener("DOMContentLoaded", () => {
       if (!serverUrl) {
         ok = false;
         warning = "Online mode needs a server URL.";
-      } else if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) {
+      } else if ((onlineAction === "join" || onlineAction === "spectate" || onlineAction === "rejoin") && !roomId) {
         ok = false;
-        warning = onlineAction === "rejoin" ? "Online Rejoin needs a room ID." : "Online Join needs a room ID.";
+        warning =
+          onlineAction === "rejoin"
+            ? "Online Rejoin needs a room ID."
+            : (onlineAction === "spectate" ? "Online Spectate needs a room ID." : "Online Join needs a room ID.");
       } else if (onlineAction === "rejoin") {
         const resume = resolveOnlineResumeRecord(serverUrl, roomId);
         if (!resume) {
@@ -540,6 +586,7 @@ window.addEventListener("DOMContentLoaded", () => {
       elPlayMode.value = readPlayMode(LS_KEYS.playMode, (elPlayMode.value === "online" ? "online" : "local") as PlayMode);
       elOnlineServerUrl.value = localStorage.getItem(LS_KEYS.onlineServerUrl) ?? elOnlineServerUrl.value;
       elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, (elOnlineAction.value as any) ?? "create");
+      elOnlineVisibility.value = readVisibility(LS_KEYS.onlineVisibility, (elOnlineVisibility.value as any) ?? "public");
       elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
     } catch {
       // ignore
@@ -564,6 +611,11 @@ window.addEventListener("DOMContentLoaded", () => {
   elOnlineAction.addEventListener("change", () => {
     localStorage.setItem(LS_KEYS.onlineAction, elOnlineAction.value);
     syncOnlineVisibility();
+    syncAvailability();
+  });
+
+  elOnlineVisibility.addEventListener("change", () => {
+    localStorage.setItem(LS_KEYS.onlineVisibility, elOnlineVisibility.value);
     syncAvailability();
   });
 
@@ -611,7 +663,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const onlineAction =
-      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
+      elOnlineAction.value === "rejoin"
+        ? "rejoin"
+        : (elOnlineAction.value === "join" ? "join" : (elOnlineAction.value === "spectate" ? "spectate" : "create"));
 
     const showOnline = playMode === "online";
     // When local/offline, hide the online controls entirely to avoid confusion.
@@ -656,10 +710,15 @@ window.addEventListener("DOMContentLoaded", () => {
     elOnlinePlayerId.style.display = showPlayerId ? "" : "none";
     elOnlinePlayerId.disabled = !showPlayerId;
 
-    const showRoomId = showOnline && (onlineAction === "join" || onlineAction === "rejoin");
+    const showRoomId = showOnline && (onlineAction === "join" || onlineAction === "spectate" || onlineAction === "rejoin");
     elOnlineRoomIdLabel.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.style.display = showRoomId ? "" : "none";
     elOnlineRoomId.disabled = !showRoomId;
+
+    const showVisibility = showOnline && onlineAction === "create";
+    elOnlineVisibilityLabel.style.display = showVisibility ? "" : "none";
+    elOnlineVisibility.style.display = showVisibility ? "" : "none";
+    elOnlineVisibility.disabled = !showVisibility;
 
     if (elLobbySection) {
       elLobbySection.style.display = showOnline ? "" : "none";
@@ -708,10 +767,13 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     const onlineAction =
-      elOnlineAction.value === "rejoin" ? "rejoin" : (elOnlineAction.value === "join" ? "join" : "create");
+      elOnlineAction.value === "rejoin"
+        ? "rejoin"
+        : (elOnlineAction.value === "join" ? "join" : (elOnlineAction.value === "spectate" ? "spectate" : "create"));
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
     const roomId = (elOnlineRoomId.value || "").trim();
     const prefColor = (elOnlinePrefColor.value === "W" || elOnlinePrefColor.value === "B") ? elOnlinePrefColor.value : "auto";
+    const visibility = (elOnlineVisibility.value === "private" ? "private" : "public") as RoomVisibility;
     if (!serverUrl) {
       setServerError(true);
       setWarning("Invalid Server: (empty)", { isError: true });
@@ -728,9 +790,9 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if ((onlineAction === "join" || onlineAction === "rejoin") && !roomId) return;
+    if ((onlineAction === "join" || onlineAction === "spectate" || onlineAction === "rejoin") && !roomId) return;
 
-    if ((onlineAction === "join" || onlineAction === "rejoin") && !isPlausibleRoomId(roomId)) {
+    if ((onlineAction === "join" || onlineAction === "spectate" || onlineAction === "rejoin") && !isPlausibleRoomId(roomId)) {
       setRoomIdError(true);
       setWarning(`Invalid Room ID: ${roomId} (must be hex).`, { isError: true });
       return;
@@ -742,9 +804,9 @@ window.addEventListener("DOMContentLoaded", () => {
     // If joining/rejoining, prefer the room's authoritative variant so we don't load the wrong board/rules UI.
     // This prevents cases like: Damasca room joined via Lasca/Dama page (can look like wrong moves).
     let targetVariant = v;
-    if (onlineAction === "join" || onlineAction === "rejoin") {
+    if (onlineAction === "join" || onlineAction === "rejoin" || onlineAction === "spectate") {
       try {
-        const res = await fetch(`${serverUrl}/api/room/${encodeURIComponent(roomId)}`);
+        const res = await fetch(`${serverUrl}/api/room/${encodeURIComponent(roomId)}/meta`);
         const json = (await res.json()) as any;
 
         if (!res.ok || json?.error) {
@@ -766,7 +828,7 @@ window.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        const roomVariantId = json?.snapshot?.state?.meta?.variantId as string | undefined;
+        const roomVariantId = json?.variantId as string | undefined;
         if (roomVariantId && isVariantId(roomVariantId)) {
           targetVariant = getVariantById(roomVariantId);
           localStorage.setItem(LS_KEYS.variantId, targetVariant.variantId);
@@ -784,10 +846,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (onlineAction === "create") {
       url.searchParams.set("create", "1");
       if (prefColor !== "auto") url.searchParams.set("prefColor", prefColor);
+      url.searchParams.set("visibility", visibility);
     } else if (onlineAction === "join") {
       url.searchParams.set("join", "1");
       url.searchParams.set("roomId", roomId);
       if (prefColor !== "auto") url.searchParams.set("prefColor", prefColor);
+    } else if (onlineAction === "spectate") {
+      url.searchParams.set("roomId", roomId);
     } else {
       url.searchParams.set("roomId", roomId);
       url.searchParams.set("playerId", (resume as OnlineResumeRecord).playerId);

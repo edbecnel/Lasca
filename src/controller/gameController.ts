@@ -29,7 +29,7 @@ import type { GameDriver } from "../driver/gameDriver.ts";
 import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
 import { deserializeWireGameState } from "../shared/wireState.ts";
-import type { PostRoomDebugReportResponse } from "../shared/onlineProtocol.ts";
+import type { GetRoomWatchTokenResponse, PostRoomDebugReportResponse } from "../shared/onlineProtocol.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -134,6 +134,59 @@ export class GameController {
       const roomId = (this.driver as OnlineGameDriver).getRoomId();
       if (!roomId) return;
       await this.copyTextToClipboard(roomId);
+    });
+  }
+
+  private bindWatchLinkCopyButton(): void {
+    const btn = document.getElementById("copyWatchLinkBtn") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    btn.addEventListener("click", async () => {
+      if (this.driver.mode !== "online") return;
+      const remote = this.driver as OnlineGameDriver;
+
+      const serverUrl = remote.getServerUrl();
+      const roomId = remote.getRoomId();
+      const playerId = remote.getPlayerId();
+      if (!serverUrl || !roomId || !playerId || playerId === "spectator") return;
+
+      try {
+        const url = new URL(`/api/room/${encodeURIComponent(roomId)}/watchToken`, serverUrl);
+        url.searchParams.set("playerId", playerId);
+        const res = await fetch(url.toString());
+        const data = (await res.json()) as GetRoomWatchTokenResponse;
+        if (!res.ok || (data as any)?.error) {
+          const msg = typeof (data as any)?.error === "string" ? (data as any).error : `HTTP ${res.status}`;
+          this.showToast(`Failed to get watch link (${msg})`, 2200);
+          return;
+        }
+
+        const tok = typeof (data as any)?.watchToken === "string" ? String((data as any).watchToken) : "";
+        const vis = (data as any)?.visibility;
+        if (vis !== "private" || !tok) {
+          this.showToast("No watch link (room is public)", 1800);
+          return;
+        }
+
+        // Share a direct link to the current variant page.
+        const share = new URL(window.location.href);
+        share.searchParams.set("mode", "online");
+        share.searchParams.set("server", serverUrl);
+        share.searchParams.set("roomId", roomId);
+        share.searchParams.set("watchToken", tok);
+        // Ensure the receiver opens as spectator.
+        share.searchParams.delete("playerId");
+        share.searchParams.delete("color");
+        share.searchParams.delete("create");
+        share.searchParams.delete("join");
+        share.searchParams.delete("prefColor");
+        share.searchParams.delete("visibility");
+
+        const copiedOk = await this.copyTextToClipboard(share.toString());
+        this.showToast(copiedOk ? "Copied spectate link" : "Failed to copy spectate link", 1800);
+      } catch {
+        this.showToast("Failed to get watch link", 1800);
+      }
     });
   }
 
@@ -646,6 +699,12 @@ export class GameController {
     if (this.driver.mode !== "online") return;
     const remote = this.driver as OnlineGameDriver;
     if (this.onlinePollTimer || this.onlineRealtimeEnabled) return;
+    
+    // Presence can change without a stateVersion bump.
+    // Refresh panel so opponent shows Connected immediately (no click required).
+    remote.onSseEvent("snapshot", (payload) => {
+      if (payload?.presence) this.updatePanel();
+    });
 
     // Surface initial connection state.
     if (!this.onlineDidShowConnectingToast && !this.isGameOver) {
@@ -1077,11 +1136,30 @@ export class GameController {
     this.recomputeRepetitionCounts();
     this.updatePanel();
 
+    // If we entered an already-ended room, show the end-game status immediately.
+    // This covers both server-forced end states and normal terminal positions.
+    if (!this.isGameOver) {
+      const forcedMsg = (this.state as any)?.forcedGameOver?.message as string | undefined;
+      if (typeof forcedMsg === "string" && forcedMsg.trim()) {
+        this.isGameOver = true;
+        this.clearSelection();
+        this.showBanner(forcedMsg, 0);
+        this.showGameOverToast(forcedMsg);
+        this.updatePanel();
+        this.fireHistoryChange("gameOver");
+      } else {
+        this.checkAndHandleCurrentPlayerLost();
+      }
+    }
+
     // Initialize and (optionally) show a turn toast at startup.
-    this.lastToastToMove = null;
-    this.maybeToastTurnChange();
+    if (!this.isGameOver) {
+      this.lastToastToMove = null;
+      this.maybeToastTurnChange();
+    }
 
     this.bindRoomIdCopyButton();
+    this.bindWatchLinkCopyButton();
     this.bindDebugCopyButton();
     this.bindReplayButton();
 
@@ -1526,6 +1604,7 @@ export class GameController {
     const elOnlineInfoPanel = document.getElementById("onlineInfoPanel") as HTMLElement | null;
     const elRoomId = document.getElementById("infoRoomId");
     const elCopy = document.getElementById("copyRoomIdBtn") as HTMLButtonElement | null;
+    const elCopyWatch = document.getElementById("copyWatchLinkBtn") as HTMLButtonElement | null;
     const elCopyDebug = document.getElementById("copyDebugBtn") as HTMLButtonElement | null;
     const elOpponent = document.getElementById("onlineOpponentStatus") as HTMLDivElement | null;
     const elReplayBtn = document.getElementById("openReplayBtn") as HTMLButtonElement | null;
@@ -1537,6 +1616,15 @@ export class GameController {
     if (elOnlineInfoPanel) elOnlineInfoPanel.hidden = !isOnline;
 
     if (elReplayBtn) elReplayBtn.disabled = !(isOnline && this.isGameOver);
+
+    if (elCopyWatch) {
+      if (!isOnline) {
+        elCopyWatch.disabled = true;
+      } else {
+        const pid = (this.driver as OnlineGameDriver).getPlayerId();
+        elCopyWatch.disabled = !pid || pid === "spectator";
+      }
+    }
 
     if (elNewGame) elNewGame.disabled = isOnline;
     if (elLoadGame) elLoadGame.disabled = isOnline;

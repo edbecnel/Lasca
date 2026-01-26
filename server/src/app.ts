@@ -22,6 +22,8 @@ import type {
   CreateRoomRequest,
   CreateRoomResponse,
   GetLobbyResponse,
+  GetRoomMetaResponse,
+  GetRoomWatchTokenResponse,
   JoinRoomRequest,
   JoinRoomResponse,
   LobbyRoomSummary,
@@ -42,6 +44,7 @@ import type {
   PlayerId,
   PlayerColor,
   PresenceByPlayerId,
+  RoomVisibility,
   TimeControl,
   ClockState,
 } from "../../src/shared/onlineProtocol.ts";
@@ -62,6 +65,7 @@ import {
   makeGameOverEvent,
   makeMoveAppliedEvent,
   resolveGamesDir,
+  snapshotPath,
   tryLoadRoom,
   writeSnapshotAtomic,
   type PersistedSnapshotFile,
@@ -75,6 +79,8 @@ type Room = {
   players: Map<PlayerId, PlayerColor>;
   colorsTaken: Set<PlayerColor>;
   variantId: VariantId;
+  visibility: RoomVisibility;
+  watchToken: string | null;
   stateVersion: number;
   rulesVersion: string;
   lastGameOverVersion: number;
@@ -170,6 +176,22 @@ function snapshotForRoom(room: Room): WireSnapshot {
   };
 }
 
+function isValidVisibility(raw: any): raw is RoomVisibility {
+  return raw === "public" || raw === "private";
+}
+
+function requireRoomView(room: Room, playerId: PlayerId | null, watchToken: string | null): void {
+  if (room.visibility !== "private") return;
+
+  // Seated players always have view access.
+  if (playerId && room.players.has(playerId)) return;
+
+  // Optional spectator access via a secret watch token.
+  if (watchToken && room.watchToken && watchToken === room.watchToken) return;
+
+  throw new Error("Room is private");
+}
+
 function parseExpectedVersion(raw: any): number | null {
   if (raw == null) return null;
   const n = Number(raw);
@@ -195,6 +217,8 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
       stateVersion: room.stateVersion,
       players: Array.from(room.players.entries()),
       colorsTaken: Array.from(room.colorsTaken.values()),
+      visibility: room.visibility,
+      watchToken: room.watchToken ?? undefined,
       presence: presenceRecord,
       disconnectGrace: graceRecord,
       timeControl: room.timeControl,
@@ -594,6 +618,10 @@ export function createLascaApp(opts: ServerOpts = {}): {
     const loadedTimeControlRaw = (loaded.meta as any).timeControl;
     const loadedTimeControl: TimeControl = isValidTimeControl(loadedTimeControlRaw) ? loadedTimeControlRaw : { mode: "none" };
     const loadedClock = ((loaded.meta as any).clock as ClockState | undefined) ?? null;
+    const loadedVisibility: RoomVisibility = isValidVisibility((loaded.meta as any).visibility) ? ((loaded.meta as any).visibility as any) : "public";
+    const loadedWatchToken = typeof (loaded.meta as any).watchToken === "string" && (loaded.meta as any).watchToken
+      ? String((loaded.meta as any).watchToken)
+      : null;
 
     const room: Room = {
       roomId,
@@ -602,6 +630,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
       players: loaded.players,
       colorsTaken: loaded.colorsTaken,
       variantId: loaded.meta.variantId as any,
+      visibility: loadedVisibility,
+      watchToken: loadedWatchToken,
       stateVersion: loaded.meta.stateVersion,
       rulesVersion: loaded.meta.rulesVersion,
       lastGameOverVersion: -1,
@@ -852,6 +882,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const room = await requireRoom(roomId);
 
       const playerId = typeof req.query.playerId === "string" ? (req.query.playerId as PlayerId) : null;
+      const watchToken = typeof req.query.watchToken === "string" ? String(req.query.watchToken) : null;
+
+      // Spectator access control: private rooms may only be viewed by seated players.
+      // (Players keep passing their playerId via querystring; observers do not.)
+      requireRoomView(room, playerId, watchToken);
+
       if (playerId && room.players.has(playerId)) {
         await queueRoomAction(room, async () => {
           touchClock(room);
@@ -930,7 +966,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Stream failed";
-      res.status(400).json({ error: msg });
+      res.status(msg === "Room is private" ? 403 : 400).json({ error: msg });
     }
   });
 
@@ -954,6 +990,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
       const timeControl: TimeControl = isValidTimeControl((body as any).timeControl) ? (body as any).timeControl : { mode: "none" };
 
+      const visibility: RoomVisibility = isValidVisibility((body as any).visibility) ? (body as any).visibility : "public";
+      const watchToken = visibility === "private" ? randId() : null;
+
       const preferredColor = (body as any)?.preferredColor;
       const creatorColor: PlayerColor = preferredColor === "B" || preferredColor === "W" ? preferredColor : "W";
 
@@ -964,6 +1003,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
         players: new Map([[playerId, creatorColor]]),
         colorsTaken: new Set([creatorColor]),
         variantId,
+        visibility,
+        watchToken,
         stateVersion: 0,
         rulesVersion: SUPPORTED_RULES_VERSION,
         lastGameOverVersion: -1,
@@ -1004,6 +1045,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
         presence: presenceForRoom(room),
         timeControl: room.timeControl,
         clock: room.clock ?? undefined,
+        visibility: room.visibility,
+        watchToken: room.watchToken ?? undefined,
       };
       broadcastRoomSnapshot(room);
       res.json(response);
@@ -1076,28 +1119,107 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const limitRaw = typeof req.query.limit === "string" ? req.query.limit : "";
       const limit = Math.max(1, Math.min(500, Number.parseInt(limitRaw || "200", 10) || 200));
 
-      const out: LobbyRoomSummary[] = [];
+      const includeFull = req.query.includeFull === "1" || req.query.includeFull === "true";
+
+      type LobbyCandidate = LobbyRoomSummary & { sortMs: number };
+      const byId = new Map<RoomId, LobbyCandidate>();
+
+      const consider = (cand: LobbyCandidate): void => {
+        // Enforce discoverability rules.
+        const isFull = cand.seatsOpen.length === 0;
+        if (!includeFull && isFull) return;
+        if (cand.visibility === "private" && isFull) return;
+        const prev = byId.get(cand.roomId);
+        if (!prev || cand.sortMs > prev.sortMs) byId.set(cand.roomId, cand);
+      };
+
+      // First: active rooms in memory (authoritative, freshest).
       for (const room of rooms.values()) {
         if (isRoomOver(room)) continue;
 
-        // Derive seats from players to stay consistent with other seat handling.
         const seatsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
         const seatsOpen: PlayerColor[] = [];
         if (!seatsTaken.has("W")) seatsOpen.push("W");
         if (!seatsTaken.has("B")) seatsOpen.push("B");
 
-        if (seatsOpen.length === 0) continue;
-
-        out.push({
+        consider({
           roomId: room.roomId,
           variantId: room.variantId,
+          visibility: room.visibility,
           seatsTaken: Array.from(seatsTaken.values()),
           seatsOpen,
           timeControl: room.timeControl,
+          sortMs: Date.now(),
         });
-
-        if (out.length >= limit) break;
       }
+
+      // Second: rooms persisted on disk but not currently loaded.
+      // This makes joinable rooms discoverable after a server restart.
+      try {
+        const entries = await fs.readdir(gamesDir, { withFileTypes: true });
+        for (const ent of entries) {
+          if (!ent.isDirectory()) continue;
+          const roomId = ent.name as RoomId;
+          if (rooms.has(roomId)) continue;
+
+          // Avoid reading obviously invalid folders.
+          if (!/^[0-9a-f]+$/i.test(roomId) || roomId.length < 4) continue;
+
+          const snapP = snapshotPath(gamesDir, roomId);
+          let raw: string;
+          try {
+            raw = await fs.readFile(snapP, "utf8");
+          } catch {
+            continue;
+          }
+
+          let file: PersistedSnapshotFile | null = null;
+          try {
+            file = JSON.parse(raw) as PersistedSnapshotFile;
+          } catch {
+            file = null;
+          }
+          if (!file?.meta) continue;
+
+          const forcedOver = Boolean((file.snapshot as any)?.state?.forcedGameOver?.message);
+          if (forcedOver) continue;
+
+          const visibility: RoomVisibility = isValidVisibility((file.meta as any).visibility)
+            ? ((file.meta as any).visibility as any)
+            : "public";
+
+          const timeControl: TimeControl = isValidTimeControl((file.meta as any).timeControl)
+            ? ((file.meta as any).timeControl as any)
+            : { mode: "none" };
+
+          const seatsTaken = new Set<PlayerColor>(Array.from((file.meta.players ?? []).map((x) => x[1])));
+          const seatsOpen: PlayerColor[] = [];
+          if (!seatsTaken.has("W")) seatsOpen.push("W");
+          if (!seatsTaken.has("B")) seatsOpen.push("B");
+
+          const sortMs = await fs
+            .stat(snapP)
+            .then((s) => s.mtimeMs)
+            .catch(() => 0);
+
+          consider({
+            roomId,
+            variantId: file.meta.variantId,
+            visibility,
+            seatsTaken: Array.from(seatsTaken.values()),
+            seatsOpen,
+            timeControl,
+            sortMs,
+          });
+        }
+      } catch {
+        // ignore
+      }
+
+      const out: LobbyRoomSummary[] = Array.from(byId.values())
+        .sort((a, b) => b.sortMs - a.sortMs)
+        .slice(0, limit)
+        .map(({ sortMs: _sortMs, ...rest }) => rest);
 
       const response: GetLobbyResponse = { rooms: out };
       res.json(response);
@@ -1108,10 +1230,68 @@ export function createLascaApp(opts: ServerOpts = {}): {
     }
   });
 
+  // Room metadata suitable for Start Page routing (variant selection) without leaking private game state.
+  app.get("/api/room/:roomId/meta", async (req, res) => {
+    try {
+      const roomId = req.params.roomId as RoomId;
+      const room = await requireRoom(roomId);
+
+      const seatsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
+      const seatsOpen: PlayerColor[] = [];
+      if (!seatsTaken.has("W")) seatsOpen.push("W");
+      if (!seatsTaken.has("B")) seatsOpen.push("B");
+
+      const response: GetRoomMetaResponse = {
+        roomId: room.roomId,
+        variantId: room.variantId as any,
+        visibility: room.visibility,
+        isOver: isRoomOver(room),
+        seatsTaken: Array.from(seatsTaken.values()),
+        seatsOpen,
+        timeControl: room.timeControl,
+      };
+
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Room meta failed";
+      const response: GetRoomMetaResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  // Private-room spectator token (only revealed to seated players).
+  // This lets either player share a watch link after the room is full.
+  app.get("/api/room/:roomId/watchToken", async (req, res) => {
+    try {
+      const roomId = req.params.roomId as RoomId;
+      const room = await requireRoom(roomId);
+
+      const playerId = typeof req.query.playerId === "string" ? String(req.query.playerId) : "";
+      if (!playerId) throw new Error("Missing playerId");
+      requirePlayer(room, playerId);
+
+      const response: GetRoomWatchTokenResponse = {
+        roomId: room.roomId,
+        visibility: room.visibility,
+        ...(room.visibility === "private" && room.watchToken ? { watchToken: room.watchToken } : {}),
+      };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Watch token failed";
+      const response: GetRoomWatchTokenResponse = { error: msg };
+      res.status(msg === "Room is private" ? 403 : 400).json(response);
+    }
+  });
+
   app.get("/api/room/:roomId", async (req, res) => {
     try {
       const roomId = req.params.roomId as RoomId;
       const room = await requireRoom(roomId);
+
+      const playerId = typeof req.query.playerId === "string" ? (req.query.playerId as PlayerId) : null;
+      const watchToken = typeof req.query.watchToken === "string" ? String(req.query.watchToken) : null;
+      requireRoomView(room, playerId, watchToken);
+
       touchClock(room);
       await maybeForceClockTimeout(room);
       updateClockPause(room);
@@ -1126,7 +1306,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Snapshot failed";
       const response: GetRoomSnapshotResponse = { error: msg };
-      res.status(400).json(response);
+      res.status(msg === "Room is private" ? 403 : 400).json(response);
     }
   });
 
@@ -1210,6 +1390,10 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const roomId = req.params.roomId as RoomId;
       const room = await requireRoom(roomId);
 
+      const playerId = typeof req.query.playerId === "string" ? (req.query.playerId as PlayerId) : null;
+      const watchToken = typeof req.query.watchToken === "string" ? String(req.query.watchToken) : null;
+      requireRoomView(room, playerId, watchToken);
+
       // Ensure any in-flight persistence (e.g. recent moves) is flushed before reading.
       await room.persistChain;
 
@@ -1244,7 +1428,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Replay failed";
       const response: GetReplayResponse = { error: msg };
-      res.status(400).json(response);
+      res.status(msg === "Room is private" ? 403 : 400).json(response);
     }
   });
 

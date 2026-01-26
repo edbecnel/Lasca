@@ -40,6 +40,8 @@ type OnlineQuery = {
   playerId: string | null;
   color: "W" | "B" | null;
   prefColor: "W" | "B" | null;
+  visibility: "public" | "private" | null;
+  watchToken: string | null;
 };
 
 type OnlineResumeRecord = {
@@ -182,8 +184,11 @@ function updateBrowserUrlForLocal(): void {
     url.searchParams.delete("server");
     url.searchParams.delete("roomId");
     url.searchParams.delete("playerId");
+    url.searchParams.delete("watchToken");
     url.searchParams.delete("color");
     url.searchParams.delete("prefColor");
+    url.searchParams.delete("visibility");
+    url.searchParams.delete("visibility");
     url.searchParams.delete("create");
     url.searchParams.delete("join");
     window.history.replaceState(null, "", url.toString());
@@ -233,7 +238,11 @@ function parseOnlineQuery(search: string, envServerUrl?: string | undefined): On
   const color = c === "W" || c === "B" ? c : null;
   const p = params.get("prefColor");
   const prefColor = p === "W" || p === "B" ? p : null;
-  return { serverUrl, create, join, roomId, playerId, color, prefColor };
+  const v = params.get("visibility");
+  const visibility = v === "public" || v === "private" ? v : null;
+  const wt = (params.get("watchToken") ?? "").trim();
+  const watchToken = wt ? wt : null;
+  return { serverUrl, create, join, roomId, playerId, color, prefColor, visibility, watchToken };
 }
 
 async function postJson<TReq, TRes>(serverUrl: string, path: string, body: TReq): Promise<TRes> {
@@ -322,9 +331,18 @@ export async function createDriverAsync(args: {
       const variantId = args.state.meta?.variantId;
       if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
       const res = await postJson<
-        { variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B" },
+        { variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B"; visibility?: "public" | "private" },
         CreateRoomResponse
-      >(q.serverUrl, "/api/create", { variantId, snapshot: wireSnapshot, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) });
+      >(
+        q.serverUrl,
+        "/api/create",
+        {
+          variantId,
+          snapshot: wireSnapshot,
+          ...(q.prefColor ? { preferredColor: q.prefColor } : {}),
+          ...(q.visibility ? { visibility: q.visibility } : {}),
+        }
+      );
       const anyRes: any = res;
 
     if ((import.meta as any)?.env?.DEV) {
@@ -344,7 +362,8 @@ export async function createDriverAsync(args: {
       if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
       await driver.connectFromSnapshot(
         { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
-        anyRes.snapshot
+        anyRes.snapshot,
+        (anyRes as any).presence ?? null
       );
 
       updateBrowserUrlForOnline({
@@ -354,6 +373,26 @@ export async function createDriverAsync(args: {
         color: anyRes.color === "W" || anyRes.color === "B" ? anyRes.color : undefined,
       });
       logJoinUrl({ serverUrl: q.serverUrl, roomId: anyRes.roomId });
+
+      // If the room is private, also log a spectate link gated by watchToken.
+      if (anyRes?.visibility === "private" && typeof anyRes?.watchToken === "string" && anyRes.watchToken) {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("mode", "online");
+          url.searchParams.set("server", q.serverUrl);
+          url.searchParams.set("roomId", String(anyRes.roomId));
+          url.searchParams.set("watchToken", String(anyRes.watchToken));
+          url.searchParams.delete("create");
+          url.searchParams.delete("join");
+          url.searchParams.delete("playerId");
+          url.searchParams.delete("color");
+          // eslint-disable-next-line no-console
+          console.info("[online] Share this PRIVATE spectate link (watch token):", url.toString());
+        } catch {
+          // ignore
+        }
+      }
+
       return driver;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Create failed";
@@ -376,11 +415,15 @@ export async function createDriverAsync(args: {
       try {
         driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId });
         if (rec0.color === "W" || rec0.color === "B") driver.setPlayerColor(rec0.color);
-        const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+        const snap = await getJson<GetRoomSnapshotResponse>(
+          q.serverUrl,
+          `/api/room/${encodeURIComponent(q.roomId)}?playerId=${encodeURIComponent(rec0.playerId)}`
+        );
         const anySnap: any = snap;
         await driver.connectFromSnapshot(
           { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId },
-          anySnap.snapshot
+          anySnap.snapshot,
+          (anySnap as any).presence ?? null
         );
         updateBrowserUrlForOnline({
           serverUrl: q.serverUrl,
@@ -413,11 +456,15 @@ export async function createDriverAsync(args: {
         if (rec?.playerId) {
           driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId });
           if (rec.color === "W" || rec.color === "B") driver.setPlayerColor(rec.color);
-          const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+          const snap = await getJson<GetRoomSnapshotResponse>(
+            q.serverUrl,
+            `/api/room/${encodeURIComponent(q.roomId)}?playerId=${encodeURIComponent(rec.playerId)}`
+          );
           const anySnap: any = snap;
           await driver.connectFromSnapshot(
             { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId },
-            anySnap.snapshot
+            anySnap.snapshot,
+            (anySnap as any).presence ?? null
           );
           updateBrowserUrlForOnline({
             serverUrl: q.serverUrl,
@@ -429,12 +476,19 @@ export async function createDriverAsync(args: {
         }
 
         // Spectator fallback.
-        driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
-        const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+        driver.setRemoteIds({
+          serverUrl: q.serverUrl,
+          roomId: q.roomId,
+          playerId: "spectator",
+          ...(q.watchToken ? { watchToken: q.watchToken } : {}),
+        });
+        const qs = q.watchToken ? `?watchToken=${encodeURIComponent(q.watchToken)}` : "";
+        const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}${qs}`);
         const anySnap: any = snap;
         await driver.connectFromSnapshot(
-          { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
-          anySnap.snapshot
+          { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
+          anySnap.snapshot,
+          (anySnap as any).presence ?? null
         );
         updateBrowserUrlForOnline({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
         setStartupMessage("Room is full — opened as spectator");
@@ -470,7 +524,8 @@ export async function createDriverAsync(args: {
     if (anyRes.color === "W" || anyRes.color === "B") driver.setPlayerColor(anyRes.color);
     await driver.connectFromSnapshot(
       { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
-      anyRes.snapshot
+      anyRes.snapshot,
+      (anyRes as any).presence ?? null
     );
 
     updateBrowserUrlForOnline({
@@ -487,12 +542,19 @@ export async function createDriverAsync(args: {
   // Input will be disabled if the player color is unknown.
   if (q.roomId && !q.playerId) {
     try {
-      driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
-      const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+      driver.setRemoteIds({
+        serverUrl: q.serverUrl,
+        roomId: q.roomId,
+        playerId: "spectator",
+        ...(q.watchToken ? { watchToken: q.watchToken } : {}),
+      });
+      const qs = q.watchToken ? `?watchToken=${encodeURIComponent(q.watchToken)}` : "";
+      const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}${qs}`);
       const anySnap: any = snap;
       await driver.connectFromSnapshot(
-        { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" },
-        anySnap.snapshot
+        { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
+        anySnap.snapshot,
+        (anySnap as any).presence ?? null
       );
       return driver;
     } catch (err) {
@@ -511,9 +573,16 @@ export async function createDriverAsync(args: {
   try {
     driver.setRemoteIds({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId });
     if (q.color) driver.setPlayerColor(q.color);
-    const snap = await getJson<GetRoomSnapshotResponse>(q.serverUrl, `/api/room/${encodeURIComponent(q.roomId)}`);
+    const snap = await getJson<GetRoomSnapshotResponse>(
+      q.serverUrl,
+      `/api/room/${encodeURIComponent(q.roomId)}?playerId=${encodeURIComponent(q.playerId)}`
+    );
     const anySnap: any = snap;
-    await driver.connectFromSnapshot({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId }, anySnap.snapshot);
+    await driver.connectFromSnapshot(
+      { serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId },
+      anySnap.snapshot,
+      (anySnap as any).presence ?? null
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "Room not found") return failToLocal(`Online game not found (roomId=${q.roomId})`);

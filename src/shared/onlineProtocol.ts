@@ -6,6 +6,8 @@ export type RoomId = string;
 export type PlayerId = string;
 export type PlayerColor = "W" | "B";
 
+export type RoomVisibility = "public" | "private";
+
 export type PlayerPresence = {
   connected: boolean;
   lastSeenAt: string; // ISO timestamp
@@ -43,6 +45,8 @@ export type CreateRoomRequest = {
   preferredColor?: PlayerColor;
   /** Immutable per game; only settable at create. */
   timeControl?: TimeControl;
+  /** Controls whether non-players may view the room (stream/snapshot/replay). Default: public (back-compat). */
+  visibility?: RoomVisibility;
 };
 
 export type CreateRoomResponse =
@@ -54,6 +58,9 @@ export type CreateRoomResponse =
       presence?: PresenceByPlayerId;
       timeControl?: TimeControl;
       clock?: ClockState;
+      visibility?: RoomVisibility;
+      /** Present when the room is private and server generated a spectator token. */
+      watchToken?: string;
     }
   | OnlineError;
 
@@ -164,11 +171,33 @@ export type GetRoomSnapshotResponse =
     }
   | OnlineError;
 
+export type GetRoomMetaResponse =
+  | {
+      roomId: RoomId;
+      variantId: VariantId;
+      visibility: RoomVisibility;
+      isOver: boolean;
+      seatsTaken: PlayerColor[];
+      seatsOpen: PlayerColor[];
+      timeControl?: TimeControl;
+    }
+  | OnlineError;
+
+export type GetRoomWatchTokenResponse =
+  | {
+      roomId: RoomId;
+      visibility: RoomVisibility;
+      /** Present only for private rooms. */
+      watchToken?: string;
+    }
+  | OnlineError;
+
 // --- Lobby / matchmaking ---
 
 export type LobbyRoomSummary = {
   roomId: RoomId;
   variantId: VariantId;
+  visibility: RoomVisibility;
   /** Player colors currently taken (derived from server room.players). */
   seatsTaken: PlayerColor[];
   /** Player colors currently available to join. */

@@ -386,7 +386,16 @@
             <select id="launchOnlineAction" class="panelSelect">
               <option value="create">Create room</option>
               <option value="join">Join room</option>
+              <option value="spectate">Spectate room</option>
               <option value="rejoin">Rejoin room (this browser)</option>
+            </select>
+
+            <label id="launchOnlineVisibilityLabel" for="launchOnlineVisibility"
+              >Room</label
+            >
+            <select id="launchOnlineVisibility" class="panelSelect">
+              <option value="public">Public (spectators allowed)</option>
+              <option value="private">Private (no spectators)</option>
             </select>
 
             <label id="launchOnlinePrefColorLabel" for="launchOnlinePrefColor"
@@ -423,8 +432,8 @@
           </div>
           <div id="launchOnlineHint" class="hint" style="margin-left: 0">
             Online Create logs a join link in the browser console (F12). Online
-            Join needs a room ID from Player 1. Online Rejoin uses a saved seat
-            from this browser.
+            Join/Spectate needs a room ID from Player 1. Online Rejoin uses a
+            saved seat from this browser.
           </div>
         </section>
 

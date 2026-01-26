@@ -23,7 +23,8 @@ describe("MP6 hardening (client)", () => {
         state: serializeWireGameState(initial),
         history: serializeWireHistory(history.exportSnapshots()),
         stateVersion: 1,
-      } as any
+      } as any,
+      null
     );
 
     const getJson = vi.fn(async () => {
@@ -49,7 +50,7 @@ describe("MP6 hardening (client)", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(getJson).toHaveBeenCalledTimes(1);
-    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1");
+    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1?playerId=p1");
   });
 
   it("coalesces realtime snapshot bursts and drops to resync", async () => {
@@ -66,7 +67,8 @@ describe("MP6 hardening (client)", () => {
         state: serializeWireGameState(initial),
         history: serializeWireHistory(history.exportSnapshots()),
         stateVersion: 1,
-      } as any
+      } as any,
+      null
     );
 
     const getJson = vi.fn(async () => {
@@ -93,6 +95,6 @@ describe("MP6 hardening (client)", () => {
     await vi.runAllTimersAsync();
 
     expect(getJson).toHaveBeenCalledTimes(1);
-    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1");
+    expect(getJson.mock.calls[0][0]).toBe("/api/room/room-1?playerId=p1");
   });
 });
