@@ -203,15 +203,32 @@
       <h2>Online multiplayer (2 players)</h2>
       <p>
         To play online, set <b>Play mode</b> to <b>Online</b>. You can then
-        <b>Create</b> a room (Player 1) or <b>Join</b> a room (Player 2).
+        <b>Create</b> a room (Player 1), <b>Join</b> a room (Player 2),
+        <b>Spectate</b> a public room, or <b>Rejoin</b> from this browser.
       </p>
       <ul>
         <li>
           <b>Server URL</b>: where the online server is running (default is
           <span class="mono">http://localhost:8788</span>).
         </li>
-        <li><b>Create</b>: makes a new room and starts you as Player 1.</li>
+        <li>
+          <b>Create</b>: makes a new room and starts you as Player 1.
+          <ul>
+            <li>
+              <b>Room</b>: choose <b>Public</b> (spectators allowed) or
+              <b>Private</b> (no public spectating).
+            </li>
+          </ul>
+        </li>
         <li><b>Join</b>: paste a room ID to join as Player 2.</li>
+        <li>
+          <b>Spectate</b>: paste a room ID to spectate a <b>public</b> room.
+          Private rooms require a secret watch link.
+        </li>
+        <li>
+          <b>Rejoin room (this browser)</b>: reclaims your seat if you previously
+          joined from this same browser (saved in localStorage).
+        </li>
         <li>
           <b>Lobby</b>: shows open rooms on the server. Click <b>Join</b> on a
           lobby row to auto-fill the join fields and launch the correct game
@@ -224,6 +241,11 @@
           After creating a room, the game UI shows the <b>Room ID</b> in
           <b>Info → Online</b>. Use the copy button next to “Room ID” to copy it
           to your clipboard.
+        </p>
+        <p>
+          Private-room spectating: if you created a <b>Private</b> room, seated
+          players can copy a secret spectate link from <b>Info → Online</b>
+          using the <b>Ⓦ</b> button.
         </p>
         <p>
           While connecting, the game may show toast notifications like
@@ -243,8 +265,20 @@
         <p>
           Leaving: in online games, <b>Leave room (forfeit)</b> ends your game
           immediately (counts as resign). If you simply close the tab, the
-          server starts a short disconnect grace period; if you don’t return in
-          time, you may lose by disconnect timeout.
+          server starts a disconnect grace period.
+        </p>
+        <p>
+          Disconnect behavior:
+          <ul>
+            <li>
+              If your opponent stays connected and you don’t return before grace
+              expires, you may lose by disconnect timeout.
+            </li>
+            <li>
+              If <b>both players disconnect</b>, the game stays paused and does
+              not time out (so you can resume later).
+            </li>
+          </ul>
         </p>
       </div>
 

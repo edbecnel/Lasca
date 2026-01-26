@@ -52,9 +52,13 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
-- 🌐 Online multiplayer (2 players) via Start Page (Create/Join rooms)
+- 🌐 Online multiplayer (2 players) via Start Page (Create/Join/Rejoin)
+- 👁️ Spectate public rooms from the Start Page
+- 🔒 Private rooms (joinable, not publicly spectatable)
+- 🔗 Private-room spectating via secret watch link
 - 📋 Lobby list of open rooms (one-click Join)
 - 🆔 Room ID shown in-game (Info → Online) with one-click copy
+- Ⓦ One-click copy of private spectate link (players)
 - 📱 Mobile board-height adjust button (tap to toggle; touch-hold + drag to move)
 
 ## How to Play
@@ -74,9 +78,16 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 Note: if `8080` is already in use, Vite will pick another port (often `8081`). Use the URL printed in your terminal.
 
 2. On the Start Page, set **Play mode** to **Online**.
-3. Player 1 chooses **Create** and clicks **Launch**.
+3. Player 1 chooses **Create**, chooses **Room** visibility (**Public** or **Private**), and clicks **Launch**.
 4. In-game, copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
 5. Player 2 goes to the Start Page, chooses **Join**, pastes the Room ID, and clicks **Launch**.
+
+#### Spectating (Start Page)
+
+- For **public** rooms, choose **Online → Spectate**, paste the Room ID, and click **Launch**.
+- **Private** rooms are not spectatable from the Lobby/Start Page without a secret watch link.
+
+To share a private spectate link, a seated player can use **Info → Online → Ⓦ** (copy watch link).
 
 Note: when joining, the Start Page will auto-open the correct variant page for that room.
 
@@ -85,7 +96,14 @@ Alternative: use the Start Page **Lobby** section to see open rooms and click **
 ##### Leaving an online game
 
 - If you want to leave cleanly and release your seat, use the in-game **Leave room (forfeit)** button. It confirms first, then ends the game immediately (counts as resign) and returns you to the Start Page.
-- If you simply close the tab, the server starts a short disconnect grace period. If you don’t return in time, the server will end the game by disconnect timeout.
+- If you simply close the tab, the server starts a disconnect grace period (default ~2 minutes).
+  - If your opponent is still connected when grace expires, you lose by disconnect timeout.
+  - If **both players are disconnected**, the game stays paused and does not time out (so you can resume later).
+
+##### Resuming later
+
+- Same browser: use Start Page **Online → Rejoin room (this browser)** (uses saved seat/player ID).
+- Different browser/device: keep the URL containing your **roomId** + **playerId** (your seat credential) and open it later.
 
 ##### Online troubleshooting
 

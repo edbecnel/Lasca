@@ -93,4 +93,61 @@ describe("MP2A disconnect grace", () => {
     await closing;
     await fs.rm(tmpRoot, { recursive: true, force: true });
   }, 30_000);
+
+  it("does not end game if both players disconnect (mutual pause)", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-disconnect-both-"));
+    const gamesDir = path.join(tmpRoot, "games");
+    const s = await startLascaServer({ port: 0, gamesDir, disconnectGraceMs: 60 });
+
+    const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+    const history = new HistoryManager();
+    history.push(initial);
+
+    const createRes = await fetch(`${s.url}/api/create`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        variantId: "lasca_7_classic",
+        snapshot: {
+          state: serializeWireGameState(initial),
+          history: serializeWireHistory(history.exportSnapshots()),
+          stateVersion: 0,
+        },
+      }),
+    }).then((r) => r.json() as Promise<any>);
+
+    expect(createRes.error).toBeUndefined();
+    const roomId = createRes.roomId as string;
+
+    const joinRes = await fetch(`${s.url}/api/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId }),
+    }).then((r) => r.json() as Promise<any>);
+
+    expect(joinRes.error).toBeUndefined();
+
+    const playerW = createRes.playerId as string;
+    const playerB = joinRes.playerId as string;
+
+    const streamW = await openRawSse(`${s.url}/api/stream/${encodeURIComponent(roomId)}?playerId=${encodeURIComponent(playerW)}`);
+    const streamB = await openRawSse(`${s.url}/api/stream/${encodeURIComponent(roomId)}?playerId=${encodeURIComponent(playerB)}`);
+
+    // Both disconnect.
+    streamW.close();
+    streamB.close();
+
+    // Wait long enough that grace would have expired at least once.
+    await new Promise((r) => setTimeout(r, 160));
+
+    const snap = await fetch(`${s.url}/api/room/${encodeURIComponent(roomId)}`).then((r) => r.json() as Promise<any>);
+    expect(snap.error).toBeUndefined();
+
+    // Mutual disconnect should not force game over.
+    expect(snap.snapshot.state.forcedGameOver).toBeUndefined();
+
+    const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
+    await closing;
+    await rmWithRetries(tmpRoot);
+  }, 30_000);
 });

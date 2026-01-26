@@ -356,6 +356,56 @@ export function createLascaApp(opts: ServerOpts = {}): {
     return sseCount > 0;
   }
 
+  function anyOtherSeatedPlayerConnected(room: Room, playerId: PlayerId): boolean {
+    for (const [pid] of room.players.entries()) {
+      if (pid === playerId) continue;
+      if (room.presence.get(pid)?.connected) return true;
+    }
+    return false;
+  }
+
+  function scheduleGraceTimeout(room: Room, playerId: PlayerId, graceUntilMs: number): NodeJS.Timeout {
+    const delay = Math.max(0, graceUntilMs - Date.now());
+    return setTimeout(() => {
+      if (isShuttingDown) return;
+
+      void queueRoomAction(room, async () => {
+        if (isShuttingDown) return;
+
+        // If reconnected, clear grace and return.
+        const p = room.presence.get(playerId);
+        if (!p || p.connected) {
+          clearGrace(room, playerId);
+          updateClockPause(room);
+          return;
+        }
+
+        // If the opponent is still connected, the disconnected player forfeits.
+        // If both players are disconnected, extend grace indefinitely (mutual pause).
+        if (anyOtherSeatedPlayerConnected(room, playerId)) {
+          clearGrace(room, playerId);
+          await forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: playerId });
+          return;
+        }
+
+        // Mutual disconnect: extend grace.
+        const nextUntilMs = Date.now() + disconnectGraceMs;
+        const nextUntilIso = new Date(nextUntilMs).toISOString();
+        const g = room.disconnectGrace.get(playerId);
+        if (!g) return;
+
+        clearTimeout(g.timer);
+        g.graceUntilMs = nextUntilMs;
+        g.graceUntilIso = nextUntilIso;
+        g.timer = scheduleGraceTimeout(room, playerId, nextUntilMs);
+
+        updateClockPause(room);
+        await queuePersist(room);
+        broadcastRoomSnapshot(room);
+      });
+    }, delay);
+  }
+
   function queuePersist(room: Room): Promise<void> {
     if (isShuttingDown) return Promise.resolve();
     room.persistChain = room.persistChain
@@ -666,16 +716,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         // Only restore grace if player is disconnected.
         if (room.presence.get(pid as any)?.connected) continue;
 
-        const delay = Math.max(0, graceUntilMs - Date.now());
-        const timer = setTimeout(() => {
-          const p = room.presence.get(pid as any);
-          if (!p || p.connected) {
-            clearGrace(room, pid as any);
-            return;
-          }
-          clearGrace(room, pid as any);
-          void queueRoomAction(room, () => forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: pid as any }));
-        }, delay);
+        const timer = scheduleGraceTimeout(room, pid as any, graceUntilMs);
         room.disconnectGrace.set(pid as any, { graceUntilIso: g.graceUntilIso, graceUntilMs, timer });
       }
     }
@@ -839,17 +880,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
     const graceUntilMs = Date.now() + disconnectGraceMs;
     const graceUntilIso = new Date(graceUntilMs).toISOString();
-    const timer = setTimeout(() => {
-      if (isShuttingDown) return;
-      // If still disconnected when grace expires, end the game.
-      const p = room.presence.get(playerId);
-      if (!p || p.connected) {
-        clearGrace(room, playerId);
-        return;
-      }
-      clearGrace(room, playerId);
-      void queueRoomAction(room, () => forceDisconnectTimeout({ gamesDir, room, disconnectedPlayerId: playerId }));
-    }, disconnectGraceMs);
+    const timer = scheduleGraceTimeout(room, playerId, graceUntilMs);
 
     room.disconnectGrace.set(playerId, { graceUntilIso, graceUntilMs, timer });
     updateClockPause(room);

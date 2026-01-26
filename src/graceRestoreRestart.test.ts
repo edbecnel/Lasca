@@ -88,6 +88,7 @@ describe("MP2A restart", () => {
     expect(beforeRestart.clock.paused).toBe(true);
 
     const closing1 = new Promise<void>((resolve) => s1.server.close(() => resolve()));
+    // Leave B disconnected; close W due to server shutdown.
     streamW.close();
     await closing1;
 
@@ -98,30 +99,30 @@ describe("MP2A restart", () => {
     expect(immediatelyAfterRestart.error).toBeUndefined();
     expect(immediatelyAfterRestart.timeControl?.mode).toBe("clock");
     expect(immediatelyAfterRestart.clock).toBeTruthy();
-    // Depending on timing, the restored grace may still be active or may have already expired.
-    const forcedNow = immediatelyAfterRestart.snapshot.state.forcedGameOver;
-    if (forcedNow) {
-      expect(forcedNow.reasonCode).toBe("DISCONNECT_TIMEOUT");
-    } else {
-      expect(immediatelyAfterRestart.presence[playerB].inGrace).toBe(true);
-      expect(immediatelyAfterRestart.clock.paused).toBe(true);
-    }
+    // After restart, both players are disconnected (server restart implies no active transports).
+    // Under mutual disconnect, grace should keep the room paused (no forced game over).
+    expect(immediatelyAfterRestart.snapshot.state.forcedGameOver).toBeUndefined();
+    expect(immediatelyAfterRestart.clock.paused).toBe(true);
 
-    // Wait long enough that the restored grace timer should expire (if it hasn't already).
+    // Reconnect White (playerW). Now Black is the only disconnected player.
+    const streamW2 = await openRawSse(`${s2.url}/api/stream/${encodeURIComponent(roomId)}?playerId=${encodeURIComponent(playerW)}`);
+    await new Promise((r) => setTimeout(r, 25));
+
+    // Wait long enough that Black's restored grace should expire.
     await new Promise((r) => setTimeout(r, 1_700));
 
     const afterRestart = await fetch(`${s2.url}/api/room/${encodeURIComponent(roomId)}`).then((r) => r.json() as Promise<any>);
     expect(afterRestart.error).toBeUndefined();
 
-    // Grace expiry should have forced game over.
+    // Black is still disconnected while White is connected => DISCONNECT_TIMEOUT.
     const forced = afterRestart.snapshot.state.forcedGameOver;
     expect(forced).toBeTruthy();
     expect(forced.reasonCode).toBe("DISCONNECT_TIMEOUT");
-
-    // Time control should still be present.
     expect(afterRestart.timeControl?.mode).toBe("clock");
 
-    await new Promise<void>((resolve) => s2.server.close(() => resolve()));
+    const closing2 = new Promise<void>((resolve) => s2.server.close(() => resolve()));
+    streamW2.close();
+    await closing2;
     await rmWithRetries(tmpRoot);
   }, 30_000);
 });
