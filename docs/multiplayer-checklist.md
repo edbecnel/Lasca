@@ -4,14 +4,14 @@ Last reviewed: 2026-01-27
 
 This document tracks the current multiplayer implementation status for Lasca / Dama / Damasca online 2‑player play.
 
-Guiding principles
+## Guiding principles
 
 - Server is authoritative: the client renders whatever the server broadcasts.
 - State updates are versioned via a monotonic `stateVersion`.
-- Realtime transport: WebSockets preferred; SSE supported as fallback.
+- Realtime transport: WebSockets preferred; SSE supported as fallback (plus snapshot polling fallback if push transports are unavailable).
 - Persistence: snapshot + append-only event log (JSONL) to survive server restarts.
 
-Quick links (implementation)
+## Quick links (implementation)
 
 - Server: `server/src/app.ts`
 - Persistence: `server/src/persistence.ts`
@@ -61,11 +61,12 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 
 ### MP3 — Lobby / Matchmaking
 
-- Lobby refresh no longer shows “active” rooms whose server folder was deleted:
-  server drops stale in-memory rooms when the snapshot on disk is missing.
-  See server/src/app.ts; test coverage: src/onlineLobby.test.ts.
+- [x] Admin deletion safety: lobby refresh no longer shows rooms whose persisted folder/snapshot was deleted.
+  - Server drops stale in-memory rooms when the snapshot on disk is missing.
+  - See `server/src/app.ts`; test coverage: `src/onlineLobby.test.ts`.
 - [~] Basic lobby list of open rooms
-  - Server endpoint: `GET /api/lobby` (currently lists joinable rooms active in memory on this server process).
+  - Server endpoint: `GET /api/lobby`.
+  - Lists joinable rooms active in memory (freshest) and also joinable rooms persisted on disk but not currently loaded (restart discoverability).
   - UI: Start Page “Lobby” panel (Refresh + quick-fill Join).
 - [ ] Matchmaking queue (optional)
 - [ ] Productized spectator UX (explicit mode)
@@ -127,6 +128,8 @@ Regression/tests to keep green
 
 ## MP1.5 — Real-time Push Transport (no polling)
 
+Note: although realtime push is WS/SSE, the client/controller also supports a snapshot polling fallback for environments where those transports are blocked.
+
 - [x] Implement push updates
   - WebSockets: `GET /api/ws` (WS path; client sends `{"type":"JOIN"}`)
   - SSE: `GET /api/stream/:roomId`
@@ -186,7 +189,7 @@ Regression/tests to keep green
 ## MP3 — Matchmaking & Lobby
 
 - [~] Public lobby list of open games (optional)
-  - `GET /api/lobby` lists joinable rooms currently active in memory.
+  - `GET /api/lobby` lists joinable rooms active in memory and joinable rooms persisted on disk but not currently loaded.
 - [ ] Random matchmaking queue
 - [x] Private invite links / friend match
   - Start Page supports Create/Join and shares `roomId`.
@@ -240,7 +243,7 @@ Regression/tests to keep green
   - Online panel ⓘ generates debug JSON, copies it to clipboard, and POSTs it to the server for per-room logging.
   - Server persists under `server/data/games/<roomId>/debug/debug.<n>.json`.
 - UX: sticky reconnect + opponent-status detail toasts; status icon is clickable.
-  See src/gameController.ts and src/opponentPresenceIndicator.ts.
+  See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
 
 ---
 
