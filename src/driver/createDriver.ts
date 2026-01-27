@@ -335,6 +335,20 @@ export async function createDriverAsync(args: {
     stateVersion: 0,
   };
 
+  const readThreefoldPrefForOnlineCreate = (): boolean => {
+    // Creator's Start Page option is persisted under this key.
+    // Back-compat default: true.
+    try {
+      const raw = localStorage.getItem("lasca.opt.threefold");
+      if (raw == null) return true;
+      if (raw === "1" || raw === "true") return true;
+      if (raw === "0" || raw === "false") return false;
+      return true;
+    } catch {
+      return true;
+    }
+  };
+
   const failToLocal = (message: string): GameDriver => {
     setStartupMessage(message);
     showOnlineLoadMessage(message);
@@ -348,7 +362,13 @@ export async function createDriverAsync(args: {
       const variantId = args.state.meta?.variantId;
       if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
       const res = await postJson<
-        { variantId: any; snapshot: WireSnapshot; preferredColor?: "W" | "B"; visibility?: "public" | "private" },
+        {
+          variantId: any;
+          snapshot: WireSnapshot;
+          preferredColor?: "W" | "B";
+          visibility?: "public" | "private";
+          rules?: { drawByThreefold?: boolean };
+        },
         CreateRoomResponse
       >(
         q.serverUrl,
@@ -356,6 +376,7 @@ export async function createDriverAsync(args: {
         {
           variantId,
           snapshot: wireSnapshot,
+          rules: { drawByThreefold: readThreefoldPrefForOnlineCreate() },
           ...(q.prefColor ? { preferredColor: q.prefColor } : {}),
           ...(q.visibility ? { visibility: q.visibility } : {}),
         }
@@ -380,7 +401,8 @@ export async function createDriverAsync(args: {
       await driver.connectFromSnapshot(
         { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
         anyRes.snapshot,
-        (anyRes as any).presence ?? null
+        (anyRes as any).presence ?? null,
+        (anyRes as any).rules ?? null
       );
 
       updateBrowserUrlForOnline({
@@ -440,7 +462,8 @@ export async function createDriverAsync(args: {
         await driver.connectFromSnapshot(
           { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId },
           anySnap.snapshot,
-          (anySnap as any).presence ?? null
+          (anySnap as any).presence ?? null,
+          (anySnap as any).rules ?? null
         );
         updateBrowserUrlForOnline({
           serverUrl: q.serverUrl,
@@ -481,7 +504,8 @@ export async function createDriverAsync(args: {
           await driver.connectFromSnapshot(
             { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId },
             anySnap.snapshot,
-            (anySnap as any).presence ?? null
+            (anySnap as any).presence ?? null,
+            (anySnap as any).rules ?? null
           );
           updateBrowserUrlForOnline({
             serverUrl: q.serverUrl,
@@ -505,7 +529,8 @@ export async function createDriverAsync(args: {
         await driver.connectFromSnapshot(
           { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
           anySnap.snapshot,
-          (anySnap as any).presence ?? null
+          (anySnap as any).presence ?? null,
+          (anySnap as any).rules ?? null
         );
         updateBrowserUrlForOnline({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
         setStartupMessage("Room is full — opened as spectator");
@@ -542,7 +567,8 @@ export async function createDriverAsync(args: {
     await driver.connectFromSnapshot(
       { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
       anyRes.snapshot,
-      (anyRes as any).presence ?? null
+      (anyRes as any).presence ?? null,
+      (anyRes as any).rules ?? null
     );
 
     updateBrowserUrlForOnline({
@@ -571,7 +597,8 @@ export async function createDriverAsync(args: {
       await driver.connectFromSnapshot(
         { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
         anySnap.snapshot,
-        (anySnap as any).presence ?? null
+        (anySnap as any).presence ?? null,
+        (anySnap as any).rules ?? null
       );
       return driver;
     } catch (err) {
@@ -598,7 +625,8 @@ export async function createDriverAsync(args: {
     await driver.connectFromSnapshot(
       { serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId },
       anySnap.snapshot,
-      (anySnap as any).presence ?? null
+      (anySnap as any).presence ?? null,
+      (anySnap as any).rules ?? null
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

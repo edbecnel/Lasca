@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { WireSnapshot } from "../../src/shared/wireState.ts";
 import { deserializeWireGameState, deserializeWireHistory } from "../../src/shared/wireState.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
-import type { ClockState, PlayerColor, PlayerId, RoomId, RoomVisibility, TimeControl } from "../../src/shared/onlineProtocol.ts";
+import type { ClockState, PlayerColor, PlayerId, RoomId, RoomRules, RoomVisibility, TimeControl } from "../../src/shared/onlineProtocol.ts";
 
 export const SUPPORTED_RULES_VERSION = "v1" as const;
 
@@ -16,6 +16,9 @@ export type PersistedRoomMeta = {
   stateVersion: number;
   players: Array<[PlayerId, PlayerColor]>;
   colorsTaken: PlayerColor[];
+
+  /** Immutable per game; present for newer snapshots. */
+  rules?: RoomRules;
 
   // Optional extensions (back-compat):
   visibility?: RoomVisibility;

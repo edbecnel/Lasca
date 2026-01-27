@@ -54,6 +54,9 @@ export interface OnlineGameDriver extends GameDriver {
   /** Latest server-reported presence info (if available). */
   getPresence(): import("../shared/onlineProtocol.ts").PresenceByPlayerId | null;
 
+  /** Immutable per room; set by the creator at /api/create. */
+  getRoomRules(): import("../shared/onlineProtocol.ts").RoomRules | null;
+
   /**
    * Starts realtime server push (WebSockets preferred, SSE fallback).
    * Returns true if realtime was started, else false.

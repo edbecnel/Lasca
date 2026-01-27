@@ -28,7 +28,9 @@ export function ensureOpponentPresenceIndicatorLayer(svg: SVGSVGElement): SVGGEl
 
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.id = "opponentPresenceIndicator";
-  g.setAttribute("pointer-events", "none");
+  // Allow click/tap so the controller can show status details.
+  g.setAttribute("pointer-events", "auto");
+  (g as any).style && (((g as any).style.cursor = "pointer"), ((g as any).style.touchAction = "manipulation"));
   svg.appendChild(g);
   return g;
 }

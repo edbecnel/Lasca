@@ -11,6 +11,7 @@ import type {
   GetRoomSnapshotResponse,
   JoinRoomResponse,
   PresenceByPlayerId,
+  RoomRules,
   ReplayEvent,
   ResignRequest,
   ResignResponse,
@@ -59,6 +60,7 @@ export class RemoteDriver implements GameDriver {
   private realtimeListeners = new Map<string, Set<(payload: any) => void>>();
   private resyncInFlight: Promise<void> | null = null;
   private lastPresence: PresenceByPlayerId | null = null;
+  private roomRules: RoomRules | null = null;
 
   // Burst/backpressure handling for realtime snapshots.
   // Strategy: coalesce snapshots (keep only the latest), apply at most once per tick.
@@ -110,6 +112,10 @@ export class RemoteDriver implements GameDriver {
 
   getPresence(): PresenceByPlayerId | null {
     return this.lastPresence;
+  }
+
+  getRoomRules(): RoomRules | null {
+    return this.roomRules;
   }
 
   async fetchReplayEvents(args?: { limit?: number }): Promise<ReplayEvent[]> {
@@ -229,6 +235,7 @@ export class RemoteDriver implements GameDriver {
     // Required event today.
     listen("snapshot", (payload) => {
       if (payload?.presence) this.lastPresence = payload.presence as PresenceByPlayerId;
+      if (payload?.rules && typeof payload.rules === "object") this.roomRules = payload.rules as RoomRules;
       const snap = payload?.snapshot as WireSnapshot | undefined;
       if (!snap) return;
       this.enqueueRealtimeSnapshot(snap);
@@ -305,6 +312,7 @@ export class RemoteDriver implements GameDriver {
 
         if (eventName === "snapshot") {
           if (payload?.presence) this.lastPresence = payload.presence as PresenceByPlayerId;
+          if (payload?.rules && typeof payload.rules === "object") this.roomRules = payload.rules as RoomRules;
           const snap = payload?.snapshot as WireSnapshot | undefined;
           if (!snap) return;
           this.enqueueRealtimeSnapshot(snap);
@@ -527,9 +535,15 @@ export class RemoteDriver implements GameDriver {
     return { next: nextState, changed };
   }
 
-  async connectFromSnapshot(ids: RemoteIds, snapshot: WireSnapshot, presence?: PresenceByPlayerId | null): Promise<void> {
+  async connectFromSnapshot(
+    ids: RemoteIds,
+    snapshot: WireSnapshot,
+    presence?: PresenceByPlayerId | null,
+    rules?: RoomRules | null
+  ): Promise<void> {
     this.ids = ids;
     this.lastPresence = presence ?? null;
+    this.roomRules = rules ?? this.roomRules;
     this.applySnapshot(snapshot);
   }
 
@@ -538,6 +552,7 @@ export class RemoteDriver implements GameDriver {
     const res = await this.getJson<GetRoomSnapshotResponse>(`/api/room/${encodeURIComponent(ids.roomId)}?${this.toAccessQuery(ids)}`);
     if ((res as any).error) throw new Error((res as any).error);
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).rules && typeof (res as any).rules === "object") this.roomRules = (res as any).rules as RoomRules;
     const applied = this.applySnapshot((res as any).snapshot);
     return applied.changed;
   }

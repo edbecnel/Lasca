@@ -148,6 +148,30 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   updatePlayerColorBadge(driver);
 
+  // Threefold repetition: local toggle for offline; creator-locked for online.
+  const savedThreefold = readOptionalBoolPref(LS_OPT_KEYS.threefold);
+  const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
+  const onlineRules =
+    driver.mode === "online" && typeof (driver as any)?.getRoomRules === "function"
+      ? ((driver as any) as OnlineGameDriver).getRoomRules()
+      : null;
+  const lockedThreefold = typeof onlineRules?.drawByThreefold === "boolean" ? onlineRules.drawByThreefold : null;
+  const effectiveThreefold = lockedThreefold ?? (savedThreefold ?? true);
+  RULES.drawByThreefold = effectiveThreefold;
+  if (threefoldToggle) {
+    threefoldToggle.checked = effectiveThreefold;
+    if (driver.mode === "online") {
+      // Remove from Options in online mode (creator-locked at create).
+      threefoldToggle.disabled = true;
+      const row = threefoldToggle.closest("div") as HTMLElement | null;
+      if (row) {
+        row.style.display = "none";
+        const desc = row.nextElementSibling as HTMLElement | null;
+        if (desc && desc.tagName.toLowerCase() === "div") desc.style.display = "none";
+      }
+    }
+  }
+
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
 
@@ -180,14 +204,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   controller.setAnimations(true);
   writeBoolPref(LS_OPT_KEYS.animations, true);
 
-  const savedThreefold = readOptionalBoolPref(LS_OPT_KEYS.threefold);
-  const threefoldToggle = document.getElementById("threefoldToggle") as HTMLInputElement | null;
-  if (threefoldToggle && savedThreefold !== null) {
-    threefoldToggle.checked = savedThreefold;
-  }
-  if (threefoldToggle) {
-    RULES.drawByThreefold = Boolean(threefoldToggle.checked);
-  }
+  // RULES.drawByThreefold initialized earlier (before controller.bind()).
 
   const toastToggle = document.getElementById("toastToggle") as HTMLInputElement | null;
   const savedToasts = readOptionalBoolPref(LS_OPT_KEYS.toasts);
@@ -252,8 +269,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Wire up threefold repetition toggle
-  if (threefoldToggle) {
+  // Wire up threefold repetition toggle (offline only)
+  if (threefoldToggle && driver.mode !== "online") {
     threefoldToggle.addEventListener("change", () => {
       RULES.drawByThreefold = threefoldToggle.checked;
       writeBoolPref(LS_OPT_KEYS.threefold, threefoldToggle.checked);

@@ -44,6 +44,7 @@ import type {
   PlayerId,
   PlayerColor,
   PresenceByPlayerId,
+  RoomRules,
   RoomVisibility,
   TimeControl,
   ClockState,
@@ -81,6 +82,7 @@ type Room = {
   variantId: VariantId;
   visibility: RoomVisibility;
   watchToken: string | null;
+  rules: RoomRules;
   stateVersion: number;
   rulesVersion: string;
   lastGameOverVersion: number;
@@ -223,6 +225,7 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
       stateVersion: room.stateVersion,
       players: Array.from(room.players.entries()),
       colorsTaken: Array.from(room.colorsTaken.values()),
+      rules: room.rules,
       visibility: room.visibility,
       watchToken: room.watchToken ?? undefined,
       presence: presenceRecord,
@@ -469,6 +472,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       roomId: room.roomId,
       snapshot: snapshotForRoom(room),
       presence: presenceForRoom(room),
+      rules: room.rules,
       timeControl: room.timeControl,
       clock: room.clock ?? undefined,
     };
@@ -679,6 +683,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
       ? String((loaded.meta as any).watchToken)
       : null;
 
+    const loadedRulesRaw = (loaded.meta as any).rules;
+    const loadedRules: RoomRules = {
+      drawByThreefold:
+        typeof loadedRulesRaw?.drawByThreefold === "boolean" ? Boolean(loadedRulesRaw.drawByThreefold) : true,
+    };
+
     const room: Room = {
       roomId,
       state: loaded.state,
@@ -688,6 +698,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       variantId: loaded.meta.variantId as any,
       visibility: loadedVisibility,
       watchToken: loadedWatchToken,
+      rules: loadedRules,
       stateVersion: loaded.meta.stateVersion,
       rulesVersion: loaded.meta.rulesVersion,
       lastGameOverVersion: -1,
@@ -895,6 +906,35 @@ export function createLascaApp(opts: ServerOpts = {}): {
     broadcastRoomSnapshot(room);
   }
 
+  function getOpponentId(room: Room, selfId: PlayerId): PlayerId | null {
+    for (const [pid] of room.players.entries()) {
+      if (pid !== selfId) return pid;
+    }
+    return null;
+  }
+
+  async function requireOpponentConnected(room: Room, selfId: PlayerId): Promise<void> {
+    // We only enforce this once both seats are filled.
+    // Before that, the existing requireRoomReady() errors are more helpful.
+    if (room.players.size < 2) return;
+
+    const opponentId = getOpponentId(room, selfId);
+    if (!opponentId) return;
+
+    const oppPresence = ensurePresence(room, opponentId);
+    if (oppPresence.connected) return;
+
+    // Be defensive: if for any reason grace wasn't started by the transport close handler,
+    // start it on-demand so clients can show an accurate countdown.
+    await startGraceIfNeeded(room, opponentId);
+    const g = room.disconnectGrace.get(opponentId);
+    if (g) {
+      throw new Error(`Opponent disconnected (grace until ${g.graceUntilIso})`);
+    }
+
+    throw new Error("Opponent disconnected");
+  }
+
   const app = express();
   // Reflect the request origin to keep browser fetch happy across dev modes
   // (including file:// where Origin can be "null").
@@ -1033,6 +1073,11 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const preferredColor = (body as any)?.preferredColor;
       const creatorColor: PlayerColor = preferredColor === "B" || preferredColor === "W" ? preferredColor : "W";
 
+      const rulesRaw = (body as any)?.rules;
+      const rules: RoomRules = {
+        drawByThreefold: typeof rulesRaw?.drawByThreefold === "boolean" ? Boolean(rulesRaw.drawByThreefold) : true,
+      };
+
       const room: Room = {
         roomId,
         state: aligned,
@@ -1042,6 +1087,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         variantId,
         visibility,
         watchToken,
+        rules,
         stateVersion: 0,
         rulesVersion: SUPPORTED_RULES_VERSION,
         lastGameOverVersion: -1,
@@ -1080,6 +1126,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         color: creatorColor,
         snapshot: snapshotForRoom(room),
         presence: presenceForRoom(room),
+        rules: room.rules,
         timeControl: room.timeControl,
         clock: room.clock ?? undefined,
         visibility: room.visibility,
@@ -1134,6 +1181,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
           color,
           snapshot: snapshotForRoom(room),
           presence: presenceForRoom(room),
+          rules: room.rules,
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
         };
@@ -1173,6 +1221,16 @@ export function createLascaApp(opts: ServerOpts = {}): {
       // First: active rooms in memory (authoritative, freshest).
       for (const room of rooms.values()) {
         if (isRoomOver(room)) continue;
+
+        // Admin safety: if a room's persisted folder/snapshot was deleted on disk,
+        // it should no longer show as active (and should be dropped from memory).
+        // This allows an admin to remove rooms by deleting their folder.
+        try {
+          await fs.stat(snapshotPath(gamesDir, room.roomId));
+        } catch {
+          rooms.delete(room.roomId);
+          continue;
+        }
 
         const seatsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
         const seatsOpen: PlayerColor[] = [];
@@ -1329,6 +1387,30 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const watchToken = typeof req.query.watchToken === "string" ? String(req.query.watchToken) : null;
       requireRoomView(room, playerId, watchToken);
 
+      // Treat authenticated snapshot fetches as presence activity.
+      // This is important for environments where realtime transports are unavailable
+      // and the client falls back to polling.
+      if (playerId && room.players.has(playerId)) {
+        await queueRoomAction(room, async () => {
+          touchClock(room);
+          await maybeForceClockTimeout(room);
+
+          const wasConnected = Boolean(room.presence.get(playerId)?.connected);
+          const hadGrace = room.disconnectGrace.has(playerId);
+
+          setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+          clearGrace(room, playerId);
+          updateClockPause(room);
+
+          // Avoid churning disk/broadcasts on every poll; only persist/broadcast
+          // when presence/grace meaningfully changes.
+          if (!wasConnected || hadGrace) {
+            await persistSnapshot(gamesDir, room);
+            broadcastRoomSnapshot(room);
+          }
+        });
+      }
+
       touchClock(room);
       await maybeForceClockTimeout(room);
       updateClockPause(room);
@@ -1336,6 +1418,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const response: GetRoomSnapshotResponse = {
         snapshot: snapshotForRoom(room),
         presence: presenceForRoom(room),
+        rules: room.rules,
         timeControl: room.timeControl,
         clock: room.clock ?? undefined,
       };
@@ -1487,6 +1570,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
         requireRoomReady(room);
 
+  // Freeze play while opponent is disconnected (until reconnect or disconnect-forfeit).
+  await requireOpponentConnected(room, body.playerId);
+
         if (isRoomOver(room)) throw new Error("Game over");
 
         if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
@@ -1557,6 +1643,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
         requireRoomReady(room);
 
+  // Freeze play while opponent is disconnected (until reconnect or disconnect-forfeit).
+  await requireOpponentConnected(room, body.playerId);
+
         if (isRoomOver(room)) throw new Error("Game over");
 
         if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
@@ -1617,6 +1706,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
         setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
         requireRoomReady(room);
+
+  // Freeze play while opponent is disconnected (until reconnect or disconnect-forfeit).
+  await requireOpponentConnected(room, body.playerId);
 
         if (isRoomOver(room)) throw new Error("Game over");
 

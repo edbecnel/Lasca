@@ -42,6 +42,9 @@ export class GameController {
   private previewLayer: SVGGElement;
   private turnIndicatorLayer: SVGGElement;
   private opponentPresenceIndicatorLayer: SVGGElement;
+  private lastOpponentDisconnectedBlockToastAt: number = 0;
+
+  private didBindOpponentStatusClicks: boolean = false;
   private state: GameState;
   private selected: string | null = null;
   private currentTargets: string[] = [];
@@ -844,10 +847,23 @@ export class GameController {
       this.updatePanel();
 
       if (status === "reconnecting") {
-        this.showToast("Reconnecting…", 2000);
+        const key = "online_reconnecting";
+
+        // Don't clobber non-online sticky toasts (e.g. report issue).
+        if (!this.stickyToastKey || this.stickyToastKey === key || this.stickyToastKey.startsWith("online_")) {
+          // Click-to-dismiss is handled by the default sticky toast behavior.
+          this.setStickyToastAction(key, null);
+          this.showStickyToast(key, "Connection to server was lost — attempting to reconnect. Tap to dismiss.", {
+            force: true,
+          });
+        }
         this.maybeShowReportIssueHintToast("Connection problem");
       } else if (prevStatus === "reconnecting" && status === "connected") {
+        this.clearStickyToast("online_reconnecting");
         this.showToast("Reconnected", 1400);
+
+        // Restore any contextual online sticky toast (e.g. waiting invite) if applicable.
+        this.maybeShowOnlineWaitingInviteToast();
       }
 
       // On reconnect, re-toast the current turn state.
@@ -1187,6 +1203,75 @@ export class GameController {
       // Mark pieces that have been captured but remain on-board until end-of-sequence.
       drawHighlightRing(this.overlayLayer, over, "#ff6b6b", 5);
     }
+  }
+
+  private showOpponentConnectionDetailsToast(): void {
+    if (this.driver.mode !== "online") return;
+    if (typeof document === "undefined") return;
+    if (this.isGameOver) return;
+
+    const key = "online_opponent_connection_details";
+
+    // Toggle off if already showing.
+    if (this.stickyToastKey === key) {
+      this.clearStickyToast(key);
+      return;
+    }
+
+    // Don't clobber non-online sticky toasts.
+    if (this.stickyToastKey && !this.stickyToastKey.startsWith("online_")) return;
+
+    const remote = this.driver as OnlineGameDriver;
+    const selfId = remote.getPlayerId();
+    const presence = remote.getPresence();
+    if (!presence || !selfId || selfId === "spectator") {
+      this.setStickyToastAction(key, null);
+      this.showStickyToast(key, "Opponent status: —", { force: true });
+      return;
+    }
+
+    const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+    const opp = opponentId ? (presence as any)[opponentId] : null;
+
+    let msg = "Opponent status: Waiting for opponent";
+    if (opp) {
+      if (opp.connected) {
+        msg = "Opponent status: Connected";
+      } else if (opp.inGrace && typeof opp.graceUntil === "string") {
+        let whenText = opp.graceUntil;
+        let remText = "";
+        try {
+          const untilMs = Date.parse(opp.graceUntil);
+          if (Number.isFinite(untilMs)) {
+            const d = new Date(untilMs);
+            if (!Number.isNaN(d.getTime())) whenText = d.toLocaleTimeString();
+            const remMs = Math.max(0, untilMs - Date.now());
+            const remS = Math.ceil(remMs / 1000);
+            remText = ` (about ${remS}s left)`;
+          }
+        } catch {
+          // ignore
+        }
+        msg = `Opponent status: Disconnected (grace until ${whenText}${remText})`;
+      } else {
+        msg = "Opponent status: Disconnected";
+      }
+
+      if (typeof opp.lastSeenAt === "string" && opp.lastSeenAt) {
+        let lastSeen = opp.lastSeenAt;
+        try {
+          const d = new Date(opp.lastSeenAt);
+          if (!Number.isNaN(d.getTime())) lastSeen = d.toLocaleString();
+        } catch {
+          // ignore
+        }
+        msg += `\nLast seen: ${lastSeen}`;
+      }
+    }
+
+    this.setStickyToastAction(key, null);
+    // Force=true because the user explicitly clicked to request this info.
+    this.showStickyToast(key, msg, { force: true });
   }
 
   /**
@@ -1869,6 +1954,29 @@ export class GameController {
         graceUntil,
         hidden: false,
       });
+    }
+
+    // Allow clicking the opponent status in either the panel row or the board HUD icon.
+    if (!this.didBindOpponentStatusClicks && typeof document !== "undefined") {
+      this.didBindOpponentStatusClicks = true;
+
+      const elOpponentStatus = document.getElementById("onlineOpponentStatus") as HTMLDivElement | null;
+      if (elOpponentStatus) {
+        elOpponentStatus.style.cursor = "pointer";
+        elOpponentStatus.title = "Show opponent connection details";
+        elOpponentStatus.addEventListener("click", () => this.showOpponentConnectionDetailsToast());
+      }
+
+      // SVG HUD icon.
+      try {
+        this.opponentPresenceIndicatorLayer.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showOpponentConnectionDetailsToast();
+        });
+      } catch {
+        // ignore
+      }
     }
 
     if (elDeadPlayTimer) {
@@ -2749,6 +2857,31 @@ export class GameController {
     // Ignore human input when AI has locked input
     if (!this.inputEnabled) {
       return;
+    }
+
+    // Online UX: freeze play while opponent is disconnected (until reconnect or disconnect-forfeit).
+    if (this.driver.mode === "online") {
+      try {
+        const remote = this.driver as OnlineGameDriver;
+        const selfId = remote.getPlayerId();
+        const presence = remote.getPresence();
+        if (presence && selfId && selfId !== "spectator") {
+          const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+          const opp = opponentId ? (presence as any)[opponentId] : null;
+          if (opp && opp.connected === false) {
+            this.clearSelection();
+
+            const now = Date.now();
+            if (now - this.lastOpponentDisconnectedBlockToastAt > 1500) {
+              this.lastOpponentDisconnectedBlockToastAt = now;
+              this.showToast("Opponent disconnected — waiting for reconnect (click the opponent status icon for details)", 2200);
+            }
+            return;
+          }
+        }
+      } catch {
+        // If presence isn't available, don't block input.
+      }
     }
 
     // In online mode, ignore input when it's not your turn.

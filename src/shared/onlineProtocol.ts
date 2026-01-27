@@ -8,6 +8,11 @@ export type PlayerColor = "W" | "B";
 
 export type RoomVisibility = "public" | "private";
 
+export type RoomRules = {
+  /** If true, threefold repetition ends the game in a draw (Lasca/Dama). */
+  drawByThreefold?: boolean;
+};
+
 export type PlayerPresence = {
   connected: boolean;
   lastSeenAt: string; // ISO timestamp
@@ -47,6 +52,8 @@ export type CreateRoomRequest = {
   timeControl?: TimeControl;
   /** Controls whether non-players may view the room (stream/snapshot/replay). Default: public (back-compat). */
   visibility?: RoomVisibility;
+  /** Immutable per game; only settable at create. */
+  rules?: RoomRules;
 };
 
 export type CreateRoomResponse =
@@ -56,6 +63,7 @@ export type CreateRoomResponse =
       color: PlayerColor;
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;
       visibility?: RoomVisibility;
@@ -77,6 +85,7 @@ export type JoinRoomResponse =
       color: PlayerColor;
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;
     }
@@ -166,6 +175,7 @@ export type GetRoomSnapshotResponse =
   | {
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;
     }

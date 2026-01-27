@@ -84,4 +84,51 @@ describe("MP3 lobby", () => {
       await rmWithRetries(tmpRoot);
     }
   });
+
+  it("does not list rooms whose folder was deleted", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-lobby-delete-"));
+    const gamesDir = path.join(tmpRoot, "games");
+    const s = await startLascaServer({ port: 0, gamesDir });
+
+    try {
+      const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+      const history = new HistoryManager();
+      history.push(initial);
+
+      const createRes = await fetch(`${s.url}/api/create`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          variantId: "lasca_7_classic",
+          snapshot: {
+            state: serializeWireGameState(initial),
+            history: serializeWireHistory(history.exportSnapshots()),
+            stateVersion: 0,
+          },
+        }),
+      }).then((r) => r.json() as Promise<any>);
+
+      expect(createRes.error).toBeUndefined();
+      const roomId = String(createRes.roomId || "");
+      expect(roomId).toBeTruthy();
+
+      const lobby1 = await fetch(`${s.url}/api/lobby`).then((r) => r.json() as Promise<any>);
+      expect(lobby1.error).toBeUndefined();
+      const ids1 = (Array.isArray(lobby1.rooms) ? lobby1.rooms : []).map((x: any) => x.roomId);
+      expect(ids1).toContain(roomId);
+
+      // Simulate admin deletion: remove the room folder from disk.
+      await rmWithRetries(path.join(gamesDir, roomId));
+
+      // Lobby refresh should not show the deleted room.
+      const lobby2 = await fetch(`${s.url}/api/lobby`).then((r) => r.json() as Promise<any>);
+      expect(lobby2.error).toBeUndefined();
+      const ids2 = (Array.isArray(lobby2.rooms) ? lobby2.rooms : []).map((x: any) => x.roomId);
+      expect(ids2).not.toContain(roomId);
+    } finally {
+      const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
+      await closing;
+      await rmWithRetries(tmpRoot);
+    }
+  });
 });
