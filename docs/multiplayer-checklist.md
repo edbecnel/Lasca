@@ -20,6 +20,18 @@ This document tracks the current multiplayer implementation status for Lasca / D
 
 ---
 
+## Recent changes (release-note summary)
+
+- [x] Lobby refresh no longer shows “active” rooms whose server folder was deleted (server drops stale in-memory rooms when the snapshot on disk is missing). See `server/src/app.ts` and regression coverage in `src/onlineLobby.test.ts`.
+- [x] Presence/grace reliability improvements:
+  - Fixes a stuck mutual-disconnect edge case (polling now counts as presence activity).
+  - Blocks move submissions while the opponent is disconnected (grace active) and exposes the grace deadline for UI messaging. See `server/src/app.ts` and `src/disconnectTimeout.test.ts`.
+- [x] UX: sticky reconnect + opponent-status details toasts; status icon is clickable. See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
+- [x] Online rules: creator-lock for “threefold repetition draw” (sent/persisted by server; clients remove the in-game toggle for online). See `src/shared/onlineProtocol.ts`, `server/src/persistence.ts`, and entrypoints like `src/main.ts`.
+- [x] Validated via `npm test`: 142/142 passing.
+
+---
+
 ## Up Next (Highest Leverage)
 
 If you’re not sure what to tackle next, MP6 hardening is usually the best safety step.
@@ -114,9 +126,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 - [~] Basic anti-cheat: reject illegal moves, wrong-turn moves, stale intents
   - Illegal/invalid moves and wrong-turn moves are rejected server-side.
   - Stale-intent / concurrency control (CAS on `stateVersion`) implemented via `expectedStateVersion`.
-- Online rules: creator-lock for “threefold repetition draw”:
-  rule flag is sent/persisted by server; clients remove the in-game toggle for online games.
-  See src/shared/onlineProtocol.ts, server/src/persistence.ts, and entrypoints like src/main.ts.
+- [x] Online rules: creator-lock for “threefold repetition draw”
+  - Rule flag is sent/persisted by server; clients remove the in-game toggle for online games.
+  - See `src/shared/onlineProtocol.ts`, `server/src/persistence.ts`, and entrypoints like `src/main.ts`.
 
 Regression/tests to keep green
 
@@ -158,10 +170,10 @@ Note: although realtime push is WS/SSE, the client/controller also supports a sn
 - [x] Grace expiry forces game over (`reasonCode=DISCONNECT_TIMEOUT`)
 - [x] Persist disconnect/grace state so it survives server restart
 - [x] Restore correctly after restart and on reconnect
-- Presence/grace reliability: fixed mutual-disconnect “stuck” edge case by counting polling as presence activity.
-  See server/src/app.ts; regression: src/disconnectTimeout.test.ts.
-- Server now blocks move submissions while opponent is disconnected (grace active) and exposes grace deadline for UI messaging.
-  See server/src/app.ts; regression: src/disconnectTimeout.test.ts.
+- [x] Presence/grace reliability: fixed mutual-disconnect “stuck” edge case by counting polling as presence activity.
+  - See `server/src/app.ts`; regression: `src/disconnectTimeout.test.ts`.
+- [x] Server blocks move submissions while opponent is disconnected (grace active) and exposes grace deadline for UI messaging.
+  - See `server/src/app.ts`; regression: `src/disconnectTimeout.test.ts`.
 
 Regression/tests to keep green
 
@@ -242,8 +254,8 @@ Regression/tests to keep green
 - [x] Report issue / copy debug info
   - Online panel ⓘ generates debug JSON, copies it to clipboard, and POSTs it to the server for per-room logging.
   - Server persists under `server/data/games/<roomId>/debug/debug.<n>.json`.
-- UX: sticky reconnect + opponent-status detail toasts; status icon is clickable.
-  See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
+- [x] UX: sticky reconnect + opponent-status detail toasts; status icon is clickable.
+  - See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
 
 ---
 
