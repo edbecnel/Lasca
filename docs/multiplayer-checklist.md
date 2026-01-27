@@ -61,6 +61,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 
 ### MP3 — Lobby / Matchmaking
 
+- Lobby refresh no longer shows “active” rooms whose server folder was deleted:
+  server drops stale in-memory rooms when the snapshot on disk is missing.
+  See server/src/app.ts; test coverage: src/onlineLobby.test.ts.
 - [~] Basic lobby list of open rooms
   - Server endpoint: `GET /api/lobby` (currently lists joinable rooms active in memory on this server process).
   - UI: Start Page “Lobby” panel (Refresh + quick-fill Join).
@@ -77,9 +80,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 
 ---
 
-## MP1 — Core Multiplayer Foundation
+## MP1 — Core Multiplayer Foundation (or Notes / Decisions)
 
-- [x] Server-authoritative game rooms (`roomId`)
+- [x] Server-authoritative game rooms (`roomId/gameId`)
   - Rooms are loaded on-demand and persisted under `server/data/games/<roomId>/`.
 - [x] Create game endpoint (new game, initial state)
   - `POST /api/create`
@@ -110,6 +113,9 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 - [~] Basic anti-cheat: reject illegal moves, wrong-turn moves, stale intents
   - Illegal/invalid moves and wrong-turn moves are rejected server-side.
   - Stale-intent / concurrency control (CAS on `stateVersion`) implemented via `expectedStateVersion`.
+- Online rules: creator-lock for “threefold repetition draw”:
+  rule flag is sent/persisted by server; clients remove the in-game toggle for online games.
+  See src/shared/onlineProtocol.ts, server/src/persistence.ts, and entrypoints like src/main.ts.
 
 Regression/tests to keep green
 
@@ -149,6 +155,10 @@ Regression/tests to keep green
 - [x] Grace expiry forces game over (`reasonCode=DISCONNECT_TIMEOUT`)
 - [x] Persist disconnect/grace state so it survives server restart
 - [x] Restore correctly after restart and on reconnect
+- Presence/grace reliability: fixed mutual-disconnect “stuck” edge case by counting polling as presence activity.
+  See server/src/app.ts; regression: src/disconnectTimeout.test.ts.
+- Server now blocks move submissions while opponent is disconnected (grace active) and exposes grace deadline for UI messaging.
+  See server/src/app.ts; regression: src/disconnectTimeout.test.ts.
 
 Regression/tests to keep green
 
@@ -162,8 +172,8 @@ Regression/tests to keep green
 - [x] Server is source of truth for remaining time
 - [x] Clock updates tied to authoritative turns + server timestamps
 - [x] On each move apply: decrement mover’s clock by elapsed time
-- [x] Timeout forces game over (`reasonCode=TIMEOUT`)
-- [x] Persist clock state + `lastTickMs`; restart-safe
+- [x] Timeout condition => GAME_OVER reason=TIMEOUT
+- [x] Persist clock state + `lastTickMs`; replay-safe
 - [x] Handle reconnect/resubscribe without clock desync
 
 Regression/tests to keep green
@@ -191,29 +201,29 @@ Regression/tests to keep green
 
 - [ ] User registration/login (email or OAuth)
 - [ ] Guest play with upgrade path
-- [ ] Profile basics
+- [ ] Profile basics: display name, avatar (optional)
 - [ ] Prevent multi-session confusion (one user controlling two seats)
 
 ---
 
 ## MP5 — Ratings / Ranking
 
-- [ ] Rating system (Elo/Glicko)
-- [ ] Rated vs casual
-- [ ] Record results with reason codes
-- [ ] Update rating on game end
-- [ ] Match history / leaderboard
+- [ ] Rating system (Elo/Glicko) and implement
+- [ ] Rated vs casual games flag at creation
+- [ ] Record results with reason codes (RESIGN, TIMEOUT, DISCONNECT, ADJUDICATED, DRAW)
+- [ ] Update rating on game end (rated only)
+- [ ] Store match history; basic leaderboard
 
 ---
 
 ## MP6 — Game Lifecycle Hardening
 
-- [ ] Idempotent endpoints
-- [x] Concurrency control (CAS/locking on `stateVersion`)
-- [x] Server restart recovery (load from snapshot/log)
-- [~] Observability
+- [ ] Idempotent endpoints (repeat requests safe)
+- [x] Concurrency: prevent double-move apply (locks / compare-and-swap on stateVersion)
+- [x] Server restart recovery: rebuild active games from DB/log
+- [~] Observability: logs for intents, validation failures, disconnects
   - Basic request logging exists; not structured/complete.
-- [ ] Abuse limits (rate limiting)
+- [ ] Abuse limits: rate limiting, per-IP or per-user throttles
 
 ---
 
@@ -229,6 +239,8 @@ Regression/tests to keep green
 - [x] Report issue / copy debug info
   - Online panel ⓘ generates debug JSON, copies it to clipboard, and POSTs it to the server for per-room logging.
   - Server persists under `server/data/games/<roomId>/debug/debug.<n>.json`.
+- UX: sticky reconnect + opponent-status detail toasts; status icon is clickable.
+  See src/gameController.ts and src/opponentPresenceIndicator.ts.
 
 ---
 
