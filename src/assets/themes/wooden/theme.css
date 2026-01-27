@@ -94,6 +94,11 @@ body {
 }
 
 /* Overlay rings with wood accent colors */
+:root {
+  --halo-selection: #d4a574;
+  --halo-target: #c97c54;
+}
+
 .selection-ring {
   stroke: #d4a574 !important;
 }

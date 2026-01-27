@@ -209,6 +209,20 @@ export function initSplitLayout(opts: SplitLayoutOptions = {}) {
   btnCollapseRight?.addEventListener("click", () => setRightCollapsed(true));
   btnExpandRight?.addEventListener("click", () => setRightCollapsed(false));
 
+  // Mobile Safari can be finicky about click dispatch on non-button elements
+  // (e.g. sidebarTab is a <div>). Pointer events are typically more reliable.
+  const onPointerDown = (handler: () => void) => (e: Event) => {
+    try {
+      e.preventDefault();
+      e.stopPropagation();
+    } catch {}
+    handler();
+  };
+  btnCollapseLeft?.addEventListener("pointerdown", onPointerDown(() => setLeftCollapsed(true)));
+  btnExpandLeft?.addEventListener("pointerdown", onPointerDown(() => setLeftCollapsed(false)));
+  btnCollapseRight?.addEventListener("pointerdown", onPointerDown(() => setRightCollapsed(true)));
+  btnExpandRight?.addEventListener("pointerdown", onPointerDown(() => setRightCollapsed(false)));
+
   onResize();
   window.addEventListener("resize", onResize);
 

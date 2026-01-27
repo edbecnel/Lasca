@@ -2,6 +2,7 @@ import { DEFAULT_THEME_ID, getThemeById, THEMES } from "./theme/themes";
 import { DEFAULT_VARIANT_ID, VARIANTS, getVariantById, isVariantId } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 import type { GetLobbyResponse, GetRoomMetaResponse, LobbyRoomSummary, RoomVisibility } from "./shared/onlineProtocol.ts";
+import { createSfxManager } from "./ui/sfx";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -18,6 +19,7 @@ const LS_KEYS = {
   optBoardCoords: "lasca.opt.boardCoords",
   optThreefold: "lasca.opt.threefold",
   optToasts: "lasca.opt.toasts",
+  optSfx: "lasca.opt.sfx",
 
   playMode: "lasca.play.mode",
   onlineServerUrl: "lasca.online.serverUrl",
@@ -241,6 +243,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elThreefold = byId<HTMLInputElement>("launchThreefold");
   const elToasts = byId<HTMLInputElement>("launchToasts");
+  const elSfx = byId<HTMLInputElement>("launchSfx");
 
   const elAiWhite = byId<HTMLSelectElement>("launchAiWhite");
   const elAiBlack = byId<HTMLSelectElement>("launchAiBlack");
@@ -465,9 +468,18 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elPlayMode.value = readPlayMode(LS_KEYS.playMode, "local");
   const envServerUrl = (import.meta as any)?.env?.VITE_SERVER_URL as string | undefined;
-  elOnlineServerUrl.value =
-    localStorage.getItem(LS_KEYS.onlineServerUrl) ??
-    (typeof envServerUrl === "string" && envServerUrl.trim() ? envServerUrl.trim() : "http://localhost:8788");
+  const defaultServerUrl = (() => {
+    if (typeof envServerUrl === "string" && envServerUrl.trim()) return envServerUrl.trim();
+    try {
+      const proto = window.location.protocol || "http:";
+      const host = window.location.hostname;
+      if (host) return `${proto}//${host}:8788`;
+    } catch {
+      // ignore
+    }
+    return "http://localhost:8788";
+  })();
+  elOnlineServerUrl.value = localStorage.getItem(LS_KEYS.onlineServerUrl) ?? defaultServerUrl;
   elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, "create");
   elOnlineVisibility.value = readVisibility(LS_KEYS.onlineVisibility, "public");
   elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
@@ -477,6 +489,10 @@ window.addEventListener("DOMContentLoaded", () => {
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
   elThreefold.checked = readBool(LS_KEYS.optThreefold, true);
   elToasts.checked = readBool(LS_KEYS.optToasts, true);
+  elSfx.checked = readBool(LS_KEYS.optSfx, false);
+
+  const sfx = createSfxManager();
+  sfx.setEnabled(elSfx.checked);
 
   elAiWhite.value = readDifficulty(LS_KEYS.aiWhite, "human");
   elAiBlack.value = readDifficulty(LS_KEYS.aiBlack, "human");
@@ -632,6 +648,12 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optToasts, elToasts.checked);
   });
 
+  elSfx.addEventListener("change", () => {
+    writeBool(LS_KEYS.optSfx, elSfx.checked);
+    sfx.setEnabled(elSfx.checked);
+    sfx.play(elSfx.checked ? "uiOn" : "uiOff");
+  });
+
   elOnlineRoomId.addEventListener("input", () => {
     localStorage.setItem(LS_KEYS.onlineRoomId, elOnlineRoomId.value);
     setRoomIdError(false);
@@ -750,6 +772,7 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
     writeBool(LS_KEYS.optThreefold, elThreefold.checked);
     writeBool(LS_KEYS.optToasts, elToasts.checked);
+    writeBool(LS_KEYS.optSfx, elSfx.checked);
 
     localStorage.setItem(LS_KEYS.aiWhite, elAiWhite.value);
     localStorage.setItem(LS_KEYS.aiBlack, elAiBlack.value);

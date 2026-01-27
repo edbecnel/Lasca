@@ -4,6 +4,48 @@ const SELECTION_STROKE_W = 5;
 const TARGET_STROKE_W = 5;
 const MIN_HIGHLIGHT_STROKE_W = 6;
 
+function makeHalo(layer: SVGGElement, args: { cx: number; cy: number; r: number; kind: "selection" | "target" | "highlight" }): SVGGElement {
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  g.setAttribute("class", `halo halo--${args.kind}`);
+  g.setAttribute("pointer-events", "none");
+
+  const glow = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  glow.setAttribute("class", "halo-glow");
+  glow.setAttribute("cx", String(args.cx));
+  glow.setAttribute("cy", String(args.cy));
+  glow.setAttribute("r", String(args.r));
+  glow.setAttribute("fill", "none");
+  glow.setAttribute("stroke", args.kind === "target" ? "#00e676" : args.kind === "highlight" ? "#ff9f40" : "#66ccff");
+  glow.setAttribute("stroke-width", String(Math.max(SELECTION_STROKE_W, TARGET_STROKE_W) + 4));
+  applyStrokeDefaults(glow);
+  g.appendChild(glow);
+
+  const core = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  core.setAttribute("class", "halo-core");
+  core.setAttribute("cx", String(args.cx));
+  core.setAttribute("cy", String(args.cy));
+  core.setAttribute("r", String(args.r));
+  core.setAttribute("fill", "none");
+  core.setAttribute("stroke", args.kind === "target" ? "#00e676" : args.kind === "highlight" ? "#ff9f40" : "#66ccff");
+  core.setAttribute("stroke-width", String(args.kind === "highlight" ? Math.max(MIN_HIGHLIGHT_STROKE_W, 6) : SELECTION_STROKE_W));
+  applyStrokeDefaults(core);
+  g.appendChild(core);
+
+  const sparks = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
+  sparks.setAttribute("class", "halo-sparks");
+  sparks.setAttribute("cx", String(args.cx));
+  sparks.setAttribute("cy", String(args.cy));
+  sparks.setAttribute("r", String(args.r));
+  sparks.setAttribute("fill", "none");
+  sparks.setAttribute("stroke", "rgba(255,255,255,0.92)");
+  sparks.setAttribute("stroke-width", "2.5");
+  applyStrokeDefaults(sparks);
+  g.appendChild(sparks);
+
+  layer.appendChild(g);
+  return g;
+}
+
 function applyStrokeDefaults(el: SVGElement): void {
   // Keep overlay strokes readable even when the board SVG is scaled.
   el.setAttribute("vector-effect", "non-scaling-stroke");
@@ -47,16 +89,7 @@ export function drawSelection(layer: SVGGElement, nodeId: string): void {
   const cy = parseFloat(node.getAttribute("cy") || "0");
   const r = parseFloat(node.getAttribute("r") || "0");
 
-  const sel = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
-  sel.setAttribute("cx", String(cx));
-  sel.setAttribute("cy", String(cy));
-  sel.setAttribute("r", String(r + 6));
-  sel.setAttribute("fill", "none");
-  sel.setAttribute("stroke", "#66ccff");
-  sel.setAttribute("stroke-width", String(SELECTION_STROKE_W));
-  sel.setAttribute("pointer-events", "none");
-  applyStrokeDefaults(sel);
-  layer.appendChild(sel);
+  makeHalo(layer, { cx, cy, r: r + 8, kind: "selection" });
 }
 
 export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
@@ -67,17 +100,7 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
     const cy = parseFloat(node.getAttribute("cy") || "0");
     const r = parseFloat(node.getAttribute("r") || "0");
 
-    const ring = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
-    ring.setAttribute("cx", String(cx));
-    ring.setAttribute("cy", String(cy));
-    ring.setAttribute("r", String(r + 10));
-    ring.setAttribute("fill", "none");
-    ring.setAttribute("stroke", "#00e676");
-    ring.setAttribute("stroke-width", String(TARGET_STROKE_W));
-    ring.setAttribute("stroke-dasharray", "4 3");
-    // Visual only; clicks handled on underlying board node circles
-    applyStrokeDefaults(ring);
-    layer.appendChild(ring);
+    makeHalo(layer, { cx, cy, r: r + 12, kind: "target" });
   }
 }
 
@@ -88,15 +111,15 @@ export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#
   const cy = parseFloat(node.getAttribute("cy") || "0");
   const r = parseFloat(node.getAttribute("r") || "0");
 
-  const ring = document.createElementNS(SVG_NS, "circle") as SVGCircleElement;
-  ring.setAttribute("cx", String(cx));
-  ring.setAttribute("cy", String(cy));
-  ring.setAttribute("r", String(r + 12));
-  ring.setAttribute("fill", "none");
-  ring.setAttribute("stroke", color);
-  ring.setAttribute("stroke-width", String(Math.max(width, MIN_HIGHLIGHT_STROKE_W)));
-  ring.setAttribute("stroke-dasharray", "6 4");
-  ring.setAttribute("pointer-events", "none");
-  applyStrokeDefaults(ring);
-  layer.appendChild(ring);
+  const g = makeHalo(layer, { cx, cy, r: r + 14, kind: "highlight" });
+  // Preserve caller-supplied color/width as a fallback; CSS can still override.
+  try {
+    const glow = g.querySelector(".halo-glow") as SVGCircleElement | null;
+    const core = g.querySelector(".halo-core") as SVGCircleElement | null;
+    if (glow) glow.setAttribute("stroke", color);
+    if (core) core.setAttribute("stroke", color);
+    if (core) core.setAttribute("stroke-width", String(Math.max(width, MIN_HIGHLIGHT_STROKE_W)));
+  } catch {
+    // ignore
+  }
 }

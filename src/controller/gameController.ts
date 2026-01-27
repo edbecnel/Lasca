@@ -30,6 +30,7 @@ import type { OnlineGameDriver } from "../driver/gameDriver.ts";
 import { LocalDriver } from "../driver/localDriver.ts";
 import { deserializeWireGameState } from "../shared/wireState.ts";
 import type { GetRoomWatchTokenResponse, PostRoomDebugReportResponse } from "../shared/onlineProtocol.ts";
+import type { SfxManager, SfxName } from "../ui/sfx.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -76,6 +77,9 @@ export class GameController {
   private toastEl: HTMLDivElement | null = null;
   private stickyToastKey: string | null = null;
   private stickyToastText: string | null = null;
+  private stickyToastActions: Map<string, () => void> = new Map();
+
+  private sfx: SfxManager | null = null;
 
   private lastOpponentPresent: boolean | null = null;
   private lastOpponentConnected: boolean | null = null;
@@ -89,6 +93,39 @@ export class GameController {
   private replaySavedState: { state: GameState; isGameOver: boolean } | null = null;
 
   private debugEl: HTMLDivElement | null = null;
+
+  setSfxManager(sfx: SfxManager | null): void {
+    this.sfx = sfx;
+  }
+
+  private playSfx(name: SfxName): void {
+    try {
+      this.sfx?.play(name);
+    } catch {
+      // ignore
+    }
+  }
+
+  private inferMoveSfx(prev: GameState, next: GameState): SfxName {
+    // Heuristic: capture => piece count drops; promotion => officer count rises.
+    let prevTotal = 0;
+    let nextTotal = 0;
+    let prevOfficers = 0;
+    let nextOfficers = 0;
+
+    for (const [, stack] of prev.board.entries()) {
+      prevTotal += stack.length;
+      for (const p of stack) if (p.rank === "O") prevOfficers += 1;
+    }
+    for (const [, stack] of next.board.entries()) {
+      nextTotal += stack.length;
+      for (const p of stack) if (p.rank === "O") nextOfficers += 1;
+    }
+
+    if (nextTotal < prevTotal) return "capture";
+    if (nextOfficers > prevOfficers) return "promote";
+    return "move";
+  }
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
     if (!text) return false;
@@ -123,6 +160,40 @@ export class GameController {
     } catch {
       return false;
     }
+  }
+
+  private buildOnlineInviteLink(): string | null {
+    if (this.driver.mode !== "online") return null;
+    const remote = this.driver as OnlineGameDriver;
+    const serverUrl = remote.getServerUrl();
+    const roomId = remote.getRoomId();
+    if (!serverUrl || !roomId) return null;
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", "online");
+      url.searchParams.set("server", serverUrl);
+      url.searchParams.set("roomId", roomId);
+      url.searchParams.set("join", "1");
+      url.searchParams.delete("create");
+      url.searchParams.delete("playerId");
+      url.searchParams.delete("color");
+      url.searchParams.delete("prefColor");
+      url.searchParams.delete("visibility");
+      url.searchParams.delete("watchToken");
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private copyOnlineInviteLink(): void {
+    const link = this.buildOnlineInviteLink();
+    if (!link) return;
+    void (async () => {
+      const ok = await this.copyTextToClipboard(link);
+      this.showToast(ok ? "Invite link copied" : "Clipboard copy failed", 1800);
+    })();
   }
 
   private bindRoomIdCopyButton(): void {
@@ -688,10 +759,60 @@ export class GameController {
     }
   }
 
+  private onlineHasOpponent(): boolean {
+    if (this.driver.mode !== "online") return true;
+    const remote = this.driver as OnlineGameDriver;
+    const selfId = remote.getPlayerId();
+    if (!selfId || selfId === "spectator") return false;
+    const presence = remote.getPresence();
+    if (!presence) return false;
+    const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+    return Boolean(opponentId);
+  }
+
+  private maybeShowOnlineWaitingInviteToast(): void {
+    // Only show a "room created" waiting toast before we've ever seen an opponent.
+    if (this.driver.mode !== "online") {
+      this.clearStickyToast("online_waiting_invite");
+      return;
+    }
+    if (this.isGameOver) {
+      this.clearStickyToast("online_waiting_invite");
+      return;
+    }
+
+    const remote = this.driver as OnlineGameDriver;
+    const selfId = remote.getPlayerId();
+    if (!selfId || selfId === "spectator") {
+      this.clearStickyToast("online_waiting_invite");
+      return;
+    }
+
+    const shouldShow = !this.onlineHasOpponent() && this.everSawOpponentPresent === false;
+    if (!shouldShow) {
+      this.clearStickyToast("online_waiting_invite");
+      return;
+    }
+
+    const key = "online_waiting_invite";
+
+    // Don't clobber non-online sticky toasts (e.g. report issue).
+    if (this.stickyToastKey && this.stickyToastKey !== key && !this.stickyToastKey.startsWith("online_")) {
+      return;
+    }
+
+    this.setStickyToastAction(key, () => this.copyOnlineInviteLink());
+    // Force: this is onboarding UX and should appear even if the user previously
+    // disabled toasts in a different mode.
+    this.showStickyToast(key, "Waiting for opponent… Tap to copy invite link", { force: true });
+  }
+
   private isLocalPlayersTurn(): boolean {
     if (this.driver.mode !== "online") return true;
     const color = (this.driver as OnlineGameDriver).getPlayerColor();
     if (!color) return false;
+    // Per multiplayer checklist: no play allowed until both seats are filled.
+    if (!this.onlineHasOpponent()) return false;
     return this.state.toMove === color;
   }
 
@@ -884,8 +1005,37 @@ export class GameController {
       e.preventDefault();
       e.stopPropagation();
 
+      // If a timed toast is currently showing (possibly temporarily replacing
+      // a sticky toast), clicking should dismiss the timed toast first.
+      if (this.toastTimer) {
+        window.clearTimeout(this.toastTimer);
+        this.toastTimer = null;
+
+        if (this.stickyToastKey && this.stickyToastText) {
+          inner.textContent = this.stickyToastText;
+          this.toastEl?.classList.add("isVisible");
+        } else {
+          this.toastEl?.classList.remove("isVisible");
+        }
+        return;
+      }
+
       if (this.stickyToastKey) {
-        this.clearStickyToast(this.stickyToastKey);
+        const key = this.stickyToastKey;
+        const action = this.stickyToastActions.get(key) ?? null;
+        if (action) {
+          try {
+            action();
+          } catch {
+            // ignore
+          }
+          // If the action didn't replace/clear the sticky toast, clear it now.
+          if (this.stickyToastKey === key) {
+            this.clearStickyToast(key);
+          }
+        } else {
+          this.clearStickyToast(key);
+        }
         return;
       }
 
@@ -950,6 +1100,15 @@ export class GameController {
     this.stickyToastText = text;
   }
 
+  public setStickyToastAction(key: string, action: (() => void) | null): void {
+    if (!key) return;
+    if (!action) {
+      this.stickyToastActions.delete(key);
+      return;
+    }
+    this.stickyToastActions.set(key, action);
+  }
+
   public clearStickyToast(key: string): void {
     if (!key) return;
     if (this.stickyToastKey !== key) return;
@@ -970,6 +1129,7 @@ export class GameController {
     if (!msg) return;
     if (msg === this.lastGameOverToast) return;
     this.lastGameOverToast = msg;
+    this.playSfx("gameOver");
     this.showToast(msg, 3200);
   }
 
@@ -1325,6 +1485,7 @@ export class GameController {
   undo(): void {
     const prevState = this.driver.undo();
     if (prevState) {
+      this.playSfx("undo");
       // Allow undoing out of terminal states.
       this.isGameOver = false;
 
@@ -1359,6 +1520,7 @@ export class GameController {
   redo(): void {
     const nextState = this.driver.redo();
     if (nextState) {
+      this.playSfx("redo");
       // Allow redoing out of terminal states.
       this.isGameOver = false;
 
@@ -1460,14 +1622,30 @@ export class GameController {
   }
 
   setState(next: GameState): void {
+    const prev = this.state;
+    const prevWasGameOver = this.isGameOver;
+
     this.state = next;
     this.driver.setState(next);
+
+    // Online snapshots (and other external pushes) should sound like the game is alive.
+    // Only attempt when we have a real prior state.
+    try {
+      const didTurnFlip = prev?.toMove !== next.toMove;
+      const didForcedOverAppear = Boolean((next as any)?.forcedGameOver) && !Boolean((prev as any)?.forcedGameOver);
+      if (!prevWasGameOver && (didForcedOverAppear || didTurnFlip)) {
+        this.playSfx(this.inferMoveSfx(prev, next));
+      }
+    } catch {
+      // ignore
+    }
     
     // When loading a game, check if the current player has already lost
     const currentPlayerResult = checkCurrentPlayerLost(this.state);
     if (currentPlayerResult.winner) {
       this.isGameOver = true;
       const msg = currentPlayerResult.reason || "Game Over";
+      this.playSfx("gameOver");
       this.showBanner(msg, 0);
       this.showGameOverToast(msg);
       this.updatePanel();
@@ -1612,6 +1790,11 @@ export class GameController {
     const elLoadGame = document.getElementById("loadGameBtn") as HTMLButtonElement | null;
     const elLoadGameInput = document.getElementById("loadGameInput") as HTMLInputElement | null;
     const isOnline = this.driver.mode === "online";
+
+    // Online UX: when a room is newly created and we're waiting for the opponent,
+    // show a sticky toast offering to copy an invite link.
+    // Call early so it still runs even if we early-return while setting status text.
+    this.maybeShowOnlineWaitingInviteToast();
 
     if (elOnlineInfoPanel) elOnlineInfoPanel.hidden = !isOnline;
 
@@ -1788,9 +1971,27 @@ export class GameController {
         elMsg.textContent = "Reconnecting…";
         return;
       }
-      if (!this.isLocalPlayersTurn()) {
-        elMsg.textContent = "Waiting for opponent";
-        return;
+
+      if (isOnline) {
+        const remote = this.driver as OnlineGameDriver;
+        const selfId = remote.getPlayerId();
+        const localColor = remote.getPlayerColor();
+        if (!selfId || selfId === "spectator") {
+          elMsg.textContent = "Spectating";
+          return;
+        }
+        if (!localColor) {
+          elMsg.textContent = "Waiting for seat assignment";
+          return;
+        }
+        if (!this.onlineHasOpponent()) {
+          elMsg.textContent = "Waiting for opponent to join";
+          return;
+        }
+        if (this.state.toMove !== localColor) {
+          elMsg.textContent = "Opponent's turn";
+          return;
+        }
       }
       if (this.selected) {
         if (this.currentTargets.length > 0) {
@@ -2088,6 +2289,7 @@ export class GameController {
     try {
       next = await this.driver.submitMove(move);
     } catch (err) {
+      this.playSfx("error");
       // eslint-disable-next-line no-console
       console.error("[controller] driver submitMove failed", err);
       const msg = err instanceof Error ? err.message : "Move failed";
@@ -2136,6 +2338,10 @@ export class GameController {
       // eslint-disable-next-line no-console
       console.log("[controller] apply", move);
     }
+
+    this.playSfx(move.kind === "capture" ? "capture" : "move");
+    if (next.didPromote) this.playSfx("promote");
+
     this.state = next;
     
     // Animate the move before rendering (both quiet moves and captures)
@@ -2592,6 +2798,7 @@ export class GameController {
     // Select only your own stack; clicking empty node clears selection
     if (this.isOwnStack(nodeId)) {
       this.selected = nodeId;
+      this.playSfx("select");
       this.showSelection(nodeId);
     } else {
       this.clearSelection();

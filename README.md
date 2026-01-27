@@ -40,6 +40,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - ⏮️ Full undo/redo with move history tracking
 - 💾 Save and load games (JSON format)
   - Multiple themes (Classic, Wooden, and others)
+- 🌈 Bright animated halos for selection/targets/highlights (theme-colored)
+- 🔊 Sound effects toggle (Start Page + in-game)
 - 📊 Stack inspector showing piece composition
 - 🎮 Game over detection with win conditions
 - 🔄 Multi-capture sequences with anti-loop protection
@@ -53,6 +55,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
 - 🌐 Online multiplayer (2 players) via Start Page (Create/Join/Rejoin)
+- ⛔ Online play is blocked until both players join (prevents “both colors” input)
+- ⏳ Online room creation shows a sticky “Waiting for opponent…” toast (tap to copy invite link)
 - 👁️ Spectate public rooms from the Start Page
 - 🔒 Private rooms (joinable, not publicly spectatable)
 - 🔗 Private-room spectating via secret watch link
@@ -79,8 +83,9 @@ Note: if `8080` is already in use, Vite will pick another port (often `8081`). U
 
 2. On the Start Page, set **Play mode** to **Online**.
 3. Player 1 chooses **Create**, chooses **Room** visibility (**Public** or **Private**), and clicks **Launch**.
-4. In-game, copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
-5. Player 2 goes to the Start Page, chooses **Join**, pastes the Room ID, and clicks **Launch**.
+4. After the room is created, the game shows a sticky **Waiting for opponent…** toast. Tap it to copy an invite link to share.
+5. You can also copy the **Room ID** from **Info → Online** (copy button next to “Room ID”).
+6. Player 2 can either open the invite link, or go to the Start Page → **Join**, paste the Room ID, and click **Launch**.
 
 #### Spectating (Start Page)
 
@@ -114,6 +119,7 @@ Alternative: use the Start Page **Lobby** section to see open rooms and click **
 - **Client is on 8081 (or similar)**: Vite will automatically choose a new port if `8080` is busy. Check the terminal output for the actual client URL.
 - **Changes not taking effect**: make sure you restarted the online server (and client) after pulling new code; stale node processes can keep old behavior running.
 - **Room ID copy doesn’t work**: clipboard writes usually require a secure context (HTTPS or `http://localhost`) and may prompt for permission. If the button fails, you can still select/copy the Room ID text manually.
+- **Testing from a phone on your LAN**: run `npm run online:dev:lan`, then open `http://<your-lan-ip>:8080/` from your phone (same Wi‑Fi). The server still runs on `8788`.
 - **Joined the wrong variant**: always join from the Start Page’s **Online → Join** flow. Opening a variant page directly (e.g. `src/lasca.html`) and then trying to “join” a room from another variant can cause confusing behavior.
 - **Opponent’s moves don’t show up**: refresh the page and confirm both players are pointing at the same **Server URL** on the Start Page. Some networks/extensions can interfere with Server-Sent Events (SSE).
 
@@ -216,6 +222,7 @@ npm install
 
 - `npm start` - Start development server with hot reload
 - `npm run online:dev` - Start online server + client (2-player online play)
+- `npm run online:dev:lan` - Online dev server + client, with the client bound to your LAN interface (for phone testing)
 - `npm run build` - Build for production
 - `npm test` - Run test suite
 - `npm run test:watch` - Run tests in watch mode

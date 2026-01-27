@@ -4,6 +4,7 @@ import { createThemeDropdown } from "../ui/components/themeDropdown";
 
 const LS_KEY = "lasca.theme";
 const LINK_ID = "lascaThemeCss";
+const OVERLAY_FX_STYLE_ID = "lascaOverlayFxCss";
 
 export const THEME_CHANGE_EVENT = "lasca:themechange" as const;
 
@@ -60,8 +61,88 @@ function saveThemeId(id: string) {
   localStorage.setItem(LS_KEY, id);
 }
 
+function ensureOverlayFxCss(): void {
+  if (document.getElementById(OVERLAY_FX_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = OVERLAY_FX_STYLE_ID;
+  style.textContent = `
+:root{
+  --halo-selection: #66ccff;
+  --halo-target: #00e676;
+  --halo-highlight: #ff9f40;
+}
+
+#lascaBoard .halo{ pointer-events:none; }
+
+#lascaBoard .halo circle{
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#lascaBoard .halo--selection{ --halo-color: var(--halo-selection); }
+#lascaBoard .halo--target{ --halo-color: var(--halo-target); }
+#lascaBoard .halo--highlight{ --halo-color: var(--halo-highlight); }
+
+#lascaBoard .halo .halo-glow{
+  stroke: var(--halo-color) !important;
+  opacity: 0.22;
+  filter:
+    drop-shadow(0 0 8px var(--halo-color))
+    drop-shadow(0 0 16px var(--halo-color));
+  animation: lascaHaloPulse 1200ms ease-in-out infinite alternate;
+}
+
+#lascaBoard .halo .halo-core{
+  stroke: var(--halo-color) !important;
+  opacity: 0.9;
+  stroke-dasharray: 14 9;
+  animation: lascaHaloSpin 1100ms linear infinite;
+  filter: drop-shadow(0 0 6px var(--halo-color));
+}
+
+#lascaBoard .halo .halo-sparks{
+  stroke: rgba(255,255,255,0.92) !important;
+  opacity: 0.75;
+  stroke-dasharray: 2 18;
+  animation: lascaHaloSpin 700ms linear infinite, lascaHaloFlicker 2100ms ease-in-out infinite;
+  filter:
+    drop-shadow(0 0 5px var(--halo-color))
+    drop-shadow(0 0 12px rgba(255,255,255,0.35));
+}
+
+@keyframes lascaHaloSpin{
+  from{ stroke-dashoffset: 0; }
+  to{ stroke-dashoffset: -96; }
+}
+
+@keyframes lascaHaloPulse{
+  from{ opacity: 0.14; }
+  to{ opacity: 0.30; }
+}
+
+@keyframes lascaHaloFlicker{
+  0%, 100%{ opacity: 0.55; }
+  40%{ opacity: 0.92; }
+  65%{ opacity: 0.40; }
+  80%{ opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  #lascaBoard .halo .halo-glow,
+  #lascaBoard .halo .halo-core,
+  #lascaBoard .halo .halo-sparks{
+    animation: none !important;
+  }
+}
+`;
+  document.head.appendChild(style);
+}
+
 export function createThemeManager(svgRoot: SVGSVGElement) {
   if (!svgRoot) throw new Error("createThemeManager: svgRoot is required");
+
+  ensureOverlayFxCss();
 
   const { themeDefs } = ensureDefsStructure(svgRoot);
 

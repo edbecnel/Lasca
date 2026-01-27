@@ -70,9 +70,16 @@ export class AIManager {
 
   private toastSyncTimer: number | null = null;
 
+  private lastBoardTapAtMs: number = 0;
+
   constructor(controller: GameController) {
     this.controller = controller;
     this.settings = this.loadSettings();
+
+    // Clicking the sticky "Tap anywhere to resume AI" toast should resume AI.
+    this.controller.setStickyToastAction(AIManager.TAP_RESUME_TOAST_KEY, () => {
+      if (this.shouldOfferTapToResume()) this.resumeAI();
+    });
 
     this.ensureWorker();
 
@@ -109,7 +116,6 @@ export class AIManager {
 
   private shouldOfferTapToResume(): boolean {
     if (!this.settings.paused) return false;
-    if (!this.isHumanVsAI()) return false;
     if (this.controller.isOver()) return false;
 
     const p: Player = this.controller.getState().toMove;
@@ -118,7 +124,7 @@ export class AIManager {
   }
 
   private syncPausedTurnToastNow(): void {
-    if (!this.isHumanVsAI() || this.controller.isOver()) {
+    if (this.controller.isOver()) {
       this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
       return;
     }
@@ -165,10 +171,33 @@ export class AIManager {
     if (!boardSvg) return;
 
     const onTap = (ev: Event) => {
-      if (!this.shouldOfferTapToResume()) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.resumeAI();
+      // On many devices, a single tap produces both pointerdown and click.
+      // Avoid handling both, otherwise we can pause on pointerdown and then
+      // immediately resume on the follow-up click (making the toast flash).
+      const now = Date.now();
+      if (ev.type === "click" && now - this.lastBoardTapAtMs < 350) {
+        return;
+      }
+
+      // Prefer resuming when paused and it's an AI turn.
+      if (this.shouldOfferTapToResume()) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.lastBoardTapAtMs = now;
+        this.resumeAI();
+        return;
+      }
+
+      // In AI-vs-AI, allow tapping the board to pause AI.
+      // Useful for spectators who want to stop the game and inspect.
+      if (this.isBothAI() && !this.settings.paused && !this.controller.isOver()) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.lastBoardTapAtMs = now;
+        this.forcePausedUI();
+        this.syncPausedTurnToastNow();
+        return;
+      }
     };
 
     // Use capture so we can intercept before the GameController click handler

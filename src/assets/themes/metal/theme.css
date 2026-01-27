@@ -115,6 +115,11 @@ body {
 }
 
 /* Overlay rings with metallic colors */
+:root {
+  --halo-selection: #4a9eff;
+  --halo-target: #00e676;
+}
+
 .selection-ring {
   stroke: #4a9eff !important;
   stroke-width: 4 !important;

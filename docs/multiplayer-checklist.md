@@ -1,6 +1,6 @@
 # Multiplayer Online Checklist (Living)
 
-Last reviewed: 2026-01-25
+Last reviewed: 2026-01-27
 
 This document tracks the current multiplayer implementation status for Lasca / Dama / Damasca online 2‑player play.
 
@@ -51,6 +51,13 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 - [x] **Replay viewer / post-game summary (from JSONL)**
   - Server endpoint: `GET /api/room/:roomId/replay`.
   - UI: Online panel “Replay → Open” overlay with prev/next stepping through snapshots.
+- [x] **Room-ready gating (no play until both seats filled)**
+  - Client blocks local input until an opponent is seated.
+  - Server rejects move-like endpoints until `room.players.size >= 2`.
+  - Guard lives in `server/src/app.ts` (`requireRoomReady`).
+- [x] **Waiting-for-opponent onboarding toast (tap-to-copy invite link)**
+  - Sticky toast appears for newly created rooms while waiting.
+  - Tap copies an invite link (join URL) to clipboard.
 
 ### MP3 — Lobby / Matchmaking
 

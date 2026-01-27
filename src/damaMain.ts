@@ -2,6 +2,7 @@ import { createInitialGameStateForVariant } from "./game/state.ts";
 import type { GameState } from "./game/state.ts";
 import { renderGameState } from "./render/renderGameState.ts";
 import { initSplitLayout } from "./ui/layout/splitLayout";
+import { initCollapsibleSections } from "./ui/layout/collapsibleSections";
 import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager, THEME_CHANGE_EVENT } from "./theme/themeManager";
 import type { Player } from "./types";
@@ -19,6 +20,7 @@ import { getVariantById, isVariantId, rulesBoardLine } from "./variants/variantR
 import type { VariantId } from "./variants/variantTypes";
 import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
+import { createSfxManager } from "./ui/sfx";
 
 const FALLBACK_VARIANT_ID: VariantId = "dama_8_classic_standard";
 
@@ -40,6 +42,7 @@ const LS_OPT_KEYS = {
   boardCoords: "lasca.opt.boardCoords",
   threefold: "lasca.opt.threefold",
   toasts: "lasca.opt.toasts",
+  sfx: "lasca.opt.sfx",
 } as const;
 
 function readOptionalBoolPref(key: string): boolean | null {
@@ -147,6 +150,23 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
   controller.bind();
+
+  // Sound effects (optional)
+  const sfx = createSfxManager();
+  controller.setSfxManager(sfx);
+  const soundToggle = document.getElementById("soundToggle") as HTMLInputElement | null;
+  const savedSfx = readOptionalBoolPref(LS_OPT_KEYS.sfx);
+  if (soundToggle && savedSfx !== null) {
+    soundToggle.checked = savedSfx;
+  }
+  sfx.setEnabled(Boolean(soundToggle?.checked ?? false));
+  if (soundToggle) {
+    soundToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.sfx, soundToggle.checked);
+      sfx.setEnabled(soundToggle.checked);
+      sfx.play(soundToggle.checked ? "uiOn" : "uiOff");
+    });
+  }
 
   // Theme switching can change piece symbol IDs (Wooden variants), so re-render on change.
   svg.addEventListener(THEME_CHANGE_EVENT, () => controller.refreshForThemeChange());
@@ -462,35 +482,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     import.meta.hot.accept(() => applyBoardCoords());
   }
 
-  // Wire up collapsible sections
-  const collapsibleSections = document.querySelectorAll("[data-toggle]");
-  collapsibleSections.forEach((header) => {
-    header.addEventListener("click", () => {
-      const sectionId = header.getAttribute("data-toggle");
-      if (!sectionId) return;
-
-      const section = document.querySelector(`[data-section=\"${sectionId}\"]`);
-      if (!section) return;
-
-      section.classList.toggle("collapsed");
-
-      // Save collapsed state to localStorage
-      const isCollapsed = section.classList.contains("collapsed");
-      localStorage.setItem(`section-${sectionId}-collapsed`, isCollapsed.toString());
-    });
-  });
-
-  // Restore collapsed states from localStorage
-  const sectionsWithState = document.querySelectorAll("[data-section]");
-  sectionsWithState.forEach((section) => {
-    const sectionId = section.getAttribute("data-section");
-    if (!sectionId) return;
-
-    const savedState = localStorage.getItem(`section-${sectionId}-collapsed`);
-    if (savedState === "true") {
-      section.classList.add("collapsed");
-    }
-  });
+  initCollapsibleSections();
 
   // Board height adjustment toggle (for Android tablets with bottom nav bar)
   const boardHeightToggle = document.getElementById("boardHeightToggle") as HTMLButtonElement | null;

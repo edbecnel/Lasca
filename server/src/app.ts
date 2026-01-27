@@ -168,6 +168,12 @@ function requirePlayer(room: Room, playerId: PlayerId): PlayerColor {
   return color;
 }
 
+function requireRoomReady(room: Room): void {
+  // Enforce: no play until both players have joined.
+  // Presence may show disconnected, but the seat still exists; we only require seats.
+  if (room.players.size < 2) throw new Error("Waiting for opponent");
+}
+
 function snapshotForRoom(room: Room): WireSnapshot {
   return {
     state: serializeWireGameState(room.state),
@@ -1479,6 +1485,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const color = requirePlayer(room, body.playerId);
         setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
+        requireRoomReady(room);
+
         if (isRoomOver(room)) throw new Error("Game over");
 
         if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
@@ -1547,6 +1555,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const color = requirePlayer(room, body.playerId);
         setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
 
+        requireRoomReady(room);
+
         if (isRoomOver(room)) throw new Error("Game over");
 
         if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
@@ -1605,6 +1615,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
         const color = requirePlayer(room, body.playerId);
         setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+        requireRoomReady(room);
 
         if (isRoomOver(room)) throw new Error("Game over");
 

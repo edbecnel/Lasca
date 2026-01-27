@@ -49,6 +49,14 @@ describe("MP7 replay endpoint", () => {
     const roomId = createRes.roomId as string;
     const whitePlayerId = createRes.playerId as string;
 
+    // Ensure both seats are filled before making moves.
+    const joinRes = await fetch(`${s.url}/api/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roomId }),
+    }).then((r) => r.json() as Promise<any>);
+    expect(joinRes.error).toBeUndefined();
+
     // Apply a legal move so the log includes MOVE_APPLIED.
     const legal = generateLegalMoves(initial as any);
     expect(legal.length).toBeGreaterThan(0);

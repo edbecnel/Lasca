@@ -93,6 +93,15 @@ body {
 }
 
 /* Overlay rings: warm/UV accent */
+.selection-ring, .target-ring {
+  /* Legacy selectors kept for compatibility; halos now use CSS variables. */
+}
+
+:root {
+  --halo-selection: #ffe7b1;
+  --halo-target: #b08cff;
+}
+
 .selection-ring {
   stroke: #ffe7b1 !important;
   filter: drop-shadow(0 0 6px rgba(255, 231, 177, 0.55));
