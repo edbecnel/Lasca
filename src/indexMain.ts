@@ -6,6 +6,7 @@ import { createSfxManager } from "./ui/sfx";
 
 const LS_KEYS = {
   theme: "lasca.theme",
+  glassBg: "lasca.theme.glassBg",
   aiWhite: "lasca.ai.white",
   aiBlack: "lasca.ai.black",
   aiDelayMs: "lasca.ai.delayMs",
@@ -34,6 +35,7 @@ type PreferredColor = "auto" | "W" | "B";
 type Difficulty = "human" | "easy" | "medium" | "advanced";
 type PlayMode = "local" | "online";
 type OnlineAction = "create" | "join" | "spectate" | "rejoin";
+type GlassBg = "original" | "felt" | "walnut";
 
 type OnlineResumeRecord = {
   serverUrl: string;
@@ -212,10 +214,19 @@ function readVariantId(key: string, fallback: VariantId): VariantId {
   return fallback;
 }
 
+function readGlassBg(key: string, fallback: GlassBg): GlassBg {
+  const raw = localStorage.getItem(key);
+  if (raw === "original" || raw === "felt" || raw === "walnut") return raw;
+  return fallback;
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   const elGame = byId<HTMLSelectElement>("launchGame");
   const elGameNote = byId<HTMLElement>("launchGameNote");
   const elTheme = byId<HTMLSelectElement>("launchTheme");
+
+  const elGlassBgRow = (document.getElementById("launchGlassBgRow") as HTMLElement | null) ?? null;
+  const elGlassBg = (document.getElementById("launchGlassBgSelect") as HTMLSelectElement | null) ?? null;
 
   const elPlayMode = byId<HTMLSelectElement>("launchPlayMode");
   const elOnlineServerUrl = byId<HTMLInputElement>("launchOnlineServerUrl");
@@ -462,6 +473,30 @@ window.addEventListener("DOMContentLoaded", () => {
   const savedTheme = localStorage.getItem(LS_KEYS.theme);
   const initialTheme = (savedTheme && getThemeById(savedTheme)) ? savedTheme : DEFAULT_THEME_ID;
   elTheme.value = initialTheme;
+
+  if (elGlassBg) {
+    elGlassBg.value = readGlassBg(LS_KEYS.glassBg, "original");
+  }
+
+  const syncGlassBg = () => {
+    const isGlass = elTheme.value === "glass";
+    if (elGlassBgRow) elGlassBgRow.style.display = isGlass ? "" : "none";
+    if (elGlassBg) elGlassBg.disabled = !isGlass;
+  };
+
+  syncGlassBg();
+
+  elTheme.addEventListener("change", () => {
+    syncGlassBg();
+  });
+
+  elGlassBg?.addEventListener("change", () => {
+    if (elTheme.value !== "glass") return;
+    const v = (elGlassBg.value === "felt" || elGlassBg.value === "walnut") ? elGlassBg.value : "original";
+    localStorage.setItem(LS_KEYS.glassBg, v);
+    // Keep the control sanitized in case the DOM was modified.
+    elGlassBg.value = v;
+  });
 
   const initialVariantId = readVariantId(LS_KEYS.variantId, DEFAULT_VARIANT_ID);
   elGame.value = initialVariantId;
@@ -764,6 +799,11 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!v.available || !v.entryUrl) return;
 
     localStorage.setItem(LS_KEYS.theme, elTheme.value);
+
+    if (elTheme.value === "glass" && elGlassBg) {
+      const v = (elGlassBg.value === "felt" || elGlassBg.value === "walnut") ? elGlassBg.value : "original";
+      localStorage.setItem(LS_KEYS.glassBg, v);
+    }
 
     // Force these UI prefs.
     writeBool(LS_KEYS.optMoveHints, false);

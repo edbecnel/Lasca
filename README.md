@@ -72,6 +72,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 1. Run the dev server with `npm start` (it opens the Start Page at `src/index.html`)
 2. Choose options (theme, startup toggles, AI), then click **Launch**
 
+- If you choose the **Glass** theme, you can also choose **Glass bg** (**Original** / **Felt** / **Walnut**).
+
 #### Online multiplayer (Create / Join)
 
 1. Start the online dev server + client with `npm run online:dev`

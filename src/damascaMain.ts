@@ -121,6 +121,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   const themeManager = createThemeManager(svg);
   await themeManager.bindThemeDropdown(themeDropdown);
 
+  const glassBgRow = document.getElementById("glassBgRow") as HTMLElement | null;
+  const glassBgSelect = document.getElementById("glassBgSelect") as HTMLSelectElement | null;
+  themeManager.bindGlassBackgroundSelect(glassBgRow, glassBgSelect);
+
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
   if (!zoomTitle || !zoomHint) throw new Error("Missing inspector DOM nodes (zoomTitle/zoomHint)");

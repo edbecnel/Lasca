@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <filter id="walnutGrain" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB">
+      <!-- Elongated noise -> wood-like grain direction (horizontal-ish). -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.010 0.090" numOctaves="3" seed="11" stitchTiles="stitch" result="n" />
+
+      <!-- Map noise into alpha, then flood with a dark brown "ink" to create
+           grain lines that read darker than the base wood.
+      -->
+      <feColorMatrix in="n" type="matrix" values="
+        0 0 0 0 0
+        0 0 0 0 0
+        0 0 0 0 0
+        1 0 0 0 0
+      " result="a" />
+      <feComponentTransfer in="a" result="a2">
+        <feFuncA type="gamma" amplitude="1" exponent="2.15" offset="-0.10" />
+      </feComponentTransfer>
+      <feFlood flood-color="#1b1009" flood-opacity="1" result="ink" />
+      <feComposite in="ink" in2="a2" operator="in" result="grain" />
+      <feGaussianBlur in="grain" stdDeviation="0.25" result="grainSoft" />
+      <feComposite in="grainSoft" in2="grainSoft" operator="over" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" filter="url(#walnutGrain)" opacity="0.18" />
+</svg>

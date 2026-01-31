@@ -3,10 +3,35 @@ import { DEFAULT_THEME_ID, THEMES, getThemeById } from "./themes";
 import { createThemeDropdown } from "../ui/components/themeDropdown";
 
 const LS_KEY = "lasca.theme";
+const GLASS_BG_LS_KEY = "lasca.theme.glassBg";
 const LINK_ID = "lascaThemeCss";
 const OVERLAY_FX_STYLE_ID = "lascaOverlayFxCss";
 
 export const THEME_CHANGE_EVENT = "lasca:themechange" as const;
+
+type GlassBgMode = "original" | "felt" | "walnut";
+
+function isGlassBgMode(v: unknown): v is GlassBgMode {
+  return v === "original" || v === "felt" || v === "walnut";
+}
+
+function readSavedGlassBgMode(): GlassBgMode | null {
+  const raw = localStorage.getItem(GLASS_BG_LS_KEY);
+  if (!raw) return null;
+  return isGlassBgMode(raw) ? raw : null;
+}
+
+function saveGlassBgMode(mode: GlassBgMode) {
+  localStorage.setItem(GLASS_BG_LS_KEY, mode);
+}
+
+function applyGlassBgMode(mode: GlassBgMode) {
+  document.body?.setAttribute("data-glass-bg", mode);
+}
+
+function clearGlassBgMode() {
+  document.body?.removeAttribute("data-glass-bg");
+}
 
 function ensureDefsStructure(svgRoot: SVGSVGElement) {
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -149,6 +174,27 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
   let currentId: string | null = null;
   let currentCssHref: string | null = null;
 
+  let glassBgRowEl: HTMLElement | null = null;
+  let glassBgSelectEl: HTMLSelectElement | null = null;
+  // Default to the historical Glass look.
+  let glassBgMode: GlassBgMode = readSavedGlassBgMode() ?? "original";
+
+  function updateGlassBgUi(themeId: string | null) {
+    const enabled = themeId === "glass";
+    if (glassBgRowEl) {
+      glassBgRowEl.style.display = enabled ? "grid" : "none";
+    }
+    if (glassBgSelectEl) {
+      glassBgSelectEl.disabled = !enabled;
+      glassBgSelectEl.value = glassBgMode;
+    }
+    if (enabled) {
+      applyGlassBgMode(glassBgMode);
+    } else {
+      clearGlassBgMode();
+    }
+  }
+
   async function applyThemeCss(cssUrl: string | URL | null | undefined) {
     if (!cssUrl) return;
     const href = String(cssUrl);
@@ -191,6 +237,9 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
 
     svgRoot.setAttribute("data-theme-id", theme.id);
 
+    // Apply theme-specific UI state (e.g. Glass background variants).
+    updateGlassBgUi(theme.id);
+
     // Notify listeners (e.g. controller) so they can re-render any <use href="#..."></use>
     // that may be theme-dependent (Wooden variants).
     svgRoot.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: { themeId: theme.id } }));
@@ -199,6 +248,27 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     saveThemeId(currentId);
     svgRoot.style.visibility = prevVis || "visible";
     return theme;
+  }
+
+  function bindGlassBackgroundSelect(rowEl: HTMLElement | null | undefined, selectEl: HTMLSelectElement | null | undefined) {
+    glassBgRowEl = rowEl ?? null;
+    glassBgSelectEl = selectEl ?? null;
+    if (!glassBgRowEl || !glassBgSelectEl) return;
+
+    // Initialize from persisted value (or default).
+    glassBgMode = readSavedGlassBgMode() ?? glassBgMode;
+    glassBgSelectEl.value = glassBgMode;
+
+    glassBgSelectEl.addEventListener("change", () => {
+      const next = glassBgSelectEl?.value;
+      if (!isGlassBgMode(next)) return;
+      glassBgMode = next;
+      saveGlassBgMode(glassBgMode);
+      // Only affects visuals when glass theme is active.
+      updateGlassBgUi(currentId ?? svgRoot.getAttribute("data-theme-id"));
+    });
+
+    updateGlassBgUi(currentId ?? svgRoot.getAttribute("data-theme-id"));
   }
 
   async function bindThemeDropdown(dropdownRootEl: HTMLElement | null | undefined) {
@@ -238,6 +308,7 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     setTheme,
     bindThemeDropdown,
     bindThemeSelect,
+    bindGlassBackgroundSelect,
     getCurrentThemeId: () => currentId,
   } as const;
 }
