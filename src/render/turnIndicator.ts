@@ -20,7 +20,8 @@ export function ensureTurnIndicatorLayer(svg: SVGSVGElement): SVGGElement {
 
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.id = "turnIndicator";
-  g.setAttribute("pointer-events", "none");
+  // Allow hover so the icon can show an SVG tooltip (<title>).
+  g.setAttribute("pointer-events", "auto");
   svg.appendChild(g);
   return g;
 }
@@ -55,6 +56,11 @@ export function renderTurnIndicator(
   backing.setAttribute("stroke", "rgba(255,255,255,0.22)");
   backing.setAttribute("stroke-width", "2");
   backing.setAttribute("vector-effect", "non-scaling-stroke");
+
+  backing.setAttribute("pointer-events", "all");
+  const title = document.createElementNS(SVG_NS, "title");
+  title.textContent = toMove === "W" ? "Light to move" : "Dark to move";
+  backing.appendChild(title);
   layer.appendChild(backing);
 
   const use = document.createElementNS(SVG_NS, "use") as SVGUseElement;
@@ -66,9 +72,8 @@ export function renderTurnIndicator(
   use.setAttribute("y", String(y));
   use.setAttribute("width", String(iconSize));
   use.setAttribute("height", String(iconSize));
+  // Keep the hover target to the backing rect (prevents the icon from
+  // intercepting pointer events in some browsers).
+  use.setAttribute("pointer-events", "none");
   layer.appendChild(use);
-
-  const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = toMove === "W" ? "Light to move" : "Dark to move";
-  layer.appendChild(title);
 }
