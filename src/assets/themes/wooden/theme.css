@@ -1,9 +1,25 @@
 /* Wooden Theme Styles */
 
-/* Wood grain background for the page - darker tones */
+/* Wood grain background for the page - glossy, low-contrast grain */
 body {
-  background: linear-gradient(135deg, #3d2f1f 0%, #2a1f15 50%, #1a120d 100%);
-  background-attachment: fixed;
+  /* Palette choice: dark walnut/espresso. This frames the board without pulling focus. */
+  background-color: #22170f;
+  background-image:
+    /* Gloss highlight */
+    radial-gradient(1200px 700px at 18% 10%, rgba(255, 244, 230, 0.16) 0%, rgba(255, 244, 230, 0.08) 28%, rgba(255, 244, 230, 0.0) 60%),
+    /* Soft vignette */
+    radial-gradient(1000px 800px at 70% 80%, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.0) 62%),
+    /* Base wood tone gradient */
+    linear-gradient(135deg, #3a2b1c 0%, #2a1f15 45%, #1a120d 100%),
+    /* Grain texture (kept subtle via blend + opacity) */
+    url("./wood_grain.svg");
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  background-size: cover, cover, cover, 512px 512px;
+  background-position: center, center, center, center;
+  background-attachment: fixed, fixed, fixed, fixed;
+
+  /* Make grain visible but not busy; keep UI readable. */
+  background-blend-mode: screen, multiply, normal, overlay;
 }
 
 /* Wood texture overlay - darker panels */
@@ -12,15 +28,19 @@ body {
     linear-gradient(to bottom, rgba(61, 47, 31, 0.15), rgba(42, 31, 21, 0.25)),
     repeating-linear-gradient(
       90deg,
-      rgba(61, 47, 31, 0.1) 0px,
+      rgba(61, 47, 31, 0.06) 0px,
       transparent 2px,
       transparent 4px,
-      rgba(61, 47, 31, 0.1) 6px
+      rgba(61, 47, 31, 0.06) 6px
     ),
     var(--panel-bg);
 }
 
 /* Wooden board squares with alternating wood tones */
+#lascaBoard #bgFill rect {
+  fill: url(#wooden-bg-fill) !important;
+}
+
 #lascaBoard .board-square-light {
   fill: #d4b896;
   filter: 
