@@ -1902,7 +1902,24 @@ export class GameController {
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
-    renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, { hidden: this.isGameOver });
+    const toMoveLabel = this.state.toMove === "W" ? "Light" : "Dark";
+    let turnTooltipText: string | undefined = `${toMoveLabel} to move`;
+    if (this.driver.mode === "online") {
+      const remote = this.driver as OnlineGameDriver;
+      const selfId = remote.getPlayerId();
+      const localColor = remote.getPlayerColor();
+
+      if ((localColor === "W" || localColor === "B") && selfId && selfId !== "spectator") {
+        const youLabel = localColor === "W" ? "Light" : "Dark";
+        const yourTurnText = this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to move`;
+        turnTooltipText = `You are ${youLabel} — ${yourTurnText}`;
+      }
+    }
+
+    renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, {
+      hidden: this.isGameOver,
+      tooltipText: turnTooltipText,
+    });
 
     // Board HUD: show opponent presence under the turn indicator.
     if (this.driver.mode !== "online" || this.isGameOver) {

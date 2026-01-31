@@ -30,7 +30,7 @@ export function renderTurnIndicator(
   svg: SVGSVGElement,
   layer: SVGGElement,
   toMove: "W" | "B",
-  opts?: { hidden?: boolean }
+  opts?: { hidden?: boolean; tooltipText?: string }
 ): void {
   while (layer.firstChild) layer.removeChild(layer.firstChild);
   if (opts?.hidden) return;
@@ -59,7 +59,7 @@ export function renderTurnIndicator(
 
   backing.setAttribute("pointer-events", "all");
   const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = toMove === "W" ? "Light to move" : "Dark to move";
+  title.textContent = opts?.tooltipText ?? (toMove === "W" ? "Light to move" : "Dark to move");
   backing.appendChild(title);
   layer.appendChild(backing);
 
