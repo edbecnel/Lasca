@@ -39,7 +39,6 @@
 
             <g
               id="connectors"
-              mask="url(#mask-connectors)"
               stroke="#404040"
               stroke-width="16"
               stroke-linecap="round"

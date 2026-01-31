@@ -332,6 +332,18 @@
             <select id="launchTheme" class="panelSelect"></select>
           </div>
 
+          <div class="row" id="launchGlassColorsRow" style="display: none">
+            <label for="launchGlassColorsSelect">Glass colors</label>
+            <select id="launchGlassColorsSelect" class="panelSelect">
+              <option value="yellow_blue">Yellow / Blue</option>
+              <option value="cyan_violet">Cyan / Violet</option>
+              <option value="mint_magenta">Mint / Magenta</option>
+              <option value="pearl_smoke">Pearl / Smoke</option>
+              <option value="lavender_sapphire">Lavender / Sapphire</option>
+              <option value="aqua_amber">Aqua / Amber</option>
+            </select>
+          </div>
+
           <div class="row" id="launchGlassBgRow" style="display: none">
             <label for="launchGlassBgSelect">Glass bg</label>
             <select id="launchGlassBgSelect" class="panelSelect">
@@ -418,8 +430,8 @@
             >
             <select id="launchOnlinePrefColor" class="panelSelect">
               <option value="auto">Auto</option>
-              <option value="W">White</option>
-              <option value="B">Black</option>
+              <option value="W">Light</option>
+              <option value="B">Dark</option>
             </select>
 
             <label id="launchOnlinePlayerIdLabel" for="launchOnlinePlayerId"
@@ -470,7 +482,7 @@
         <section class="panelSection" aria-label="AI">
           <h2>AI</h2>
           <div class="row" style="grid-template-columns: 64px minmax(0, 1fr)">
-            <label for="launchAiWhite">White</label>
+            <label for="launchAiWhite">Light</label>
             <select id="launchAiWhite" class="panelSelect">
               <option value="human">Human</option>
               <option value="easy">Beginner AI</option>
@@ -478,7 +490,7 @@
               <option value="advanced">Expert AI</option>
             </select>
 
-            <label for="launchAiBlack">Black</label>
+            <label for="launchAiBlack">Dark</label>
             <select id="launchAiBlack" class="panelSelect">
               <option value="human">Human</option>
               <option value="easy">Beginner AI</option>

@@ -73,6 +73,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 2. Choose options (theme, startup toggles, AI), then click **Launch**
 
 - If you choose the **Glass** theme, you can also choose **Glass bg** (**Original** / **Felt** / **Walnut**).
+- If you choose the **Glass** theme, you can also choose **Glass colors** (piece color-pair presets).
 
 #### Online multiplayer (Create / Join)
 
@@ -149,7 +150,7 @@ If you want help using the Start Page itself (launcher UI), see [Start Page Help
 
 ### AI and Evaluation
 
-- **AI (Game Panel → AI):** Set White and/or Black to an AI difficulty. If both sides are AI, the game can auto-play.
+- **AI (Game Panel → AI):** Set Light and/or Dark to an AI difficulty. If both sides are AI, the game can auto-play.
 - **Speed:** Adjusts the pause between AI moves.
 - **Pause / Step:** Pause AI play, or step a single move when both sides are AI.
 - **Evaluation (Info panel → Evaluation):** Choose what to display using the icon buttons (hover for tooltips):
@@ -171,7 +172,7 @@ The Move History section (in the Info panel, below the Lasca Stack Inspector) sh
 - **Captures**: `1. ⚫ F6 × E5` (using × symbol)
 - **Multi-captures**: `2. ⚪ D3 × F5 × H7` (full path when available)
 
-Move numbers follow chess convention: each full turn (White + Black) is one move number.
+Move numbers follow chess convention: each full turn (Light + Dark) is one move number.
 
 #### Export Move History
 
@@ -184,12 +185,12 @@ Click "Export Move History" to download a JSON file containing all moves:
   "moves": [
     {
       "moveNumber": 1,
-      "player": "White",
+      "player": "Light",
       "notation": "D3 → E4"
     },
     {
       "moveNumber": 1,
-      "player": "Black",
+      "player": "Dark",
       "notation": "F6 × E5"
     }
   ]

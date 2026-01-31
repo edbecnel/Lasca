@@ -61,7 +61,7 @@ function formatAdvantage(state: GameState): string {
 
   if (Math.abs(units) < 0.05) return "Even";
   const magnitude = Math.abs(units);
-  return units > 0 ? `White ${formatSigned(magnitude)}` : `Black ${formatSigned(magnitude)}`;
+  return units > 0 ? `Light ${formatSigned(magnitude)}` : `Dark ${formatSigned(magnitude)}`;
 }
 
 function formatControl(state: GameState): string {
@@ -69,19 +69,19 @@ function formatControl(state: GameState): string {
   const w = isDama ? countTopPieces(state, "W") : countControlledStacks(state, "W");
   const b = isDama ? countTopPieces(state, "B") : countControlledStacks(state, "B");
   const label = isDama ? "Pieces" : "Controlled stacks";
-  if (w === b) return `${label}: White ${w} / Black ${b} (even)`;
-  const leader = w > b ? "White" : "Black";
+  if (w === b) return `${label}: Light ${w} / Dark ${b} (even)`;
+  const leader = w > b ? "Light" : "Dark";
   const diff = Math.abs(w - b);
-  return `${label}: White ${w} / Black ${b} (${leader} +${diff})`;
+  return `${label}: Light ${w} / Dark ${b} (${leader} +${diff})`;
 }
 
 function formatMaterial(state: GameState): string {
   const w = sumMaterial(state, "W");
   const b = sumMaterial(state, "B");
-  if (Math.abs(w - b) < 0.05) return `Material: White ${w.toFixed(1)} / Black ${b.toFixed(1)} (even)`;
-  const leader = w > b ? "White" : "Black";
+  if (Math.abs(w - b) < 0.05) return `Material: Light ${w.toFixed(1)} / Dark ${b.toFixed(1)} (even)`;
+  const leader = w > b ? "Light" : "Dark";
   const diff = Math.abs(w - b);
-  return `Material: White ${w.toFixed(1)} / Black ${b.toFixed(1)} (${leader} +${diff.toFixed(1)})`;
+  return `Material: Light ${w.toFixed(1)} / Dark ${b.toFixed(1)} (${leader} +${diff.toFixed(1)})`;
 }
 
 export function bindEvaluationPanel(controller: GameController): void {

@@ -60,7 +60,7 @@ function updatePlayerColorBadge(driver: unknown): void {
 
   el.textContent = color === "W" ? "⚪" : "⚫";
   el.style.display = "inline-flex";
-  const label = color === "W" ? "Playing as White" : "Playing as Black";
+  const label = color === "W" ? "Playing as Light" : "Playing as Dark";
   el.title = label;
   el.setAttribute("aria-label", label);
 }
@@ -110,6 +110,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   const themeManager = createThemeManager(svg);
   await themeManager.bindThemeDropdown(themeDropdown);
 
+  const glassPieceColorsRow = document.getElementById("glassPieceColorsRow") as HTMLElement | null;
+  const glassPieceColorsSelect = document.getElementById("glassPieceColorsSelect") as HTMLSelectElement | null;
+  themeManager.bindGlassPieceColorsSelect(glassPieceColorsRow, glassPieceColorsSelect);
+
   const glassBgRow = document.getElementById("glassBgRow") as HTMLElement | null;
   const glassBgSelect = document.getElementById("glassBgSelect") as HTMLSelectElement | null;
   themeManager.bindGlassBackgroundSelect(glassBgRow, glassBgSelect);
@@ -132,7 +136,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   const elRulesBoard = document.getElementById("statusRulesBoard");
   const elPhase = document.getElementById("statusPhase");
   const elMsg = document.getElementById("statusMessage");
-  if (elTurn) elTurn.textContent = state.toMove === "B" ? "Black" : "White";
+  if (elTurn) elTurn.textContent = state.toMove === "B" ? "Dark" : "Light";
   if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
   if (elPhase) elPhase.textContent = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
   if (elMsg) elMsg.textContent = "—";
@@ -391,11 +395,11 @@ window.addEventListener("DOMContentLoaded", async () => {
             
             // For moves: toMove indicates who's about to move, so invert to get who just moved
             // If toMove is "B", White just moved. If toMove is "W", Black just moved.
-            const playerWhoMoved = entry.toMove === "B" ? "White" : "Black";
-            const playerIcon = playerWhoMoved === "Black" ? "⚫" : "⚪";
+            const playerWhoMoved = entry.toMove === "B" ? "Light" : "Dark";
+            const playerIcon = playerWhoMoved === "Dark" ? "⚫" : "⚪";
             
             // Calculate move number: each player's move increments the counter
-            const moveNum = playerWhoMoved === "Black" 
+            const moveNum = playerWhoMoved === "Dark" 
               ? Math.ceil(idx / 2)  // Black: moves 1, 3, 5... → move# 1, 2, 3...
               : Math.floor((idx + 1) / 2); // White: moves 2, 4, 6... → move# 1, 2, 3...
             
@@ -457,7 +461,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         driver.mode === "online"
           ? (driver as OnlineGameDriver).getPlayerColor()
           : controller.getState().toMove;
-      const currentPlayer = localColor === "B" ? "Black" : localColor === "W" ? "White" : "—";
+      const currentPlayer = localColor === "B" ? "Dark" : localColor === "W" ? "Light" : "—";
       const confirmed = confirm(`Are you sure you want to resign as ${currentPlayer}?`);
       if (confirmed) {
         void controller.resign();
@@ -482,7 +486,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
 
       const localColor = online.getPlayerColor();
-      const currentPlayer = localColor === "B" ? "Black" : localColor === "W" ? "White" : "your";
+      const currentPlayer = localColor === "B" ? "Dark" : localColor === "W" ? "Light" : "your";
       const confirmed = confirm(
         `Leave room? This forfeits the game (counts as resign). ${currentPlayer} will lose. Continue?`
       );
@@ -631,7 +635,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       const elRulesBoard = document.getElementById("statusRulesBoard");
       const elPhase = document.getElementById("statusPhase");
       const elMsg = document.getElementById("statusMessage");
-      if (elTurn) elTurn.textContent = next.toMove === "B" ? "Black" : "White";
+      if (elTurn) elTurn.textContent = next.toMove === "B" ? "Dark" : "Light";
       if (elRulesBoard) elRulesBoard.textContent = rulesBoardLine(activeVariant.rulesetId, activeVariant.boardSize);
       if (elPhase) elPhase.textContent = next.phase.charAt(0).toUpperCase() + next.phase.slice(1);
       if (elMsg) elMsg.textContent = "—";

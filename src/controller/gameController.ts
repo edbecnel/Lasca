@@ -1175,7 +1175,7 @@ export class GameController {
 
       // If we don't know local color (spectator / reconnect edge), fall back
       // to explicit side-to-move messaging.
-      this.showToast(`${toMove === "B" ? "Black" : "White"} to ${hasCapture ? "capture" : "move"}`, 1500);
+      this.showToast(`${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`, 1500);
       return;
     }
 
@@ -1187,7 +1187,7 @@ export class GameController {
     if (shouldToast) {
       const legal = this.getLegalMovesForTurn();
       const hasCapture = legal.some((m) => m.kind === "capture");
-      this.showToast(`${toMove === "B" ? "Black" : "White"} to ${hasCapture ? "capture" : "move"}`, 1500);
+      this.showToast(`${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`, 1500);
     }
   }
 
@@ -1688,8 +1688,8 @@ export class GameController {
     const moves = historyData
       .filter((entry, idx) => idx > 0 && entry.notation) // Skip "Start" and entries without notation
       .map((entry, idx) => {
-        const playerWhoMoved = entry.toMove === "B" ? "White" : "Black";
-        const moveNum = playerWhoMoved === "Black" 
+        const playerWhoMoved = entry.toMove === "B" ? "Light" : "Dark";
+        const moveNum = playerWhoMoved === "Dark"
           ? Math.ceil((idx + 1) / 2) 
           : Math.floor((idx + 2) / 2);
         return {
@@ -1775,8 +1775,8 @@ export class GameController {
 
     // Local: current player resigns, so the other player wins
     const winner = this.state.toMove === "B" ? "W" : "B";
-    const winnerName = winner === "B" ? "Black" : "White";
-    const loserName = this.state.toMove === "B" ? "Black" : "White";
+    const winnerName = winner === "B" ? "Dark" : "Light";
+    const loserName = this.state.toMove === "B" ? "Dark" : "Light";
 
     this.isGameOver = true;
     this.clearSelection();
@@ -1898,7 +1898,7 @@ export class GameController {
     if (elLoadGame) elLoadGame.disabled = isOnline;
     if (elLoadGameInput) elLoadGameInput.disabled = isOnline;
 
-    if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Black" : "White";
+    if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Dark" : "Light";
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.

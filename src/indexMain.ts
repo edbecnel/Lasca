@@ -7,6 +7,7 @@ import { createSfxManager } from "./ui/sfx";
 const LS_KEYS = {
   theme: "lasca.theme",
   glassBg: "lasca.theme.glassBg",
+  glassPalette: "lasca.theme.glassPalette",
   aiWhite: "lasca.ai.white",
   aiBlack: "lasca.ai.black",
   aiDelayMs: "lasca.ai.delayMs",
@@ -36,6 +37,13 @@ type Difficulty = "human" | "easy" | "medium" | "advanced";
 type PlayMode = "local" | "online";
 type OnlineAction = "create" | "join" | "spectate" | "rejoin";
 type GlassBg = "original" | "felt" | "walnut";
+type GlassPaletteId =
+  | "yellow_blue"
+  | "cyan_violet"
+  | "mint_magenta"
+  | "pearl_smoke"
+  | "lavender_sapphire"
+  | "aqua_amber";
 
 type OnlineResumeRecord = {
   serverUrl: string;
@@ -220,10 +228,39 @@ function readGlassBg(key: string, fallback: GlassBg): GlassBg {
   return fallback;
 }
 
+function readGlassPaletteId(key: string, fallback: GlassPaletteId): GlassPaletteId {
+  const raw = localStorage.getItem(key);
+  if (
+    raw === "yellow_blue" ||
+    raw === "cyan_violet" ||
+    raw === "mint_magenta" ||
+    raw === "pearl_smoke" ||
+    raw === "lavender_sapphire" ||
+    raw === "aqua_amber"
+  ) {
+    return raw;
+  }
+  return fallback;
+}
+
+function isGlassPaletteId(v: unknown): v is GlassPaletteId {
+  return (
+    v === "yellow_blue" ||
+    v === "cyan_violet" ||
+    v === "mint_magenta" ||
+    v === "pearl_smoke" ||
+    v === "lavender_sapphire" ||
+    v === "aqua_amber"
+  );
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   const elGame = byId<HTMLSelectElement>("launchGame");
   const elGameNote = byId<HTMLElement>("launchGameNote");
   const elTheme = byId<HTMLSelectElement>("launchTheme");
+
+  const elGlassColorsRow = (document.getElementById("launchGlassColorsRow") as HTMLElement | null) ?? null;
+  const elGlassColors = (document.getElementById("launchGlassColorsSelect") as HTMLSelectElement | null) ?? null;
 
   const elGlassBgRow = (document.getElementById("launchGlassBgRow") as HTMLElement | null) ?? null;
   const elGlassBg = (document.getElementById("launchGlassBgSelect") as HTMLSelectElement | null) ?? null;
@@ -478,16 +515,30 @@ window.addEventListener("DOMContentLoaded", () => {
     elGlassBg.value = readGlassBg(LS_KEYS.glassBg, "original");
   }
 
-  const syncGlassBg = () => {
+  if (elGlassColors) {
+    elGlassColors.value = readGlassPaletteId(LS_KEYS.glassPalette, "yellow_blue");
+  }
+
+  const syncGlassThemeOptions = () => {
     const isGlass = elTheme.value === "glass";
+    if (elGlassColorsRow) elGlassColorsRow.style.display = isGlass ? "" : "none";
+    if (elGlassColors) elGlassColors.disabled = !isGlass;
     if (elGlassBgRow) elGlassBgRow.style.display = isGlass ? "" : "none";
     if (elGlassBg) elGlassBg.disabled = !isGlass;
   };
 
-  syncGlassBg();
+  syncGlassThemeOptions();
 
   elTheme.addEventListener("change", () => {
-    syncGlassBg();
+    syncGlassThemeOptions();
+  });
+
+  elGlassColors?.addEventListener("change", () => {
+    if (elTheme.value !== "glass") return;
+    const raw = elGlassColors.value;
+    const next: GlassPaletteId = isGlassPaletteId(raw) ? raw : "yellow_blue";
+    localStorage.setItem(LS_KEYS.glassPalette, next);
+    elGlassColors.value = next;
   });
 
   elGlassBg?.addEventListener("change", () => {
@@ -746,7 +797,7 @@ window.addEventListener("DOMContentLoaded", () => {
     elOnlinePrefColor.style.display = showPrefColor ? "" : "none";
     elOnlinePrefColor.disabled = !allowNonAuto;
 
-    // Disable White/Black options when joining/rejoining.
+    // Disable Light/Dark options when joining/rejoining.
     for (const opt of Array.from(elOnlinePrefColor.options)) {
       const v = opt.value;
       if (v === "W" || v === "B") {
@@ -799,6 +850,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!v.available || !v.entryUrl) return;
 
     localStorage.setItem(LS_KEYS.theme, elTheme.value);
+
+    if (elTheme.value === "glass" && elGlassColors) {
+      const raw = elGlassColors.value;
+      const next: GlassPaletteId = isGlassPaletteId(raw) ? raw : "yellow_blue";
+      localStorage.setItem(LS_KEYS.glassPalette, next);
+      elGlassColors.value = next;
+    }
 
     if (elTheme.value === "glass" && elGlassBg) {
       const v = (elGlassBg.value === "felt" || elGlassBg.value === "walnut") ? elGlassBg.value : "original";

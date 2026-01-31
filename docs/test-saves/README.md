@@ -6,17 +6,17 @@ These JSON saves are designed to be loaded in the **Damasca** page: `damasca.htm
 
 Demonstrates that a soldier does **not** promote until the capture chain ends.
 
-- Side to move: **Black**
-- Expected: Black has a forced 3-step capture chain `B5 -> D3 -> F1 -> H3`.
+- Side to move: **Dark**
+- Expected: Dark has a forced 3-step capture chain `B5 -> D3 -> F1 -> H3`.
 - During the chain, the moving piece remains a **soldier** after landing on the last rank (`F1`); it promotes only after the chain finishes.
 
 ## dama-promotion-delayed-until-chain-ends.json
 
 Same idea as the Damasca test, but for the **Dama** page (`dama.html`).
 
-- Side to move: **Black**
+- Side to move: **Dark**
 - Expected forced chain: `B5 -> D3 -> F1 -> H3`
-- Expected: after landing on `F1` mid-chain, Black still must continue capturing; promotion should occur after the chain ends.
+- Expected: after landing on `F1` mid-chain, Dark still must continue capturing; promotion should occur after the chain ends.
 
 ## How to load
 
@@ -31,8 +31,8 @@ Purpose: verify **multi-capture continuation** and the **Officer zigzag restrict
 
 Expected:
 
-1. It is **Black to move**.
-2. Make the first capture with the Black Officer:
+1. It is **Dark to move**.
+2. Make the first capture with the Dark Officer:
    - `r2c2` over `r3c3` to `r4c4`
 3. The game should force you to continue capturing.
 4. From `r4c4`, you should **only** be offered the zigzag continuation:
@@ -41,7 +41,7 @@ Expected:
 
 Notes:
 
-- There is also a White piece at **B7** (`r1c1`), so the starting position has a second possible capture line,
+- There is also a Light piece at **B7** (`r1c1`), so the starting position has a second possible capture line,
   but it is shorter; the **max-capture** rule should force the `r2c2 → r4c4` line.
 
 ### `damasca-no-rejump-square.json`
@@ -50,10 +50,10 @@ Purpose: verify **anti-loop**: you cannot jump the **same jumped square** twice 
 
 Expected:
 
-1. It is **Black to move**.
-2. Make the capture with the Black Soldier:
+1. It is **Dark to move**.
+2. Make the capture with the Dark Soldier:
    - `r2c2` over `r3c3` to `r4c4`
-3. After landing on `r4c4`, note there is still a White piece remaining on `r3c3`.
+3. After landing on `r4c4`, note there is still a Light piece remaining on `r3c3`.
 4. A backward recapture over `r3c3` back to `r2c2` would normally be possible, but it must be **disallowed** because `r3c3` was already jumped this turn.
 
 If you want a save that also tests **max-capture choice** (two different capture lines with different totals), say so and I’ll add one.

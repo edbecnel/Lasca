@@ -18,7 +18,7 @@ describe("getWinner", () => {
     expect(result.reason).toBe(null);
   });
 
-  it("should detect White win when Black has no pieces", () => {
+  it("should detect Light win when Dark has no pieces", () => {
     const state: GameState = {
       board: new Map([
         ["r3c3", [{ owner: "W", rank: "S" }]],
@@ -29,11 +29,11 @@ describe("getWinner", () => {
 
     const result = getWinner(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no pieces");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no pieces");
   });
 
-  it("should detect Black win when White has no pieces", () => {
+  it("should detect Dark win when Light has no pieces", () => {
     const state: GameState = {
       board: new Map([
         ["r3c3", [{ owner: "B", rank: "O" }]],
@@ -44,8 +44,8 @@ describe("getWinner", () => {
 
     const result = getWinner(state);
     expect(result.winner).toBe("B");
-    expect(result.reason).toContain("Black wins");
-    expect(result.reason).toContain("White has no pieces");
+    expect(result.reason).toContain("Dark wins");
+    expect(result.reason).toContain("Light has no pieces");
   });
 
   it("should detect win when opponent pieces are all captured in stacks (tops are all owned by current player)", () => {
@@ -61,8 +61,8 @@ describe("getWinner", () => {
 
     const result = getWinner(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no pieces");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no pieces");
   });
 
   it("should detect win when opponent is blocked and has no legal moves", () => {
@@ -82,8 +82,8 @@ describe("getWinner", () => {
     const result = getWinner(state);
     // Black should have no legal moves (soldier at edge with no forward moves)
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no moves");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no moves");
   });
 
   it("should not declare winner if opponent still has controlled stacks", () => {
@@ -111,7 +111,7 @@ describe("getWinner", () => {
     // With no pieces, White (current player) wins because opponent has no pieces
     const result = getWinner(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("Black has no pieces");
+    expect(result.reason).toContain("Dark has no pieces");
   });
 });
 
@@ -127,8 +127,8 @@ describe("checkCurrentPlayerLost", () => {
 
     const result = checkCurrentPlayerLost(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no pieces");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no pieces");
   });
 
   it("should detect that current player has lost when they have no legal moves", () => {
@@ -144,8 +144,8 @@ describe("checkCurrentPlayerLost", () => {
 
     const result = checkCurrentPlayerLost(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no moves");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no moves");
   });
 
   it("should return null when current player can still play", () => {
@@ -176,7 +176,7 @@ describe("checkCurrentPlayerLost", () => {
 
     const result = checkCurrentPlayerLost(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toContain("White wins");
-    expect(result.reason).toContain("Black has no pieces");
+    expect(result.reason).toContain("Light wins");
+    expect(result.reason).toContain("Dark has no pieces");
   });
 });

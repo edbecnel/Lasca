@@ -69,6 +69,6 @@ export function renderTurnIndicator(
   layer.appendChild(use);
 
   const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = toMove === "W" ? "White to move" : "Black to move";
+  title.textContent = toMove === "W" ? "Light to move" : "Dark to move";
   layer.appendChild(title);
 }

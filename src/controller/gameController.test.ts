@@ -229,7 +229,7 @@ describe("GameController turn toast indicates capture", () => {
 
     (controller as any).maybeToastTurnChange();
     const toast = document.querySelector(".lascaToast") as HTMLElement | null;
-    expect(toast?.textContent).toBe("Black to capture");
+    expect(toast?.textContent).toBe("Dark to capture");
 
     vi.runAllTimers();
     vi.useRealTimers();
@@ -248,7 +248,7 @@ describe("GameController turn toast indicates capture", () => {
 
     (controller as any).maybeToastTurnChange();
     const toast = document.querySelector(".lascaToast") as HTMLElement | null;
-    expect(toast?.textContent).toBe("Black to move");
+    expect(toast?.textContent).toBe("Dark to move");
 
     vi.runAllTimers();
     vi.useRealTimers();

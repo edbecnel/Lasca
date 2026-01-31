@@ -1004,7 +1004,7 @@
             <div class="sectionContent">
               <div class="kv">
                 <div class="k">Turn</div>
-                <div id="statusTurn">Black</div>
+                <div id="statusTurn">Dark</div>
                 <div class="k">Rules/Board</div>
                 <div id="statusRulesBoard">—</div>
                 <div class="k">Phase</div>
@@ -1296,7 +1296,7 @@
                   font-size: 12px;
                 "
               >
-                <label for="aiWhiteSelect">White</label>
+                <label for="aiWhiteSelect">Light</label>
                 <select id="aiWhiteSelect" class="panelSelect">
                   <option value="human" selected>Human</option>
                   <option value="easy">Beginner AI</option>
@@ -1304,7 +1304,7 @@
                   <option value="advanced">Expert AI</option>
                 </select>
 
-                <label for="aiBlackSelect">Black</label>
+                <label for="aiBlackSelect">Dark</label>
                 <select id="aiBlackSelect" class="panelSelect">
                   <option value="human" selected>Human</option>
                   <option value="easy">Beginner AI</option>
@@ -1605,6 +1605,27 @@
                     hidden
                   ></div>
                 </div>
+              </div>
+              <div
+                id="glassPieceColorsRow"
+                style="
+                  display: none;
+                  margin-top: 10px;
+                  grid-template-columns: 72px 1fr;
+                  gap: 8px 10px;
+                  align-items: center;
+                  font-size: 12px;
+                "
+              >
+                <label for="glassPieceColorsSelect">Glass colors</label>
+                <select id="glassPieceColorsSelect" class="panelSelect">
+                  <option value="yellow_blue">Yellow / Blue</option>
+                  <option value="cyan_violet">Cyan / Violet</option>
+                  <option value="mint_magenta">Mint / Magenta</option>
+                  <option value="pearl_smoke">Pearl / Smoke</option>
+                  <option value="lavender_sapphire">Lavender / Sapphire</option>
+                  <option value="aqua_amber">Aqua / Amber</option>
+                </select>
               </div>
               <div
                 id="glassBgRow"

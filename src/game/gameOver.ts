@@ -29,8 +29,8 @@ export function checkCurrentPlayerLost(state: GameState): { winner: Player | nul
   }
 
   if (!currentPlayerHasStacks) {
-    const winnerName = opponent === "B" ? "Black" : "White";
-    const loserName = currentPlayer === "B" ? "Black" : "White";
+    const winnerName = opponent === "B" ? "Dark" : "Light";
+    const loserName = currentPlayer === "B" ? "Dark" : "Light";
     return {
       winner: opponent,
       reason: `${winnerName} wins — ${loserName} has no pieces`,
@@ -40,8 +40,8 @@ export function checkCurrentPlayerLost(state: GameState): { winner: Player | nul
   // Check if current player has no legal moves
   const currentPlayerMoves = generateLegalMoves(state);
   if (currentPlayerMoves.length === 0) {
-    const winnerName = opponent === "B" ? "Black" : "White";
-    const loserName = currentPlayer === "B" ? "Black" : "White";
+    const winnerName = opponent === "B" ? "Dark" : "Light";
+    const loserName = currentPlayer === "B" ? "Dark" : "Light";
     return {
       winner: opponent,
       reason: `${winnerName} wins — ${loserName} has no moves`,
@@ -79,8 +79,8 @@ export function getWinner(state: GameState): { winner: Player | null; reason: st
   }
 
   if (!opponentHasStacks) {
-    const winnerName = currentPlayer === "B" ? "Black" : "White";
-    const opponentName = opponent === "B" ? "Black" : "White";
+    const winnerName = currentPlayer === "B" ? "Dark" : "Light";
+    const opponentName = opponent === "B" ? "Dark" : "Light";
     return {
       winner: currentPlayer,
       reason: `${winnerName} wins — ${opponentName} has no pieces`,
@@ -95,8 +95,8 @@ export function getWinner(state: GameState): { winner: Player | null; reason: st
   };
   const opponentLegalMoves = generateLegalMoves(opponentState);
   if (opponentLegalMoves.length === 0) {
-    const winnerName = currentPlayer === "B" ? "Black" : "White";
-    const opponentName = opponent === "B" ? "Black" : "White";
+    const winnerName = currentPlayer === "B" ? "Dark" : "Light";
+    const opponentName = opponent === "B" ? "Dark" : "Light";
     return {
       winner: currentPlayer,
       reason: `${winnerName} wins — ${opponentName} has no moves`,
