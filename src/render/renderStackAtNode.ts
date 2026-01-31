@@ -1,6 +1,7 @@
 import { pieceToHref } from "../pieces/pieceToHref";
 import { makeUse } from "./svgUse";
 import { drawMiniStackSpine } from "./miniSpine";
+import { maybeVariantStonePieceHref } from "./stonePieceVariant";
 import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
 
@@ -34,7 +35,7 @@ export function renderStackAtNode(
   const half = pieceSize / 2;
 
   const baseHref = pieceToHref(top, { rulesetId });
-  const href = maybeVariantWoodenPieceHref(svgRoot, baseHref, nodeId);
+  const href = maybeVariantStonePieceHref(svgRoot, maybeVariantWoodenPieceHref(svgRoot, baseHref, nodeId), nodeId);
   g.appendChild(makeUse(href, cx - half, cy - half, pieceSize));
 
   drawMiniStackSpine(svgRoot, g, cx, cy, stack, {
