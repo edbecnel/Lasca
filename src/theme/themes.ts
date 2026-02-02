@@ -38,6 +38,13 @@ export const THEMES: ThemeDef[] = [
     css: new URL("../assets/themes/stone/theme.css", import.meta.url),
   },
   {
+    id: "semiprecious",
+    label: "Semi-Precious Stones",
+    piecesDefs: new URL("../assets/themes/semiprecious/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/semiprecious/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/semiprecious/theme.css", import.meta.url),
+  },
+  {
     id: "glass",
     label: "Glass",
     piecesDefs: new URL("../assets/themes/glass/pieces_defs.svg", import.meta.url),

@@ -1,3 +1,5 @@
+import { maybeVariantSemiPreciousPieceHref } from "./semipreciousPieceVariant";
+
 const STONE_THEME_ID = "stone";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -279,9 +281,17 @@ export function maybeVariantStonePieceHref(
   seedKey: string
 ): string {
   const themeId = svgRoot.getAttribute("data-theme-id");
-  if (themeId !== STONE_THEME_ID) return baseHref;
   if (!isPieceHref(baseHref)) return baseHref;
 
+  if (themeId === STONE_THEME_ID) {
+    return ensureUniqueStoneSymbol(svgRoot, baseHref, seedKey);
+  }
+
+  // Semi-precious stones are rendered with their own procedural textures.
+  if (themeId === "semiprecious") {
+    return maybeVariantSemiPreciousPieceHref(svgRoot, baseHref, seedKey);
+  }
+
   // Generate per-piece unique stone symbols/patterns to avoid repeats.
-  return ensureUniqueStoneSymbol(svgRoot, baseHref, seedKey);
+  return baseHref;
 }
