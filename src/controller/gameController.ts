@@ -82,6 +82,9 @@ export class GameController {
   private stickyToastText: string | null = null;
   private stickyToastActions: Map<string, () => void> = new Map();
 
+  private readonly cursorMarkedSelectableStacks: Set<string> = new Set();
+  private readonly cursorMarkedTargets: Set<string> = new Set();
+
   private sfx: SfxManager | null = null;
 
   private lastOpponentPresent: boolean | null = null;
@@ -1293,6 +1296,8 @@ export class GameController {
     this.svg.appendChild(this.previewLayer);
     this.svg.appendChild(this.turnIndicatorLayer);
     this.svg.appendChild(this.opponentPresenceIndicatorLayer);
+
+    this.refreshSelectableCursors();
   }
 
   private maybeShowReportIssueStickyToast(): void {
@@ -1380,6 +1385,7 @@ export class GameController {
     this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
     this.recomputeRepetitionCounts();
     this.updatePanel();
+    this.refreshSelectableCursors();
 
     // If we entered an already-ended room, show the end-game status immediately.
     // This covers both server-forced end states and normal terminal positions.
@@ -1409,6 +1415,74 @@ export class GameController {
     this.bindReplayButton();
 
     this.startOnlinePolling();
+  }
+
+  private isBlockedByDisconnectedOpponent(): boolean {
+    if (this.driver.mode !== "online") return false;
+    try {
+      const remote = this.driver as OnlineGameDriver;
+      const selfId = remote.getPlayerId();
+      const presence = remote.getPresence();
+      if (presence && selfId && selfId !== "spectator") {
+        const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
+        const opp = opponentId ? (presence as any)[opponentId] : null;
+        return Boolean(opp && opp.connected === false);
+      }
+    } catch {
+      // If presence isn't available, don't block.
+    }
+    return false;
+  }
+
+  private refreshSelectableCursors(): void {
+    // Clear any previous markings that we applied.
+    for (const nodeId of this.cursorMarkedSelectableStacks) {
+      const g = this.piecesLayer.querySelector(`g.stack[data-node="${nodeId}"]`) as SVGGElement | null;
+      if (g && g.getAttribute("data-cursor") === "selectable") {
+        g.style.cursor = "";
+        g.removeAttribute("data-cursor");
+      }
+    }
+    this.cursorMarkedSelectableStacks.clear();
+
+    for (const nodeId of this.cursorMarkedTargets) {
+      const el = document.getElementById(nodeId) as SVGElement | null;
+      if (el && el.getAttribute("data-cursor") === "target") {
+        (el as any).style.cursor = "";
+        el.removeAttribute("data-cursor");
+      }
+    }
+    this.cursorMarkedTargets.clear();
+
+    // Only show the pointer cursor when input is actually meaningful.
+    if (this.isGameOver) return;
+    if (!this.inputEnabled) return;
+    if (!this.isLocalPlayersTurn()) return;
+    if (this.isBlockedByDisconnectedOpponent()) return;
+
+    const legal = this.getLegalMovesForTurn();
+    const selectableFrom = new Set<string>(
+      legal.map((m) => (m as any).from).filter((v) => typeof v === "string") as string[]
+    );
+
+    for (const fromId of selectableFrom) {
+      const g = this.piecesLayer.querySelector(`g.stack[data-node="${fromId}"]`) as SVGGElement | null;
+      if (!g) continue;
+      g.style.cursor = "pointer";
+      g.setAttribute("data-cursor", "selectable");
+      this.cursorMarkedSelectableStacks.add(fromId);
+    }
+
+    // When a piece is selected, also show a pointer over its legal destination squares.
+    if (this.selected && this.currentTargets.length) {
+      for (const toId of this.currentTargets) {
+        const el = document.getElementById(toId) as SVGElement | null;
+        if (!el) continue;
+        (el as any).style.cursor = "pointer";
+        el.setAttribute("data-cursor", "target");
+        this.cursorMarkedTargets.add(toId);
+      }
+    }
   }
 
   /**
@@ -1500,6 +1574,8 @@ export class GameController {
     if (!enabled) {
       // Avoid leaving stale selection overlays when AI is running.
       this.clearSelectionForInputLock();
+      // Also clear any pointer cursor hints while input is locked.
+      this.refreshSelectableCursors();
       return;
     }
 
@@ -1509,6 +1585,9 @@ export class GameController {
       this.lastToastToMove = null;
       this.maybeToastTurnChange();
     }
+
+    // Input re-enabled: re-apply cursor hints immediately.
+    this.refreshSelectableCursors();
   }
 
   getCaptureChainConstraints(): {
@@ -2354,6 +2433,7 @@ export class GameController {
     }
     
     this.updatePanel();
+    this.refreshSelectableCursors();
     if (import.meta.env && import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.log("[controller] select", nodeId, { targets: this.currentTargets });
@@ -2373,6 +2453,7 @@ export class GameController {
     clearOverlays(this.overlayLayer);
     clearPreviewLayer(this.previewLayer);
     this.updatePanel();
+    this.refreshSelectableCursors();
   }
 
   private showBanner(text: string, durationMs: number = 1500): void {
