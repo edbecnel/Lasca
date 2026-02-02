@@ -132,7 +132,7 @@ export function createStackInspector(
   function hideSoon(): void {
     if (hideTimer) window.clearTimeout(hideTimer);
     hideTimer = window.setTimeout(() => {
-      zoomTitle.textContent = "Lasca Stack Inspector";
+      zoomTitle.textContent = "Stack Inspector";
       zoomHint.textContent =
         "Hover a stacked piece to see the full column order (bottom → top). If a crack appears on the mini spine, brackets mark the omitted middle here.";
       clearZoom();
