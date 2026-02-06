@@ -50,6 +50,8 @@ type OnlineResumeRecord = {
   roomId: string;
   playerId: string;
   color?: "W" | "B";
+  /** Informational: display name used when this seat was created/joined. */
+  displayName?: string;
   savedAtMs: number;
 };
 
@@ -76,6 +78,16 @@ function isPlausibleRoomId(roomId: string): boolean {
   return true;
 }
 
+function isPlausiblePlayerId(playerId: string): boolean {
+  const p = (playerId || "").trim();
+  if (!p) return false;
+  const lower = p.toLowerCase();
+  if (lower === "spectator" || lower === "undefined" || lower === "null") return false;
+  if (!/^[0-9a-f]+$/i.test(p)) return false;
+  if (p.length < 4) return false;
+  return true;
+}
+
 function tryLoadOnlineResumeRecord(args: { serverUrl: string; roomId: string }): OnlineResumeRecord | null {
   if (typeof window === "undefined") return null;
   try {
@@ -89,8 +101,7 @@ function tryLoadOnlineResumeRecord(args: { serverUrl: string; roomId: string }):
     if (!raw) return null;
     const rec = JSON.parse(raw) as OnlineResumeRecord;
     if (!rec || typeof rec !== "object") return null;
-    if (typeof rec.playerId !== "string" || !rec.playerId.trim()) return null;
-    if (rec.playerId === "spectator") return null;
+    if (typeof rec.playerId !== "string" || !isPlausiblePlayerId(rec.playerId)) return null;
     return rec;
   } catch {
     return null;
@@ -113,21 +124,29 @@ function resumeStorageKey(serverUrl: string, roomId: string): string {
   return `lasca.online.resume.${encodeURIComponent(s)}.${encodeURIComponent(r)}`;
 }
 
-function saveOnlineResumeRecord(args: { serverUrl: string; roomId: string; playerId: string; color?: "W" | "B" }): void {
+function saveOnlineResumeRecord(args: {
+  serverUrl: string;
+  roomId: string;
+  playerId: string;
+  color?: "W" | "B";
+  displayName?: string;
+}): void {
   if (typeof window === "undefined") return;
   try {
     if (!args.serverUrl || !args.roomId || !args.playerId) return;
-    // Avoid persisting spectator pseudo-identity.
-    if (args.playerId === "spectator") return;
+    // Avoid persisting spectator/bad pseudo-identities.
+    if (!isPlausiblePlayerId(args.playerId)) return;
 
     const serverUrl = normalizeServerUrlForStorage(args.serverUrl);
     const roomId = normalizeRoomIdForStorage(args.roomId);
+    const playerId = args.playerId.trim();
 
     const record: OnlineResumeRecord = {
       serverUrl,
       roomId,
-      playerId: args.playerId,
+      playerId,
       ...(args.color ? { color: args.color } : {}),
+      ...(args.displayName && args.displayName.trim() ? { displayName: args.displayName.trim() } : {}),
       savedAtMs: Date.now(),
     };
 
@@ -159,11 +178,18 @@ function updateBrowserUrlForOnline(args: {
 }): void {
   if (typeof window === "undefined") return;
   try {
+    const ident = getGuestIdentity();
+    const displayName = typeof (ident as any)?.displayName === "string" ? String((ident as any).displayName).trim() : "";
+
     const url = new URL(window.location.href);
     url.searchParams.set("mode", "online");
     url.searchParams.set("server", args.serverUrl);
     url.searchParams.set("roomId", args.roomId);
-    url.searchParams.set("playerId", args.playerId);
+    if (isPlausiblePlayerId(args.playerId)) {
+      url.searchParams.set("playerId", args.playerId);
+    } else {
+      url.searchParams.delete("playerId");
+    }
     if (args.color) url.searchParams.set("color", args.color);
     url.searchParams.delete("create");
     url.searchParams.delete("join");
@@ -171,7 +197,7 @@ function updateBrowserUrlForOnline(args: {
 
     // Also persist a resume token so the Start Page can resume without requiring
     // the user to manually copy the playerId.
-    saveOnlineResumeRecord(args);
+    saveOnlineResumeRecord({ ...args, ...(displayName ? { displayName } : {}) });
   } catch {
     // ignore
   }
@@ -408,7 +434,8 @@ export async function createDriverAsync(args: {
         { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
         anyRes.snapshot,
         (anyRes as any).presence ?? null,
-        (anyRes as any).rules ?? null
+        (anyRes as any).rules ?? null,
+        (anyRes as any).identity ?? null
       );
 
       updateBrowserUrlForOnline({
@@ -469,7 +496,8 @@ export async function createDriverAsync(args: {
           { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec0.playerId },
           anySnap.snapshot,
           (anySnap as any).presence ?? null,
-          (anySnap as any).rules ?? null
+          (anySnap as any).rules ?? null,
+          (anySnap as any).identity ?? null
         );
         updateBrowserUrlForOnline({
           serverUrl: q.serverUrl,
@@ -517,7 +545,8 @@ export async function createDriverAsync(args: {
             { serverUrl: q.serverUrl, roomId: q.roomId, playerId: rec.playerId },
             anySnap.snapshot,
             (anySnap as any).presence ?? null,
-            (anySnap as any).rules ?? null
+            (anySnap as any).rules ?? null,
+            (anySnap as any).identity ?? null
           );
           updateBrowserUrlForOnline({
             serverUrl: q.serverUrl,
@@ -542,7 +571,8 @@ export async function createDriverAsync(args: {
           { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
           anySnap.snapshot,
           (anySnap as any).presence ?? null,
-          (anySnap as any).rules ?? null
+          (anySnap as any).rules ?? null,
+          (anySnap as any).identity ?? null
         );
         updateBrowserUrlForOnline({ serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator" });
         setStartupMessage("Room is full — opened as spectator");
@@ -580,7 +610,8 @@ export async function createDriverAsync(args: {
       { serverUrl: q.serverUrl, roomId: anyRes.roomId, playerId: anyRes.playerId },
       anyRes.snapshot,
       (anyRes as any).presence ?? null,
-      (anyRes as any).rules ?? null
+      (anyRes as any).rules ?? null,
+      (anyRes as any).identity ?? null
     );
 
     updateBrowserUrlForOnline({
@@ -610,7 +641,8 @@ export async function createDriverAsync(args: {
         { serverUrl: q.serverUrl, roomId: q.roomId, playerId: "spectator", ...(q.watchToken ? { watchToken: q.watchToken } : {}) },
         anySnap.snapshot,
         (anySnap as any).presence ?? null,
-        (anySnap as any).rules ?? null
+        (anySnap as any).rules ?? null,
+        (anySnap as any).identity ?? null
       );
       return driver;
     } catch (err) {
@@ -638,7 +670,8 @@ export async function createDriverAsync(args: {
       { serverUrl: q.serverUrl, roomId: q.roomId, playerId: q.playerId },
       anySnap.snapshot,
       (anySnap as any).presence ?? null,
-      (anySnap as any).rules ?? null
+      (anySnap as any).rules ?? null,
+      (anySnap as any).identity ?? null
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import path from "node:path";
 
 export default defineConfig(({ mode }) => ({
+  // Admin page is intentionally not linked from the UI and not documented publicly.
+  // To include it in production builds, set VITE_EMIT_ADMIN=1 at build time.
+  // (Useful for self-hosted deployments where operators need online admin tools.)
+  // Example: cross-env VITE_EMIT_ADMIN=1 vite build
   // GitHub Pages deployment at https://edbecnel.github.io/Lasca/
   // Only use /Lasca/ base in production, use / for local development
   base: mode === "production" ? "/Lasca/" : "/",
@@ -19,6 +23,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         index: path.resolve(__dirname, "src/index.html"),
+        ...(process.env.VITE_EMIT_ADMIN === "1" ? { admin: path.resolve(__dirname, "src/admin.html") } : {}),
         lasca: path.resolve(__dirname, "src/lasca.html"),
         lasca8x8: path.resolve(__dirname, "src/lasca8x8.html"),
         dama: path.resolve(__dirname, "src/dama.html"),

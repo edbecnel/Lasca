@@ -262,9 +262,14 @@ describe("GameController online opponent presence toasts", () => {
   class FakeOnlineDriver {
     public mode = "online" as const;
     private presence: any = null;
+    private identity: any = null;
 
     setPresence(p: any): void {
       this.presence = p;
+    }
+
+    setIdentity(i: any): void {
+      this.identity = i;
     }
 
     getPlayerId(): string {
@@ -277,6 +282,10 @@ describe("GameController online opponent presence toasts", () => {
 
     getPresence(): any {
       return this.presence;
+    }
+
+    getIdentity(): any {
+      return this.identity;
     }
   }
 
@@ -359,6 +368,33 @@ describe("GameController online opponent presence toasts", () => {
     vi.runAllTimers();
     vi.useRealTimers();
   });
+
+  it("renders opponent displayName in the online panel", () => {
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([["r1c1", [{ owner: "W", rank: "O" }]]]),
+      toMove: "W",
+      phase: "idle",
+    };
+    history.push(s);
+
+    const driver = new FakeOnlineDriver();
+    driver.setPresence({
+      p1: { connected: true, lastSeenAt: "2026-01-25T00:00:00.000Z" },
+      p2: { connected: true, lastSeenAt: "2026-01-25T00:00:00.000Z" },
+    });
+    driver.setIdentity({
+      p1: { displayName: "Alice" },
+      p2: { displayName: "Bob" },
+    });
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history, driver as any);
+    (controller as any).updatePanel();
+
+    expect((document.getElementById("onlineOpponentStatus") as HTMLElement | null)?.textContent).toBe(
+      "Bob — Connected"
+    );
+  });
 });
 
 describe("GameController online debug copy", () => {
@@ -380,6 +416,10 @@ describe("GameController online debug copy", () => {
       return "W";
     }
     getPresence(): any {
+      return null;
+    }
+
+    getIdentity(): any {
       return null;
     }
   }

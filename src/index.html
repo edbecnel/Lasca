@@ -83,7 +83,8 @@
 
       @media (min-width: 900px) {
         .grid {
-          grid-template-columns: 1fr 1fr;
+          /* Use minmax(0, 1fr) so long unbroken text (e.g., room IDs) can't force one column wider and squeeze the other. */
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         }
       }
 
@@ -92,6 +93,8 @@
         background: rgba(0, 0, 0, 0.18);
         border-radius: var(--panel-radius);
         padding: 12px;
+        /* Let panels shrink inside the grid instead of sizing to min-content. */
+        min-width: 0;
       }
 
       .panelSection h2 {
@@ -255,6 +258,26 @@
         gap: 8px;
       }
 
+      .lobbyTools {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .lobbyTools input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      .lobbyTools label {
+        cursor: pointer;
+        user-select: none;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.85);
+        white-space: nowrap;
+      }
+
       .lobbyItem {
         display: flex;
         align-items: center;
@@ -412,9 +435,6 @@
             <label for="launchOnlineAction">Online</label>
             <select id="launchOnlineAction" class="panelSelect">
               <option value="create">Create room</option>
-              <option value="join">Join room</option>
-              <option value="spectate">Spectate room</option>
-              <option value="rejoin">Rejoin room (this browser)</option>
             </select>
 
             <label id="launchOnlineNameLabel" for="launchOnlineName"
@@ -470,9 +490,8 @@
             />
           </div>
           <div id="launchOnlineHint" class="hint" style="margin-left: 0">
-            Online Create logs a join link in the browser console (F12). Online
-            Join/Spectate needs a room ID from Player 1. Online Rejoin uses a
-            saved seat from this browser.
+            Online Create logs a join link in the browser console (F12). To
+            Join/Spectate/Rejoin, use the Lobby list.
           </div>
         </section>
 
@@ -482,8 +501,12 @@
           id="launchLobbySection"
         >
           <h2>Lobby</h2>
-          <div class="row" style="grid-template-columns: 1fr auto">
+          <div class="row" style="grid-template-columns: 1fr auto auto">
             <div id="launchLobbyStatus" class="hint" style="margin: 0">—</div>
+            <div class="lobbyTools">
+              <input type="checkbox" id="launchLobbyMineOnly" />
+              <label for="launchLobbyMineOnly">My rooms</label>
+            </div>
             <button id="launchLobbyRefresh" class="panelBtn" type="button">
               Refresh
             </button>

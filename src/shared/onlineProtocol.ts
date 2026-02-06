@@ -229,14 +229,24 @@ export type GetRoomWatchTokenResponse =
 
 // --- Lobby / matchmaking ---
 
+export type LobbyRoomStatus = "waiting" | "in_game";
+
 export type LobbyRoomSummary = {
   roomId: RoomId;
   variantId: VariantId;
   visibility: RoomVisibility;
+  /** Server-derived status for UI display. */
+  status?: LobbyRoomStatus;
+  /** ISO timestamp when the room was created (best-effort; may be omitted for older persisted rooms). */
+  createdAt?: string;
+  /** Optional room host display name (best-effort; informational only). */
+  hostDisplayName?: string;
   /** Player colors currently taken (derived from server room.players). */
   seatsTaken: PlayerColor[];
   /** Player colors currently available to join. */
   seatsOpen: PlayerColor[];
+  /** Optional public display names per seat (informational only). */
+  displayNameByColor?: Partial<Record<PlayerColor, string>>;
   /** Included for UI display; informational only. */
   timeControl?: TimeControl;
 };
@@ -266,6 +276,8 @@ export type ReplayEvent = {
 export type GetReplayResponse =
   | {
       events: ReplayEvent[];
+      /** Optional public display names per seat (informational only). */
+      displayNameByColor?: Partial<Record<PlayerColor, string>>;
     }
   | OnlineError;
 

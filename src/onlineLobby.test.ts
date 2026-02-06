@@ -62,6 +62,11 @@ describe("MP3 lobby", () => {
       expect(ids1).toContain(r1.roomId);
       expect(ids1).toContain(r2.roomId);
 
+      const item1 = rooms1.find((x: any) => x?.roomId === r1.roomId);
+      expect(item1?.status).toBe("waiting");
+      expect(typeof item1?.createdAt).toBe("string");
+      expect(Number.isFinite(Date.parse(String(item1?.createdAt)))).toBe(true);
+
       // Fill r1 by joining as player 2.
       const joinRes = await fetch(`${s.url}/api/join`, {
         method: "POST",
@@ -78,6 +83,14 @@ describe("MP3 lobby", () => {
 
       expect(ids2).not.toContain(r1.roomId);
       expect(ids2).toContain(r2.roomId);
+
+      // When includeFull=1, the full room should appear with status=in_game.
+      const lobbyFull = await fetch(`${s.url}/api/lobby?includeFull=1`).then((r) => r.json() as Promise<any>);
+      expect(lobbyFull.error).toBeUndefined();
+      const roomsFull = Array.isArray(lobbyFull.rooms) ? lobbyFull.rooms : [];
+      const fullItem1 = roomsFull.find((x: any) => x?.roomId === r1.roomId);
+      expect(fullItem1).toBeTruthy();
+      expect(fullItem1?.status).toBe("in_game");
     } finally {
       const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
       await closing;
@@ -125,6 +138,63 @@ describe("MP3 lobby", () => {
       expect(lobby2.error).toBeUndefined();
       const ids2 = (Array.isArray(lobby2.rooms) ? lobby2.rooms : []).map((x: any) => x.roomId);
       expect(ids2).not.toContain(roomId);
+    } finally {
+      const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
+      await closing;
+      await rmWithRetries(tmpRoot);
+    }
+  });
+
+  it("includes displayNameByColor when provided", async () => {
+    const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lasca-online-lobby-names-"));
+    const gamesDir = path.join(tmpRoot, "games");
+    const s = await startLascaServer({ port: 0, gamesDir });
+
+    try {
+      const initial = createInitialGameStateForVariant("lasca_7_classic" as any);
+      const history = new HistoryManager();
+      history.push(initial);
+
+      const createRes = await fetch(`${s.url}/api/create`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          variantId: "lasca_7_classic",
+          displayName: "Alice",
+          preferredColor: "W",
+          snapshot: {
+            state: serializeWireGameState(initial),
+            history: serializeWireHistory(history.exportSnapshots()),
+            stateVersion: 0,
+          },
+        }),
+      }).then((r) => r.json() as Promise<any>);
+
+      expect(createRes.error).toBeUndefined();
+      expect(createRes.roomId).toBeTruthy();
+      expect(createRes.color).toBe("W");
+      const roomId = String(createRes.roomId);
+
+      const joinRes = await fetch(`${s.url}/api/join`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roomId, displayName: "Bob", preferredColor: "B" }),
+      }).then((r) => r.json() as Promise<any>);
+
+      expect(joinRes.error).toBeUndefined();
+      expect(joinRes.color).toBe("B");
+
+      const lobby = await fetch(`${s.url}/api/lobby?includeFull=1`).then((r) => r.json() as Promise<any>);
+      expect(lobby.error).toBeUndefined();
+      const rooms = Array.isArray(lobby.rooms) ? lobby.rooms : [];
+      const item = rooms.find((x: any) => x?.roomId === roomId);
+      expect(item).toBeTruthy();
+
+      const names = (item as any)?.displayNameByColor ?? null;
+      expect(names?.W).toBe("Alice");
+      expect(names?.B).toBe("Bob");
+
+      expect((item as any)?.hostDisplayName).toBe("Alice");
     } finally {
       const closing = new Promise<void>((resolve) => s.server.close(() => resolve()));
       await closing;

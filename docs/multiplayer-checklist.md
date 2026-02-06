@@ -1,6 +1,6 @@
 # Multiplayer Online Checklist (Living)
 
-Last reviewed: 2026-01-27
+Last reviewed: 2026-02-06
 
 This document tracks the current multiplayer implementation status for Lasca / Dama / Damasca online 2‑player play.
 
@@ -28,7 +28,8 @@ This document tracks the current multiplayer implementation status for Lasca / D
   - Blocks move submissions while the opponent is disconnected (grace active) and exposes the grace deadline for UI messaging. See `server/src/app.ts` and `src/disconnectTimeout.test.ts`.
 - [x] UX: sticky reconnect + opponent-status details toasts; status icon is clickable. See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
 - [x] Online rules: creator-lock for “threefold repetition draw” (sent/persisted by server; clients remove the in-game toggle for online). See `src/shared/onlineProtocol.ts`, `server/src/persistence.ts`, and entrypoints like `src/main.ts`.
-- [x] Validated via `npm test`: 143/143 passing.
+- [x] Guest identity display names now surface in UI (in-game Online panel, lobby, and replay viewer) without changing server authority rules.
+- [x] Validated via `npm test`: 145/145 passing.
 
 ---
 
@@ -76,10 +77,16 @@ If you’re not sure what to tackle next, MP6 hardening is usually the best safe
 - [x] Admin deletion safety: lobby refresh no longer shows rooms whose persisted folder/snapshot was deleted.
   - Server drops stale in-memory rooms when the snapshot on disk is missing.
   - See `server/src/app.ts`; test coverage: `src/onlineLobby.test.ts`.
-- [~] Basic lobby list of open rooms
+- [x] Basic lobby list of open rooms
   - Server endpoint: `GET /api/lobby`.
   - Lists joinable rooms active in memory (freshest) and also joinable rooms persisted on disk but not currently loaded (restart discoverability).
   - UI: Start Page “Lobby” panel (Refresh + quick-fill Join).
+- [x] Lobby shows room age
+  - API includes best-effort `createdAt` and UI renders `Age: …`.
+- [x] Lobby shows room status (waiting / in game)
+  - API includes `status` and UI renders `Status: …`.
+- [x] Lobby shows room host name
+  - API includes `hostDisplayName` (best-effort) and UI renders `Host: …`.
 - [ ] Matchmaking queue (optional)
 - [ ] Productized spectator UX (explicit mode)
 
@@ -200,7 +207,7 @@ Regression/tests to keep green
 
 ## MP3 — Matchmaking & Lobby
 
-- [~] Public lobby list of open games (optional)
+- [x] Public lobby list of open games (optional)
   - `GET /api/lobby` lists joinable rooms active in memory and joinable rooms persisted on disk but not currently loaded.
 - [ ] Random matchmaking queue
 - [x] Private invite links / friend match
@@ -241,9 +248,9 @@ Regression/tests to keep green
 - [x] Guest identity key (`guestId`) persisted on device
   - Sent with create/join as _informational_ identity (not authorization).
   - Server can attach it to game metadata and debug reports.
-- [~] Display name (client-side) with server echo
+- [x] Display name (client-side) with server echo
   - Minimal UX: “Player (Guest)” + editable display name.
-  - Acceptance: lobby/replay can show names, but gameplay authority remains server-side.
+  - Acceptance: lobby/replay show names (when available) and gameplay authority remains server-side.
 - [ ] Upgrade path: link guest identity to account later
   - Migration: keep match history and rating under the account after linking.
 

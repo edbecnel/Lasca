@@ -80,6 +80,8 @@ type Room = {
   roomId: RoomId;
   history: HistoryManager;
   state: any;
+  createdAtIso: string;
+  creatorPlayerId: PlayerId;
   players: Map<PlayerId, PlayerColor>;
   colorsTaken: Set<PlayerColor>;
   variantId: VariantId;
@@ -171,6 +173,23 @@ function publicIdentityForRoom(room: Room): IdentityByPlayerId {
     if (ident?.displayName) out[playerId] = { displayName: ident.displayName };
   }
   return out;
+}
+
+function displayNameByColorForPlayers(args: {
+  players: Iterable<[PlayerId, PlayerColor]>;
+  identity: IdentityByPlayerId | null | undefined;
+}): Partial<Record<PlayerColor, string>> | undefined {
+  if (!args.identity) return undefined;
+
+  const out: Partial<Record<PlayerColor, string>> = {};
+  for (const [playerId, color] of args.players) {
+    const raw = args.identity[playerId]?.displayName;
+    const name = typeof raw === "string" ? raw.trim() : "";
+    if (!name) continue;
+    out[color] = name;
+  }
+
+  return Object.keys(out).length ? out : undefined;
 }
 
 function clearGrace(room: Room, playerId: PlayerId): void {
@@ -265,7 +284,11 @@ function parseExpectedVersion(raw: any): number | null {
   return Math.trunc(n);
 }
 
-async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
+async function persistSnapshot(
+  gamesDir: string,
+  room: Room,
+  opts?: { allowCreateRoomDir?: boolean }
+): Promise<void> {
   const presenceRecord: Record<PlayerId, { connected: boolean; lastSeenAt: string }> = {};
   for (const [pid, p] of room.presence.entries()) {
     presenceRecord[pid] = { connected: p.connected, lastSeenAt: p.lastSeenAt };
@@ -289,6 +312,8 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
       variantId: room.variantId,
       rulesVersion: room.rulesVersion,
       stateVersion: room.stateVersion,
+      createdAtIso: room.createdAtIso,
+      createdByPlayerId: room.creatorPlayerId,
       players: Array.from(room.players.entries()),
       colorsTaken: Array.from(room.colorsTaken.values()),
       rules: room.rules,
@@ -302,7 +327,7 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
     },
     snapshot: snapshotForRoom(room),
   };
-  await writeSnapshotAtomic(gamesDir, room.roomId, file);
+  await writeSnapshotAtomic(gamesDir, room.roomId, file, { allowCreateRoomDir: opts?.allowCreateRoomDir });
 
   if (process.env.LASCA_PERSIST_LOG === "1") {
     // eslint-disable-next-line no-console
@@ -383,9 +408,100 @@ export function createLascaApp(opts: ServerOpts = {}): {
   const wsClients = new Map<RoomId, Set<WebSocket>>();
   const streamPlayerClients = new Map<RoomId, Map<PlayerId, Set<express.Response>>>();
   const wsPlayerClients = new Map<RoomId, Map<PlayerId, Set<WebSocket>>>();
+  const tombstonedRooms = new Set<RoomId>();
   let wss: WebSocketServer | null = null;
   let wsHeartbeat: NodeJS.Timeout | null = null;
   let isShuttingDown = false;
+
+  function readAdminToken(): string {
+    return typeof process.env.LASCA_ADMIN_TOKEN === "string" ? process.env.LASCA_ADMIN_TOKEN.trim() : "";
+  }
+
+  function isAdminAuthorized(req: express.Request): boolean {
+    const token = readAdminToken();
+    if (!token) return false;
+
+    const headerRaw =
+      (typeof req.headers["x-lasca-admin-token"] === "string" ? req.headers["x-lasca-admin-token"] : "") ||
+      (typeof req.headers["x-admin-token"] === "string" ? req.headers["x-admin-token"] : "");
+    const providedHeader = typeof headerRaw === "string" ? headerRaw.trim() : "";
+
+    const q = typeof req.query.adminToken === "string" ? req.query.adminToken.trim() : "";
+    const provided = providedHeader || q;
+
+    return Boolean(provided && provided === token);
+  }
+
+  function evictRoomFromMemory(roomId: RoomId): void {
+    const room = rooms.get(roomId);
+    if (room) {
+      // Stop any pending disconnect-grace timers from firing after deletion.
+      for (const g of room.disconnectGrace.values()) {
+        try {
+          clearTimeout(g.timer);
+        } catch {
+          // ignore
+        }
+      }
+      room.disconnectGrace.clear();
+    }
+
+    rooms.delete(roomId);
+
+    // Close SSE clients.
+    const sse = streamClients.get(roomId);
+    if (sse) {
+      for (const res of sse) {
+        try {
+          res.end();
+        } catch {
+          // ignore
+        }
+      }
+      streamClients.delete(roomId);
+    }
+
+    const sseByPlayer = streamPlayerClients.get(roomId);
+    if (sseByPlayer) {
+      for (const set of sseByPlayer.values()) {
+        for (const res of set) {
+          try {
+            res.end();
+          } catch {
+            // ignore
+          }
+        }
+      }
+      streamPlayerClients.delete(roomId);
+    }
+
+    // Close WS clients.
+    const wsSet = wsClients.get(roomId);
+    if (wsSet) {
+      for (const ws of wsSet) {
+        try {
+          ws.close(1000, "Room deleted");
+        } catch {
+          // ignore
+        }
+      }
+      wsClients.delete(roomId);
+    }
+
+    const wsByPlayer = wsPlayerClients.get(roomId);
+    if (wsByPlayer) {
+      for (const set of wsByPlayer.values()) {
+        for (const ws of set) {
+          try {
+            ws.close(1000, "Room deleted");
+          } catch {
+            // ignore
+          }
+        }
+      }
+      wsPlayerClients.delete(roomId);
+    }
+  }
 
   function addStreamPlayerClient(roomId: RoomId, playerId: PlayerId, res: express.Response): void {
     const byPlayer = streamPlayerClients.get(roomId) ?? new Map<PlayerId, Set<express.Response>>();
@@ -444,6 +560,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
     const delay = Math.max(0, graceUntilMs - Date.now());
     return setTimeout(() => {
       if (isShuttingDown) return;
+      if (tombstonedRooms.has(room.roomId)) return;
 
       void queueRoomAction(room, async () => {
         if (isShuttingDown) return;
@@ -484,6 +601,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
   function queuePersist(room: Room): Promise<void> {
     if (isShuttingDown) return Promise.resolve();
+    if (tombstonedRooms.has(room.roomId)) return Promise.resolve();
     room.persistChain = room.persistChain
       .then(() => persistSnapshot(gamesDir, room))
       .catch((err) => {
@@ -727,6 +845,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
   }
 
   async function requireRoom(roomId: RoomId): Promise<Room> {
+    if (tombstonedRooms.has(roomId)) throw new Error("Room deleted");
     const existing = rooms.get(roomId);
     if (existing) return existing;
 
@@ -753,6 +872,19 @@ export function createLascaApp(opts: ServerOpts = {}): {
       ? String((loaded.meta as any).watchToken)
       : null;
 
+    const loadedCreatedAtIsoRaw = (loaded.meta as any).createdAtIso;
+    const loadedCreatedAtIso = typeof loadedCreatedAtIsoRaw === "string" && loadedCreatedAtIsoRaw.trim()
+      ? String(loadedCreatedAtIsoRaw)
+      : nowIso();
+
+    const loadedCreatorRaw = (loaded.meta as any).createdByPlayerId;
+    const fallbackCreator = Array.isArray((loaded.meta as any)?.players) && (loaded.meta as any).players.length
+      ? (loaded.meta as any).players[0]?.[0]
+      : null;
+    const loadedCreatorPlayerId = typeof loadedCreatorRaw === "string" && loadedCreatorRaw.trim()
+      ? (loadedCreatorRaw as any)
+      : (typeof fallbackCreator === "string" && fallbackCreator.trim() ? (fallbackCreator as any) : (loaded.players.keys().next().value as any));
+
     const loadedRulesRaw = (loaded.meta as any).rules;
     const loadedRules: RoomRules = {
       drawByThreefold:
@@ -763,6 +895,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
       roomId,
       state: loaded.state,
       history: loaded.history,
+      createdAtIso: loadedCreatedAtIso,
+      creatorPlayerId: loadedCreatorPlayerId,
       players: loaded.players,
       colorsTaken: loaded.colorsTaken,
       variantId: loaded.meta.variantId as any,
@@ -1035,6 +1169,42 @@ export function createLascaApp(opts: ServerOpts = {}): {
     res.json({ ok: true });
   });
 
+  // Admin endpoint: delete a room (disk + memory).
+  // No admin login UI: guarded by a shared secret in LASCA_ADMIN_TOKEN.
+  app.delete("/api/admin/room/:roomId", async (req, res) => {
+    try {
+      // If no token is configured, hide the endpoint.
+      if (!readAdminToken()) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      if (!isAdminAuthorized(req)) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+
+      const roomId = String(req.params.roomId || "").trim() as RoomId;
+      if (!/^[0-9a-f]+$/i.test(roomId) || roomId.length < 4) {
+        res.status(400).json({ error: "Invalid roomId" });
+        return;
+      }
+
+      tombstonedRooms.add(roomId);
+      evictRoomFromMemory(roomId);
+
+      try {
+        await fs.rm(path.join(gamesDir, roomId), { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+
+      res.json({ ok: true, roomId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      res.status(400).json({ error: msg });
+    }
+  });
+
   // Server-Sent Events stream for realtime room snapshots.
   // Clients should keep this open and will receive `snapshot` events.
   app.get("/api/stream/:roomId", async (req, res) => {
@@ -1166,6 +1336,8 @@ export function createLascaApp(opts: ServerOpts = {}): {
         roomId,
         state: aligned,
         history,
+        createdAtIso: nowIso(),
+        creatorPlayerId: playerId,
         players: new Map([[playerId, creatorColor]]),
         colorsTaken: new Set([creatorColor]),
         variantId,
@@ -1205,15 +1377,20 @@ export function createLascaApp(opts: ServerOpts = {}): {
       rooms.set(roomId, room);
 
       // Persist creation event and initial snapshot.
-      await appendEvent(gamesDir, roomId, makeCreatedEvent({
+      await appendEvent(
+        gamesDir,
+        roomId,
+        makeCreatedEvent({
         roomId,
         variantId,
         stateVersion: room.stateVersion,
         snapshot: snapshotForRoom(room),
         players: room.players,
         colorsTaken: room.colorsTaken,
-      }));
-      await persistSnapshot(gamesDir, room);
+        }),
+        { allowCreateRoomDir: true }
+      );
+      await persistSnapshot(gamesDir, room, { allowCreateRoomDir: true });
 
       const response: CreateRoomResponse = {
         roomId,
@@ -1248,24 +1425,91 @@ export function createLascaApp(opts: ServerOpts = {}): {
         touchClock(room);
         await maybeForceClockTimeout(room);
 
+        const guestId = sanitizeGuestId((body as any).guestId);
+        const displayName = sanitizeDisplayName((body as any).displayName);
+
+        const findPlayerIdsByGuestId = (gid: string): PlayerId[] => {
+          const out: PlayerId[] = [];
+          for (const [pid] of room.players.entries()) {
+            const ident = room.identity.get(pid);
+            if (ident?.guestId === gid) out.push(pid);
+          }
+          return out;
+        };
+
+        const rejoinCandidates = guestId ? findPlayerIdsByGuestId(guestId) : [];
+        const ensureRejoinCandidate = (): PlayerId => {
+          if (rejoinCandidates.length === 1) return rejoinCandidates[0];
+          if (rejoinCandidates.length > 1) throw new Error("Multiple seats match this guest identity; use playerId");
+          throw new Error("Room full");
+        };
+
+        const maybeRejoin = async (playerId: PlayerId): Promise<JoinRoomResponse> => {
+          const color = room.players.get(playerId);
+          if (!color) throw new Error("Room full");
+
+          if (guestId || displayName) {
+            setIdentity(room, playerId, {
+              ...(guestId ? { guestId } : {}),
+              ...(displayName ? { displayName } : {}),
+            });
+          }
+
+          setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
+          clearGrace(room, playerId);
+          updateClockPause(room);
+
+          // Keep rejoin working across server restarts.
+          await persistSnapshot(gamesDir, room);
+
+          const resp: JoinRoomResponse = {
+            roomId,
+            playerId,
+            color,
+            snapshot: snapshotForRoom(room),
+            presence: presenceForRoom(room),
+            identity: publicIdentityForRoom(room),
+            rules: room.rules,
+            timeControl: room.timeControl,
+            clock: room.clock ?? undefined,
+          };
+          broadcastRoomSnapshot(room);
+          return resp;
+        };
+
         const preferredColor = (body as any)?.preferredColor;
         let color: PlayerColor | null = null;
         if (preferredColor === "W" || preferredColor === "B") {
           // Enforce explicit seat choice.
           const taken = new Set<PlayerColor>(Array.from(room.players.values()));
-          if (taken.has(preferredColor)) throw new Error("Color taken");
+          if (taken.has(preferredColor)) {
+            if (guestId) {
+              // If this guest already owns the requested seat, treat as rejoin.
+              for (const pid of rejoinCandidates) {
+                if (room.players.get(pid) === preferredColor) {
+                  return await maybeRejoin(pid);
+                }
+              }
+            }
+            throw new Error("Color taken");
+          }
           color = preferredColor;
         } else {
           color = nextColor(room);
         }
-        if (!color) throw new Error("Room full");
+        if (!color) {
+          // Room is full. If this request carries a matching guestId for a seated
+          // player, treat this as a rejoin and return their existing playerId.
+          if (guestId) {
+            const pid = ensureRejoinCandidate();
+            return await maybeRejoin(pid);
+          }
+          throw new Error("Room full");
+        }
 
         const playerId: PlayerId = randId();
         room.players.set(playerId, color);
         room.colorsTaken.add(color);
-
-        const guestId = sanitizeGuestId((body as any).guestId);
-        const displayName = sanitizeDisplayName((body as any).displayName);
         if (guestId || displayName) {
           setIdentity(room, playerId, {
             ...(guestId ? { guestId } : {}),
@@ -1344,12 +1588,23 @@ export function createLascaApp(opts: ServerOpts = {}): {
         if (!seatsTaken.has("W")) seatsOpen.push("W");
         if (!seatsTaken.has("B")) seatsOpen.push("B");
 
+        const identity = publicIdentityForRoom(room);
+        const displayNameByColor = displayNameByColorForPlayers({ players: room.players.entries(), identity });
+        const hostNameRaw = identity?.[room.creatorPlayerId]?.displayName;
+        const hostDisplayName = typeof hostNameRaw === "string" ? hostNameRaw.trim() : "";
+
+        const status = seatsOpen.length > 0 ? "waiting" : "in_game";
+
         consider({
           roomId: room.roomId,
           variantId: room.variantId,
           visibility: room.visibility,
+          status,
+          createdAt: room.createdAtIso,
+          ...(hostDisplayName ? { hostDisplayName } : {}),
           seatsTaken: Array.from(seatsTaken.values()),
           seatsOpen,
+          ...(displayNameByColor ? { displayNameByColor } : {}),
           timeControl: room.timeControl,
           sortMs: Date.now(),
         });
@@ -1399,17 +1654,47 @@ export function createLascaApp(opts: ServerOpts = {}): {
           if (!seatsTaken.has("W")) seatsOpen.push("W");
           if (!seatsTaken.has("B")) seatsOpen.push("B");
 
-          const sortMs = await fs
+          const fileIdentityRaw = (file.meta as any)?.identity as IdentityByPlayerId | undefined;
+          const publicIdentity: IdentityByPlayerId | undefined = fileIdentityRaw
+            ? Object.fromEntries(
+                Object.entries(fileIdentityRaw)
+                  .map(([pid, ident]) => [pid, { displayName: (ident as any)?.displayName }])
+                  .filter(([, ident]) => typeof (ident as any)?.displayName === "string" && String((ident as any).displayName).trim())
+              )
+            : undefined;
+
+          const creatorIdRaw = (file.meta as any)?.createdByPlayerId;
+          const creatorId = typeof creatorIdRaw === "string" && creatorIdRaw.trim()
+            ? String(creatorIdRaw)
+            : (Array.isArray(file.meta.players) && file.meta.players.length ? String(file.meta.players[0]?.[0] ?? "") : "");
+          const hostNameRaw = creatorId ? (publicIdentity as any)?.[creatorId]?.displayName : null;
+          const hostDisplayName = typeof hostNameRaw === "string" ? String(hostNameRaw).trim() : "";
+          const displayNameByColor = displayNameByColorForPlayers({
+            players: (file.meta.players ?? []) as Array<[PlayerId, PlayerColor]>,
+            identity: publicIdentity,
+          });
+
+          const stat = await fs
             .stat(snapP)
-            .then((s) => s.mtimeMs)
-            .catch(() => 0);
+            .then((s) => s)
+            .catch(() => null);
+          const sortMs = stat?.mtimeMs ?? 0;
+
+          const metaCreatedAt = typeof (file.meta as any)?.createdAtIso === "string" ? String((file.meta as any).createdAtIso).trim() : "";
+          const fallbackCreatedMs = Math.min(stat?.birthtimeMs ?? sortMs, sortMs);
+          const createdAt = metaCreatedAt || (fallbackCreatedMs > 0 ? new Date(fallbackCreatedMs).toISOString() : undefined);
+          const status = seatsOpen.length > 0 ? "waiting" : "in_game";
 
           consider({
             roomId,
             variantId: file.meta.variantId,
             visibility,
+            status,
+            ...(createdAt ? { createdAt } : {}),
+            ...(hostDisplayName ? { hostDisplayName } : {}),
             seatsTaken: Array.from(seatsTaken.values()),
             seatsOpen,
+            ...(displayNameByColor ? { displayNameByColor } : {}),
             timeControl,
             sortMs,
           });
@@ -1554,6 +1839,13 @@ export function createLascaApp(opts: ServerOpts = {}): {
         // Ensure we don't race with any in-flight persistence.
         await room.persistChain;
 
+        // If the room folder was deleted (admin cleanup), don't recreate it.
+        try {
+          await fs.stat(path.join(gamesDir, roomId));
+        } catch {
+          throw new Error("Room folder missing");
+        }
+
         const debugDir = path.join(gamesDir, roomId, "debug");
         await fs.mkdir(debugDir, { recursive: true });
 
@@ -1652,7 +1944,13 @@ export function createLascaApp(opts: ServerOpts = {}): {
         }
       }
 
-      const response: GetReplayResponse = { events };
+      const identity = publicIdentityForRoom(room);
+      const displayNameByColor = displayNameByColorForPlayers({ players: room.players.entries(), identity });
+
+      const response: GetReplayResponse = {
+        events,
+        ...(displayNameByColor ? { displayNameByColor } : {}),
+      };
       res.json(response);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Replay failed";
@@ -1995,7 +2293,24 @@ export async function startLascaServer(args: {
   // Use an explicit HTTP server so WebSockets can attach cleanly.
   const server = createServer(app);
   attachWebSockets(server);
-  server.listen(port);
+  const listenError = await new Promise<Error | null>((resolve) => {
+    const onError = (err: any) => resolve(err instanceof Error ? err : new Error(String(err)));
+    const onListening = () => resolve(null);
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port);
+  });
+
+  if (listenError) {
+    // eslint-disable-next-line no-console
+    const anyErr = listenError as any;
+    if (anyErr && anyErr.code === "EADDRINUSE") {
+      console.error(`[lasca-server] Port ${port} is already in use. Stop the other process or set PORT to a free port.`);
+    } else {
+      console.error("[lasca-server] Server failed to start:", listenError);
+    }
+    throw listenError;
+  }
 
   // Ensure teardown disables grace/persistence side effects.
   const originalClose = server.close.bind(server);
@@ -2006,10 +2321,6 @@ export async function startLascaServer(args: {
     })();
     return server;
   };
-
-  await new Promise<void>((resolve) => {
-    server.once("listening", () => resolve());
-  });
 
   const actualPort = (server.address() as any)?.port ?? port;
   return { app, server, url: `http://localhost:${actualPort}`, gamesDir };

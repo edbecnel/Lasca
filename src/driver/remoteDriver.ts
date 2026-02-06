@@ -10,6 +10,7 @@ import type {
   GetReplayResponse,
   GetRoomSnapshotResponse,
   JoinRoomResponse,
+  IdentityByPlayerId,
   PresenceByPlayerId,
   RoomRules,
   ReplayEvent,
@@ -60,6 +61,7 @@ export class RemoteDriver implements GameDriver {
   private realtimeListeners = new Map<string, Set<(payload: any) => void>>();
   private resyncInFlight: Promise<void> | null = null;
   private lastPresence: PresenceByPlayerId | null = null;
+  private lastIdentity: IdentityByPlayerId | null = null;
   private roomRules: RoomRules | null = null;
 
   // Burst/backpressure handling for realtime snapshots.
@@ -114,19 +116,28 @@ export class RemoteDriver implements GameDriver {
     return this.lastPresence;
   }
 
+  getIdentity(): IdentityByPlayerId | null {
+    return this.lastIdentity;
+  }
+
   getRoomRules(): RoomRules | null {
     return this.roomRules;
   }
 
   async fetchReplayEvents(args?: { limit?: number }): Promise<ReplayEvent[]> {
-    const ids = this.requireIds();
-    const limit = args?.limit;
-    const qs = this.toAccessQuery(ids, { limit });
-    const res = await this.getJson<GetReplayResponse>(`/api/room/${encodeURIComponent(ids.roomId)}/replay?${qs}`);
+    const res = await this.fetchReplay(args);
     if ((res as any)?.error) throw new Error(String((res as any).error));
     const events = (res as any)?.events;
     if (!Array.isArray(events)) return [];
     return events as ReplayEvent[];
+  }
+
+  async fetchReplay(args?: { limit?: number }): Promise<GetReplayResponse> {
+    const ids = this.requireIds();
+    const limit = args?.limit;
+    const qs = this.toAccessQuery(ids, { limit });
+    const res = await this.getJson<GetReplayResponse>(`/api/room/${encodeURIComponent(ids.roomId)}/replay?${qs}`);
+    return res;
   }
 
   private requireIds(): RemoteIds {
@@ -235,6 +246,7 @@ export class RemoteDriver implements GameDriver {
     // Required event today.
     listen("snapshot", (payload) => {
       if (payload?.presence) this.lastPresence = payload.presence as PresenceByPlayerId;
+      if (payload?.identity && typeof payload.identity === "object") this.lastIdentity = payload.identity as IdentityByPlayerId;
       if (payload?.rules && typeof payload.rules === "object") this.roomRules = payload.rules as RoomRules;
       const snap = payload?.snapshot as WireSnapshot | undefined;
       if (!snap) return;
@@ -312,6 +324,7 @@ export class RemoteDriver implements GameDriver {
 
         if (eventName === "snapshot") {
           if (payload?.presence) this.lastPresence = payload.presence as PresenceByPlayerId;
+          if (payload?.identity && typeof payload.identity === "object") this.lastIdentity = payload.identity as IdentityByPlayerId;
           if (payload?.rules && typeof payload.rules === "object") this.roomRules = payload.rules as RoomRules;
           const snap = payload?.snapshot as WireSnapshot | undefined;
           if (!snap) return;
@@ -539,11 +552,13 @@ export class RemoteDriver implements GameDriver {
     ids: RemoteIds,
     snapshot: WireSnapshot,
     presence?: PresenceByPlayerId | null,
-    rules?: RoomRules | null
+    rules?: RoomRules | null,
+    identity?: IdentityByPlayerId | null
   ): Promise<void> {
     this.ids = ids;
     this.lastPresence = presence ?? null;
     this.roomRules = rules ?? this.roomRules;
+    this.lastIdentity = identity ?? this.lastIdentity;
     this.applySnapshot(snapshot);
   }
 
@@ -552,6 +567,7 @@ export class RemoteDriver implements GameDriver {
     const res = await this.getJson<GetRoomSnapshotResponse>(`/api/room/${encodeURIComponent(ids.roomId)}?${this.toAccessQuery(ids)}`);
     if ((res as any).error) throw new Error((res as any).error);
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
     if ((res as any).rules && typeof (res as any).rules === "object") this.roomRules = (res as any).rules as RoomRules;
     const applied = this.applySnapshot((res as any).snapshot);
     return applied.changed;
@@ -580,6 +596,7 @@ export class RemoteDriver implements GameDriver {
     const next = this.applySnapshot((res as any).snapshot).next;
     (next as any).didPromote = (res as any).didPromote;
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
     return next;
   }
 
@@ -636,6 +653,7 @@ export class RemoteDriver implements GameDriver {
     const next = this.applySnapshot((res as any).snapshot).next;
     (next as any).didPromote = (res as any).didPromote;
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
     return next;
   }
 
@@ -661,6 +679,7 @@ export class RemoteDriver implements GameDriver {
       throw e;
     }
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
     return this.applySnapshot((res as any).snapshot).next;
   }
 
@@ -685,6 +704,7 @@ export class RemoteDriver implements GameDriver {
       throw e;
     }
     if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
     return this.applySnapshot((res as any).snapshot).next;
   }
 

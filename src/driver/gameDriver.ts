@@ -54,6 +54,9 @@ export interface OnlineGameDriver extends GameDriver {
   /** Latest server-reported presence info (if available). */
   getPresence(): import("../shared/onlineProtocol.ts").PresenceByPlayerId | null;
 
+  /** Latest server-reported player identity info (if available). */
+  getIdentity(): import("../shared/onlineProtocol.ts").IdentityByPlayerId | null;
+
   /** Immutable per room; set by the creator at /api/create. */
   getRoomRules(): import("../shared/onlineProtocol.ts").RoomRules | null;
 
@@ -87,4 +90,7 @@ export interface OnlineGameDriver extends GameDriver {
 
   /** Online-only: fetch replay/event log for the current room. */
   fetchReplayEvents(args?: { limit?: number }): Promise<import("../shared/onlineProtocol.ts").ReplayEvent[]>;
+
+  /** Online-only: fetch replay response (events + optional metadata). */
+  fetchReplay(args?: { limit?: number }): Promise<import("../shared/onlineProtocol.ts").GetReplayResponse>;
 }

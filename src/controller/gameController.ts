@@ -97,6 +97,7 @@ export class GameController {
   private replaySnapshots: Array<{ stateVersion: number; ts: string; state: GameState; summary: string }> = [];
   private replayIndex: number = 0;
   private replaySavedState: { state: GameState; isGameOver: boolean } | null = null;
+  private replayPlayersSummary: string | null = null;
 
   private debugEl: HTMLDivElement | null = null;
 
@@ -619,6 +620,7 @@ export class GameController {
         <div class="lascaReplayTitle">Replay</div>
         <button class="lascaReplayBtn" type="button" data-action="close">Close</button>
       </div>
+      <div class="lascaReplayMeta" data-el="players">—</div>
       <div class="lascaReplayMeta" data-el="summary">Loading…</div>
       <div class="lascaReplayRow">
         <button class="lascaReplayBtn" type="button" data-action="prev">Prev</button>
@@ -651,11 +653,16 @@ export class GameController {
     const el = this.replayEl;
     if (!el) return;
 
+    const playersEl = el.querySelector('[data-el="players"]') as HTMLElement | null;
     const summaryEl = el.querySelector('[data-el="summary"]') as HTMLElement | null;
     const posEl = el.querySelector('[data-el="pos"]') as HTMLElement | null;
     const listEl = el.querySelector('[data-el="list"]') as HTMLElement | null;
     const prevBtn = el.querySelector('[data-action="prev"]') as HTMLButtonElement | null;
     const nextBtn = el.querySelector('[data-action="next"]') as HTMLButtonElement | null;
+
+    if (playersEl) {
+      playersEl.textContent = (this.replayPlayersSummary || "").trim() || "—";
+    }
 
     if (prevBtn) prevBtn.disabled = this.replayIndex <= 0;
     if (nextBtn) nextBtn.disabled = this.replayIndex >= this.replaySnapshots.length - 1;
@@ -710,7 +717,17 @@ export class GameController {
 
     let events: any[] = [];
     try {
-      events = await remote.fetchReplayEvents({ limit: 5000 });
+      const replay = await remote.fetchReplay({ limit: 5000 });
+      if ((replay as any)?.error) throw new Error(String((replay as any).error));
+      events = Array.isArray((replay as any)?.events) ? ((replay as any).events as any[]) : [];
+
+      const byColor = (replay as any)?.displayNameByColor as Partial<Record<"W" | "B", string>> | undefined;
+      const lightName = typeof byColor?.W === "string" ? byColor.W.trim() : "";
+      const darkName = typeof byColor?.B === "string" ? byColor.B.trim() : "";
+      this.replayPlayersSummary =
+        lightName || darkName
+          ? `Players: ${lightName ? `Light=${lightName}` : "Light=—"} • ${darkName ? `Dark=${darkName}` : "Dark=—"}`
+          : null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Replay fetch failed";
       this.showToast(msg, 2000);
@@ -754,6 +771,7 @@ export class GameController {
     this.replaySavedState = null;
     this.replaySnapshots = [];
     this.replayIndex = 0;
+    this.replayPlayersSummary = null;
 
     this.setInputEnabled(true);
 
@@ -830,7 +848,7 @@ export class GameController {
     // Presence can change without a stateVersion bump.
     // Refresh panel so opponent shows Connected immediately (no click required).
     remote.onSseEvent("snapshot", (payload) => {
-      if (payload?.presence) this.updatePanel();
+      if (payload?.presence || payload?.identity) this.updatePanel();
     });
 
     // Surface initial connection state.
@@ -1236,10 +1254,15 @@ export class GameController {
     const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
     const opp = opponentId ? (presence as any)[opponentId] : null;
 
-    let msg = "Opponent status: Waiting for opponent";
+    const identity = remote.getIdentity();
+    const opponentNameRaw = opponentId ? identity?.[opponentId]?.displayName : null;
+    const opponentName = typeof opponentNameRaw === "string" ? opponentNameRaw.trim() : "";
+    const who = opponentName ? `Opponent (${opponentName})` : "Opponent";
+
+    let msg = `${who} status: Waiting for opponent`;
     if (opp) {
       if (opp.connected) {
-        msg = "Opponent status: Connected";
+        msg = `${who} status: Connected`;
       } else if (opp.inGrace && typeof opp.graceUntil === "string") {
         let whenText = opp.graceUntil;
         let remText = "";
@@ -1255,9 +1278,9 @@ export class GameController {
         } catch {
           // ignore
         }
-        msg = `Opponent status: Disconnected (grace until ${whenText}${remText})`;
+        msg = `${who} status: Disconnected (grace until ${whenText}${remText})`;
       } else {
-        msg = "Opponent status: Disconnected";
+        msg = `${who} status: Disconnected`;
       }
 
       if (typeof opp.lastSeenAt === "string" && opp.lastSeenAt) {
@@ -2142,12 +2165,17 @@ export class GameController {
         const remote = this.driver as OnlineGameDriver;
         const selfId = remote.getPlayerId();
         const presence = remote.getPresence();
+        const identity = remote.getIdentity();
 
         if (!presence || !selfId || selfId === "spectator") {
           elOpponent.textContent = selfId === "spectator" ? "Spectating" : "—";
         } else {
           const opponentId = Object.keys(presence).find((pid) => pid !== selfId) ?? null;
           const opp = opponentId ? (presence as any)[opponentId] : null;
+
+          const opponentNameRaw = opponentId ? identity?.[opponentId]?.displayName : null;
+          const opponentName = typeof opponentNameRaw === "string" ? opponentNameRaw.trim() : "";
+          const namePrefix = opponentName ? `${opponentName} — ` : "";
 
           this.maybeToastOpponentPresence({ selfId, opponentId, opp });
 
@@ -2161,11 +2189,11 @@ export class GameController {
             } catch {
               // ignore
             }
-            elOpponent.textContent = `Disconnected (grace until ${when})`;
+            elOpponent.textContent = `${namePrefix}Disconnected (grace until ${when})`;
           } else if (opp.connected) {
-            elOpponent.textContent = "Connected";
+            elOpponent.textContent = `${namePrefix}Connected`;
           } else {
-            elOpponent.textContent = "Disconnected";
+            elOpponent.textContent = `${namePrefix}Disconnected`;
           }
         }
       }
@@ -2969,10 +2997,18 @@ export class GameController {
           if (opp && opp.connected === false) {
             this.clearSelection();
 
+            const identity = remote.getIdentity();
+            const opponentNameRaw = opponentId ? identity?.[opponentId]?.displayName : null;
+            const opponentName = typeof opponentNameRaw === "string" ? opponentNameRaw.trim() : "";
+            const who = opponentName ? `Opponent (${opponentName})` : "Opponent";
+
             const now = Date.now();
             if (now - this.lastOpponentDisconnectedBlockToastAt > 1500) {
               this.lastOpponentDisconnectedBlockToastAt = now;
-              this.showToast("Opponent disconnected — waiting for reconnect (click the opponent status icon for details)", 2200);
+              this.showToast(
+                `${who} disconnected — waiting for reconnect (click the opponent status icon for details)`,
+                2200
+              );
             }
             return;
           }

@@ -25,6 +25,10 @@ export type PersistedRoomMeta = {
   variantId: any;
   rulesVersion: typeof SUPPORTED_RULES_VERSION | string;
   stateVersion: number;
+  /** ISO timestamp when the room was created (best-effort; may be absent for older snapshots). */
+  createdAtIso?: string;
+  /** PlayerId of the room creator/host (best-effort; may be absent for older snapshots). */
+  createdByPlayerId?: PlayerId;
   players: Array<[PlayerId, PlayerColor]>;
   colorsTaken: PlayerColor[];
 
@@ -125,6 +129,13 @@ async function ensureRoomDir(gamesDir: string, roomId: RoomId): Promise<void> {
   await fs.mkdir(roomDir(gamesDir, roomId), { recursive: true });
 }
 
+async function roomDirExists(gamesDir: string, roomId: RoomId): Promise<boolean> {
+  return fs
+    .stat(roomDir(gamesDir, roomId))
+    .then(() => true)
+    .catch(() => false);
+}
+
 async function gamesDirExists(gamesDir: string): Promise<boolean> {
   return fs
     .stat(gamesDir)
@@ -132,20 +143,71 @@ async function gamesDirExists(gamesDir: string): Promise<boolean> {
     .catch(() => false);
 }
 
-export async function appendEvent(gamesDir: string, roomId: RoomId, ev: PersistedEvent): Promise<void> {
+export async function appendEvent(
+  gamesDir: string,
+  roomId: RoomId,
+  ev: PersistedEvent,
+  opts?: { allowCreateRoomDir?: boolean }
+): Promise<void> {
   if (!(await gamesDirExists(gamesDir))) return;
-  await ensureRoomDir(gamesDir, roomId);
+
+  if (opts?.allowCreateRoomDir) {
+    await ensureRoomDir(gamesDir, roomId);
+  } else {
+    // If the room directory is missing, treat it as an admin deletion and
+    // do not recreate it.
+    if (!(await roomDirExists(gamesDir, roomId))) return;
+  }
+
   const p = eventsPath(gamesDir, roomId);
-  await fs.appendFile(p, `${JSON.stringify(ev)}\n`, "utf8");
+  try {
+    await fs.appendFile(p, `${JSON.stringify(ev)}\n`, "utf8");
+  } catch (err: any) {
+    // If the room folder was deleted between the stat check and the write,
+    // treat it as an admin deletion and stop persisting.
+    if (err && err.code === "ENOENT") return;
+    throw err;
+  }
 }
 
-export async function writeSnapshotAtomic(gamesDir: string, roomId: RoomId, file: PersistedSnapshotFile): Promise<void> {
+export async function writeSnapshotAtomic(
+  gamesDir: string,
+  roomId: RoomId,
+  file: PersistedSnapshotFile,
+  opts?: { allowCreateRoomDir?: boolean }
+): Promise<void> {
   if (!(await gamesDirExists(gamesDir))) return;
-  await ensureRoomDir(gamesDir, roomId);
+
+  if (opts?.allowCreateRoomDir) {
+    await ensureRoomDir(gamesDir, roomId);
+  } else {
+    // If the room directory is missing, treat it as an admin deletion and
+    // do not recreate it.
+    if (!(await roomDirExists(gamesDir, roomId))) return;
+  }
+
   const p = snapshotPath(gamesDir, roomId);
   const tmp = `${p}.tmp.${process.pid}.${Date.now()}.${secureRandomHex(8)}`;
-  await fs.writeFile(tmp, JSON.stringify(file, null, 2), "utf8");
-  await fs.rename(tmp, p);
+  try {
+    await fs.writeFile(tmp, JSON.stringify(file, null, 2), "utf8");
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") return;
+    throw err;
+  }
+
+  try {
+    await fs.rename(tmp, p);
+  } catch (err: any) {
+    if (err && err.code === "ENOENT") {
+      try {
+        await fs.unlink(tmp);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function tryLoadRoom(gamesDir: string, roomId: RoomId): Promise<LoadedRoom | null> {
