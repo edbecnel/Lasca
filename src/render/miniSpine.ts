@@ -7,6 +7,8 @@ import type { Stack } from "../types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+let nextClipId = 1;
+
 interface MiniSpineOptions {
   pieceSize: number;
   maxShown: number;
@@ -84,7 +86,7 @@ export function drawMiniStackSpine(
   const defs = svgRoot.querySelector("defs") as SVGDefsElement | null;
   if (!defs) throw new Error("SVG <defs> not found. miniSpine requires <defs>.");
 
-  const clipId = `clip_${Math.random().toString(16).slice(2)}`;
+  const clipId = `clip_${nextClipId++}`;
   const clipPath = document.createElementNS(SVG_NS, "clipPath");
   clipPath.setAttribute("id", clipId);
 

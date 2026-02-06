@@ -2,13 +2,12 @@ import type { GameState } from "./state.ts";
 import type { Player, Stack } from "../types";
 import { getAllNodes } from "./board.ts";
 import { parseNodeId } from "./coords.ts";
+import { createPrng, type Prng } from "../shared/prng.ts";
+import { secureRandomSeed32 } from "../shared/secureRandom.ts";
 
-function shuffle<T>(arr: T[]): T[] {
+function shuffle<T>(arr: T[], rng: Prng): T[] {
   const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
+  rng.shuffleInPlace(a);
   return a;
 }
 
@@ -17,9 +16,13 @@ export type RandomStateOptions = {
   toMove?: Player;       // default: "B"
   boardSize?: 7 | 8;     // default: 7
   ranks?: { B?: ("S"|"O")[], W?: ("S"|"O")[] }; // optional ranks per side; default all "S"
+  seed?: number | string;
 };
 
 export function createRandomGameState(opts: RandomStateOptions = {}): GameState {
+  const seed = opts.seed ?? secureRandomSeed32() ?? 0;
+  const rng = createPrng(seed);
+
   const boardSize = opts.boardSize ?? 7;
   const allNodes = getAllNodes(boardSize);
 
@@ -44,9 +47,9 @@ export function createRandomGameState(opts: RandomStateOptions = {}): GameState 
     return r !== 0; // White can't have soldiers on row 0
   });
 
-  const shuffledBlackSoldiers = shuffle(blackSoldierNodes);
-  const shuffledWhiteSoldiers = shuffle(whiteSoldierNodes);
-  const allNodesShuffled = shuffle(allNodes);
+  const shuffledBlackSoldiers = shuffle(blackSoldierNodes, rng);
+  const shuffledWhiteSoldiers = shuffle(whiteSoldierNodes, rng);
+  const allNodesShuffled = shuffle(allNodes, rng);
 
   const board = new Map<string, Stack>();
 

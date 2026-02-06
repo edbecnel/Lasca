@@ -9,6 +9,8 @@ import { finalizeDamaCaptureChain, getDamaCaptureRemovalMode } from "../game/dam
 import { finalizeDamascaCaptureChain } from "../game/damascaCaptureChain.ts";
 import { endTurn } from "../game/endTurn.ts";
 import { parseNodeId } from "../game/coords.ts";
+import { hashGameState } from "../game/hashState.ts";
+import { createPrng } from "../shared/prng.ts";
 
 type CaptureDir = { dr: number; dc: number };
 
@@ -360,7 +362,8 @@ export function chooseGreedyMove(ctx: SearchContext, perspective: Player): Move 
     }
   }
 
-  const pick = best[Math.floor(Math.random() * best.length)];
+  const rng = createPrng(`ai.greedy:${perspective}:${hashGameState(ctx.state)}`);
+  const pick = best[rng.int(0, best.length)];
   return pick ?? moves[0];
 }
 
@@ -439,6 +442,10 @@ export function chooseMoveByDifficulty(
   difficulty: "easy" | "medium" | "advanced"
 ): { move: Move | null; info?: { depth?: number; nodes?: number; ms?: number } } {
   const perspective: Player = ctx.state.toMove;
+
+  // Deterministic RNG for AI variety without Math.random().
+  // Seed is derived from position + difficulty so replays/tests are stable.
+  const rng = createPrng(`ai:${difficulty}:${perspective}:${hashGameState(ctx.state)}:${ctx.lockedFrom ?? ""}:${ctx.lockedDir ? `${ctx.lockedDir.dr},${ctx.lockedDir.dc}` : ""}`);
   
   // Get legal moves upfront for fallback
   const legalMoves = legalMovesForContext(ctx);
@@ -463,12 +470,12 @@ export function chooseMoveByDifficulty(
     
     // Add some randomness: occasionally pick a suboptimal move,
     // but keep it among the better candidates (avoid obvious blunders).
-    if (Math.random() < 0.15 && legalMoves.length > 1) {
+    if (rng.nextFloat() < 0.15 && legalMoves.length > 1) {
       const scored = legalMoves
         .map((m) => ({ m, s: greedyScore(ctx, m, perspective) }))
         .sort((a, b) => b.s - a.s);
       const pool = scored.slice(0, Math.min(3, scored.length)).map((x) => x.m);
-      const randomMove = pool[Math.floor(Math.random() * pool.length)];
+      const randomMove = pool[rng.int(0, pool.length)];
       return { move: randomMove ?? scored[0]!.m, info: { score: res.score, depth: res.depthReached, nodes: res.nodes, ms } as any };
     }
     

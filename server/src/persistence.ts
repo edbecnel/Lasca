@@ -2,10 +2,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { secureRandomHex } from "./secureRandom.ts";
+
 import type { WireSnapshot } from "../../src/shared/wireState.ts";
 import { deserializeWireGameState, deserializeWireHistory } from "../../src/shared/wireState.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
-import type { ClockState, PlayerColor, PlayerId, RoomId, RoomRules, RoomVisibility, TimeControl } from "../../src/shared/onlineProtocol.ts";
+import type {
+  ClockState,
+  PlayerColor,
+  PlayerId,
+  RoomId,
+  RoomRules,
+  RoomVisibility,
+  TimeControl,
+  PlayerIdentity,
+} from "../../src/shared/onlineProtocol.ts";
 
 export const SUPPORTED_RULES_VERSION = "v1" as const;
 
@@ -23,6 +34,9 @@ export type PersistedRoomMeta = {
   // Optional extensions (back-compat):
   visibility?: RoomVisibility;
   watchToken?: string;
+
+  /** Informational per-player identity (guestId/displayName). */
+  identity?: Record<PlayerId, PlayerIdentity>;
 
   presence?: Record<PlayerId, { connected: boolean; lastSeenAt: string }>;
   disconnectGrace?: Record<PlayerId, { graceUntilIso: string }>; // only when in grace
@@ -129,7 +143,7 @@ export async function writeSnapshotAtomic(gamesDir: string, roomId: RoomId, file
   if (!(await gamesDirExists(gamesDir))) return;
   await ensureRoomDir(gamesDir, roomId);
   const p = snapshotPath(gamesDir, roomId);
-  const tmp = `${p}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const tmp = `${p}.tmp.${process.pid}.${Date.now()}.${secureRandomHex(8)}`;
   await fs.writeFile(tmp, JSON.stringify(file, null, 2), "utf8");
   await fs.rename(tmp, p);
 }
@@ -247,10 +261,14 @@ export async function tryLoadRoom(gamesDir: string, roomId: RoomId): Promise<Loa
     return null;
   }
 
-  const optionalFromSnapshot: Pick<PersistedRoomMeta, "visibility" | "watchToken" | "presence" | "disconnectGrace" | "timeControl" | "clock"> = snapshotFile
+  const optionalFromSnapshot: Pick<
+    PersistedRoomMeta,
+    "visibility" | "watchToken" | "identity" | "presence" | "disconnectGrace" | "timeControl" | "clock"
+  > = snapshotFile
     ? {
         visibility: snapshotFile.meta.visibility,
         watchToken: snapshotFile.meta.watchToken,
+        identity: snapshotFile.meta.identity,
         presence: snapshotFile.meta.presence,
         disconnectGrace: snapshotFile.meta.disconnectGrace,
         timeControl: snapshotFile.meta.timeControl,

@@ -2,6 +2,7 @@ import { DEFAULT_THEME_ID, getThemeById, THEMES } from "./theme/themes";
 import { DEFAULT_VARIANT_ID, VARIANTS, getVariantById, isVariantId } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
 import type { GetLobbyResponse, GetRoomMetaResponse, LobbyRoomSummary, RoomVisibility } from "./shared/onlineProtocol.ts";
+import { getGuestDisplayName, setGuestDisplayName } from "./shared/guestIdentity.ts";
 import { createSfxManager } from "./ui/sfx";
 
 const LS_KEYS = {
@@ -272,6 +273,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const elOnlineActionLabel =
     (document.querySelector('label[for="launchOnlineAction"]') as HTMLElement | null) ?? null;
   const elOnlineAction = byId<HTMLSelectElement>("launchOnlineAction");
+  const elOnlineNameLabel = byId<HTMLElement>("launchOnlineNameLabel");
+  const elOnlineName = byId<HTMLInputElement>("launchOnlineName");
   const elOnlineVisibilityLabel = byId<HTMLElement>("launchOnlineVisibilityLabel");
   const elOnlineVisibility = byId<HTMLSelectElement>("launchOnlineVisibility");
   const elOnlineHint = (document.getElementById("launchOnlineHint") as HTMLElement | null) ?? null;
@@ -570,6 +573,7 @@ window.addEventListener("DOMContentLoaded", () => {
   elOnlineVisibility.value = readVisibility(LS_KEYS.onlineVisibility, "public");
   elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
   elOnlinePrefColor.value = readPreferredColor(LS_KEYS.onlinePrefColor, "auto");
+  elOnlineName.value = getGuestDisplayName() ?? "";
 
   elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
@@ -690,6 +694,7 @@ window.addEventListener("DOMContentLoaded", () => {
       elOnlineAction.value = readOnlineAction(LS_KEYS.onlineAction, (elOnlineAction.value as any) ?? "create");
       elOnlineVisibility.value = readVisibility(LS_KEYS.onlineVisibility, (elOnlineVisibility.value as any) ?? "public");
       elOnlineRoomId.value = localStorage.getItem(LS_KEYS.onlineRoomId) ?? "";
+      elOnlineName.value = getGuestDisplayName() ?? "";
     } catch {
       // ignore
     }
@@ -714,6 +719,10 @@ window.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem(LS_KEYS.onlineAction, elOnlineAction.value);
     syncOnlineVisibility();
     syncAvailability();
+  });
+
+  elOnlineName.addEventListener("input", () => {
+    setGuestDisplayName(elOnlineName.value);
   });
 
   elOnlineVisibility.addEventListener("change", () => {
@@ -784,6 +793,10 @@ window.addEventListener("DOMContentLoaded", () => {
     elOnlineActionLabel && (elOnlineActionLabel.style.display = showOnline ? "" : "none");
     elOnlineAction.style.display = showOnline ? "" : "none";
     elOnlineAction.disabled = !showOnline;
+
+    elOnlineNameLabel.style.display = showOnline ? "" : "none";
+    elOnlineName.style.display = showOnline ? "" : "none";
+    elOnlineName.disabled = !showOnline;
 
     if (elOnlineHint) elOnlineHint.style.display = showOnline ? "" : "none";
 

@@ -1,10 +1,12 @@
 import type { Move } from "../game/moveTypes.ts";
 import { serializeGameState } from "../game/saveLoad.ts";
+import { hashGameState } from "../game/hashState.ts";
 import type { Player } from "../types.ts";
 import type { GameController } from "../controller/gameController.ts";
 import type { HistoryChangeReason } from "../controller/gameController.ts";
 import type { AISettings, AIDifficulty, AIWorkerResponse } from "./aiTypes.ts";
 import { difficultyForPlayer } from "./aiTypes.ts";
+import { createPrng } from "../shared/prng.ts";
 
 const LS_KEYS = {
   white: "lasca.ai.white",
@@ -495,6 +497,12 @@ export class AIManager {
       ? this.controller.getCaptureChainConstraints()
       : { lockedCaptureFrom: null, lockedCaptureDir: null, jumpedSquares: [] };
 
+    const rng = createPrng(
+      `ai.manager:${difficulty}:${hashGameState(state as any)}:${constraints.lockedCaptureFrom ?? ""}:${
+        constraints.lockedCaptureDir ? `${constraints.lockedCaptureDir.dr},${constraints.lockedCaptureDir.dc}` : ""
+      }`
+    );
+
     const serialized = serializeGameState(state);
 
     // Prefer worker; fall back to greedy.
@@ -509,7 +517,7 @@ export class AIManager {
 
       // If the worker gets stuck, apply a safe fallback move so the game cannot freeze.
       const timeoutMs = difficulty === "advanced" ? 4000 : 6000;
-      const fallbackMove = legal[Math.floor(Math.random() * legal.length)];
+      const fallbackMove = legal[rng.int(0, legal.length)];
       this.workerFallbackMoves.set(myRequestId, fallbackMove);
       const tid = window.setTimeout(() => {
         if (this.activeRequestId !== myRequestId) return;
@@ -541,7 +549,7 @@ export class AIManager {
     }
 
     // No worker: just pick first legal move.
-    const picked = legal[Math.floor(Math.random() * legal.length)];
+    const picked = legal[rng.int(0, legal.length)];
     await this.applyPickedMove(myRequestId, picked, undefined);
   }
 

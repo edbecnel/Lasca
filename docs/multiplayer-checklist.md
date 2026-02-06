@@ -28,7 +28,7 @@ This document tracks the current multiplayer implementation status for Lasca / D
   - Blocks move submissions while the opponent is disconnected (grace active) and exposes the grace deadline for UI messaging. See `server/src/app.ts` and `src/disconnectTimeout.test.ts`.
 - [x] UX: sticky reconnect + opponent-status details toasts; status icon is clickable. See `src/controller/gameController.ts` and `src/render/opponentPresenceIndicator.ts`.
 - [x] Online rules: creator-lock for “threefold repetition draw” (sent/persisted by server; clients remove the in-game toggle for online). See `src/shared/onlineProtocol.ts`, `server/src/persistence.ts`, and entrypoints like `src/main.ts`.
-- [x] Validated via `npm test`: 142/142 passing.
+- [x] Validated via `npm test`: 143/143 passing.
 
 ---
 
@@ -214,10 +214,60 @@ Regression/tests to keep green
 
 ## MP4 — Accounts & Identity
 
+- [x] **Per-room seat capability token (`playerId`) required for all move-like requests**
+  - Issued by server on `POST /api/create` and `POST /api/join`.
+  - Client must include it on `submitMove`, `finalizeCaptureChain`, `endTurn`, `resign`, debug report, etc.
+  - Note: this is a _capability_, not an authenticated account.
+- [x] **Private-room spectator access via `watchToken`**
+  - Server enforces access with `requireRoomView()`.
+
+### MP4A — Token strength / identity hardening (pre-accounts)
+
+- [x] Treat `playerId` and `watchToken` as secrets (do not log; do not expose in UI beyond copy-to-clipboard)
+  - Server request logging redacts token query params.
+  - Today they effectively authorize actions/viewing.
+- [x] Generate `roomId` / `playerId` / `watchToken` using a CSPRNG
+  - Implemented with `crypto.randomBytes(16).toString("hex")`.
+  - Acceptance: tokens are unguessable, and tests/typing remain unchanged.
+- [ ] Decide where seat tokens live client-side
+  - Option A: localStorage per room (simple; works for refresh).
+  - Option B: in-memory only (more private; worse UX).
+  - Acceptance: refresh/reconnect keeps control of the same seat without re-joining into the other color.
+- [ ] Optional: rotate / invalidate tokens on “leave room”
+  - Only if/when there’s a real concept of leaving (today seats are persistent for the game).
+
+### MP4B — Guest identity (persistent name without login)
+
+- [x] Guest identity key (`guestId`) persisted on device
+  - Sent with create/join as _informational_ identity (not authorization).
+  - Server can attach it to game metadata and debug reports.
+- [~] Display name (client-side) with server echo
+  - Minimal UX: “Player (Guest)” + editable display name.
+  - Acceptance: lobby/replay can show names, but gameplay authority remains server-side.
+- [ ] Upgrade path: link guest identity to account later
+  - Migration: keep match history and rating under the account after linking.
+
+### MP4C — Accounts (authn/authz)
+
 - [ ] User registration/login (email or OAuth)
-- [ ] Guest play with upgrade path
-- [ ] Profile basics: display name, avatar (optional)
-- [ ] Prevent multi-session confusion (one user controlling two seats)
+- [ ] Session management (cookie-based sessions recommended)
+  - Avoid putting long-lived secrets into query params.
+- [ ] Account-bound profile basics: display name, avatar (optional)
+- [ ] Abuse protections for auth endpoints
+  - Rate limits, lockouts, email verification (if email/password).
+
+### MP4D — Multi-session and seat ownership rules
+
+- [ ] Prevent one account from occupying both seats in the same room
+  - Acceptance: server rejects joining the opposite seat when `userId` already controls a seat.
+- [ ] Allow multiple connections for the same seat (tabs/devices) _for the same user_
+  - Presence should remain “connected” if any connection is alive.
+- [ ] Explicit UX for “You are already seated as …”
+  - Avoid confusion when joining from another tab/device.
+
+Regression/tests to keep green (once MP4 lands)
+
+- Add targeted tests for token generation (CSPRNG) and seat-ownership enforcement.
 
 ---
 

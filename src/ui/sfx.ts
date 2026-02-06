@@ -1,3 +1,5 @@
+import { createPrng } from "../shared/prng.ts";
+
 export type SfxName =
   | "uiOn"
   | "uiOff"
@@ -129,7 +131,8 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
     const len = Math.max(1, Math.floor(sr * args.dur));
     const buf = g.ctx.createBuffer(1, len, sr);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.7;
+    const rng = createPrng(`sfx.noise:${len}:${sr}:${args.dur}:${args.hp ?? ""}:${args.lp ?? ""}`);
+    for (let i = 0; i < data.length; i++) data[i] = (rng.nextFloat() * 2 - 1) * 0.7;
 
     const src = g.ctx.createBufferSource();
     src.buffer = buf;

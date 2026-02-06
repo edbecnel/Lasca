@@ -37,6 +37,8 @@ describe("server persistence (Step F)", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         variantId: "lasca_7_classic",
+        guestId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        displayName: "Alice",
         snapshot: {
           state: serializeWireGameState(initial),
           history: serializeWireHistory(history.exportSnapshots()),
@@ -52,7 +54,11 @@ describe("server persistence (Step F)", () => {
     const joinRes = await fetch(`${s1.url}/api/join`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roomId }),
+      body: JSON.stringify({
+        roomId,
+        guestId: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        displayName: "Bob",
+      }),
     }).then((r) => r.json() as Promise<any>);
     expect(joinRes.error).toBeUndefined();
 
@@ -102,6 +108,9 @@ describe("server persistence (Step F)", () => {
 
     expect(afterRestart.snapshot.stateVersion).toBe(expectedVersion);
     expect(canonicalBoard(afterRestart.snapshot.state.board)).toBe(expectedBoard);
+
+    expect(afterRestart.identity?.[playerW]?.displayName).toBe("Alice");
+    expect(afterRestart.identity?.[playerB]?.displayName).toBe("Bob");
 
     const notation = afterRestart.snapshot.history.notation as string[];
     // index 0 is the initial position. History may also include additional entries

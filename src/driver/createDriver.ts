@@ -4,6 +4,7 @@ import type { DriverMode, GameDriver } from "./gameDriver.ts";
 import { LocalDriver } from "./localDriver.ts";
 import { RemoteDriver } from "./remoteDriver.ts";
 import { serializeWireGameState, serializeWireHistory, type WireSnapshot } from "../shared/wireState.ts";
+import { getGuestIdentity } from "../shared/guestIdentity.ts";
 import type {
   CreateRoomResponse,
   JoinRoomResponse,
@@ -361,10 +362,13 @@ export async function createDriverAsync(args: {
     try {
       const variantId = args.state.meta?.variantId;
       if (!variantId) throw new Error("Cannot create online room: missing state.meta.variantId");
+      const guest = getGuestIdentity();
       const res = await postJson<
         {
           variantId: any;
           snapshot: WireSnapshot;
+          guestId?: string;
+          displayName?: string;
           preferredColor?: "W" | "B";
           visibility?: "public" | "private";
           rules?: { drawByThreefold?: boolean };
@@ -376,6 +380,8 @@ export async function createDriverAsync(args: {
         {
           variantId,
           snapshot: wireSnapshot,
+          ...(guest?.guestId ? { guestId: guest.guestId } : {}),
+          ...(guest?.displayName ? { displayName: guest.displayName } : {}),
           rules: { drawByThreefold: readThreefoldPrefForOnlineCreate() },
           ...(q.prefColor ? { preferredColor: q.prefColor } : {}),
           ...(q.visibility ? { visibility: q.visibility } : {}),
@@ -480,10 +486,16 @@ export async function createDriverAsync(args: {
 
     let anyRes: any = null;
     try {
-      const res = await postJson<{ roomId: string; preferredColor?: "W" | "B" }, JoinRoomResponse>(
+      const guest = getGuestIdentity();
+      const res = await postJson<{ roomId: string; guestId?: string; displayName?: string; preferredColor?: "W" | "B" }, JoinRoomResponse>(
         q.serverUrl,
         "/api/join",
-        { roomId: q.roomId, ...(q.prefColor ? { preferredColor: q.prefColor } : {}) }
+        {
+          roomId: q.roomId,
+          ...(guest?.guestId ? { guestId: guest.guestId } : {}),
+          ...(guest?.displayName ? { displayName: guest.displayName } : {}),
+          ...(q.prefColor ? { preferredColor: q.prefColor } : {}),
+        }
       );
       anyRes = res as any;
     } catch (err) {

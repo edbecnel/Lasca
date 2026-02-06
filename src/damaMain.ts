@@ -21,6 +21,7 @@ import type { VariantId } from "./variants/variantTypes";
 import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.ts";
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 import { createSfxManager } from "./ui/sfx";
+import { createPrng } from "./shared/prng.ts";
 
 const FALLBACK_VARIANT_ID: VariantId = "dama_8_classic_standard";
 
@@ -669,20 +670,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         return s;
       }
 
-      const s = randomMod.createRandomGameState({ totalPerSide, toMove });
+      const rng = createPrng(`debug.__random:dama:${totalPerSide}:${toMove}:${testMode ?? ""}`);
+      const s = randomMod.createRandomGameState({ totalPerSide, toMove, seed: rng.nextUint32() });
 
       // Add one random white and one random black multi-piece stack at empty nodes
       const empty = ALL_NODES.filter((n) => !s.board.has(n));
-      const pickIndex = (max: number) => Math.floor(Math.random() * max);
-      const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1));
-      const shuffle = <T,>(arr: T[]): T[] => {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-      };
+      const pickIndex = (max: number) => rng.int(0, max);
+      const randInt = (min: number, max: number) => rng.int(min, max + 1);
       const makeStack = (topOwner: Player) => {
         const total = randInt(2, 5); // 2..5 pieces in the stack
         const other = topOwner === "W" ? "B" : "W";

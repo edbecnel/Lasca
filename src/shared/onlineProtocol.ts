@@ -24,6 +24,15 @@ export type PlayerPresence = {
 
 export type PresenceByPlayerId = Record<PlayerId, PlayerPresence>;
 
+export type PlayerIdentity = {
+  /** Stable per-device guest identifier (informational only; not authorization). */
+  guestId?: string;
+  /** Display name (may be shown to the opponent / spectators depending on room visibility). */
+  displayName?: string;
+};
+
+export type IdentityByPlayerId = Record<PlayerId, PlayerIdentity>;
+
 export type TimeControl =
   | { mode: "none" }
   | { mode: "clock"; initialMs: number; incrementMs?: number };
@@ -46,6 +55,10 @@ export type OnlineError = {
 export type CreateRoomRequest = {
   variantId: VariantId;
   snapshot: WireSnapshot;
+  /** Optional informational identity for guest play (not authorization). */
+  guestId?: string;
+  /** Optional player-chosen display name. */
+  displayName?: string;
   /** Optional seat preference for the creator. If omitted, creator is White (back-compat). */
   preferredColor?: PlayerColor;
   /** Immutable per game; only settable at create. */
@@ -63,6 +76,8 @@ export type CreateRoomResponse =
       color: PlayerColor;
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      /** Informational per-player identity (may be partial). */
+      identity?: IdentityByPlayerId;
       rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;
@@ -74,6 +89,10 @@ export type CreateRoomResponse =
 
 export type JoinRoomRequest = {
   roomId: RoomId;
+  /** Optional informational identity for guest play (not authorization). */
+  guestId?: string;
+  /** Optional player-chosen display name. */
+  displayName?: string;
   /** Optional seat preference for the joiner. If omitted, server assigns the remaining color. */
   preferredColor?: PlayerColor;
 };
@@ -85,6 +104,7 @@ export type JoinRoomResponse =
       color: PlayerColor;
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;
@@ -108,6 +128,7 @@ export type SubmitMoveResponse =
       snapshot: WireSnapshot;
       didPromote?: boolean;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       timeControl?: TimeControl;
       clock?: ClockState;
     }
@@ -135,6 +156,7 @@ export type FinalizeCaptureChainResponse =
       snapshot: WireSnapshot;
       didPromote?: boolean;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       timeControl?: TimeControl;
       clock?: ClockState;
     }
@@ -151,6 +173,7 @@ export type EndTurnResponse =
   | {
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       timeControl?: TimeControl;
       clock?: ClockState;
     }
@@ -166,6 +189,7 @@ export type ResignResponse =
   | {
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       timeControl?: TimeControl;
       clock?: ClockState;
     }
@@ -175,6 +199,7 @@ export type GetRoomSnapshotResponse =
   | {
       snapshot: WireSnapshot;
       presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
       rules?: RoomRules;
       timeControl?: TimeControl;
       clock?: ClockState;

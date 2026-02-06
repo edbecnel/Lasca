@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { secureRandomHex } from "./secureRandom.ts";
 import { createServer, type Server } from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -43,6 +44,8 @@ import type {
   RoomId,
   PlayerId,
   PlayerColor,
+  PlayerIdentity,
+  IdentityByPlayerId,
   PresenceByPlayerId,
   RoomRules,
   RoomVisibility,
@@ -86,6 +89,7 @@ type Room = {
   stateVersion: number;
   rulesVersion: string;
   lastGameOverVersion: number;
+  identity: Map<PlayerId, PlayerIdentity>;
   presence: Map<PlayerId, { connected: boolean; lastSeenAt: string }>;
   disconnectGrace: Map<PlayerId, { graceUntilIso: string; graceUntilMs: number; timer: NodeJS.Timeout }>;
   timeControl: TimeControl;
@@ -101,10 +105,27 @@ type ServerOpts = {
   disconnectGraceMs?: number;
 };
 
-const randId = () => Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
+const randId = () => secureRandomHex(16);
+
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function safeUrlForLog(originalUrl: string): string {
+  // Redact seat/view capability tokens that may be sent as query params.
+  // Keep other params for debuggability (e.g. lobby includeFull).
+  try {
+    const u = new URL(originalUrl, "http://local");
+    for (const key of ["playerId", "watchToken", "guestId"]) {
+      if (u.searchParams.has(key)) u.searchParams.set(key, "<redacted>");
+    }
+    const qs = u.searchParams.toString();
+    return qs ? `${u.pathname}?${qs}` : u.pathname;
+  } catch {
+    // If parsing fails, avoid logging the raw URL to be safe.
+    return "<unparseable-url>";
+  }
 }
 
 function ensurePresence(room: Room, playerId: PlayerId): { connected: boolean; lastSeenAt: string } {
@@ -113,6 +134,43 @@ function ensurePresence(room: Room, playerId: PlayerId): { connected: boolean; l
   const created = { connected: false, lastSeenAt: nowIso() };
   room.presence.set(playerId, created);
   return created;
+}
+
+function sanitizeGuestId(raw: any): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const s = raw.trim().toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(s)) return undefined;
+  return s;
+}
+
+function sanitizeDisplayName(raw: any): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return undefined;
+  return cleaned.slice(0, 24);
+}
+
+function ensureIdentity(room: Room, playerId: PlayerId): PlayerIdentity {
+  const existing = room.identity.get(playerId);
+  if (existing) return existing;
+  const created: PlayerIdentity = {};
+  room.identity.set(playerId, created);
+  return created;
+}
+
+function setIdentity(room: Room, playerId: PlayerId, patch: Partial<PlayerIdentity>): void {
+  const cur = ensureIdentity(room, playerId);
+  if (typeof patch.guestId === "string") cur.guestId = patch.guestId;
+  if (typeof patch.displayName === "string") cur.displayName = patch.displayName;
+}
+
+function publicIdentityForRoom(room: Room): IdentityByPlayerId {
+  const out: IdentityByPlayerId = {};
+  for (const [playerId] of room.players.entries()) {
+    const ident = room.identity.get(playerId);
+    if (ident?.displayName) out[playerId] = { displayName: ident.displayName };
+  }
+  return out;
 }
 
 function clearGrace(room: Room, playerId: PlayerId): void {
@@ -217,6 +275,14 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
     graceRecord[pid] = { graceUntilIso: g.graceUntilIso };
   }
 
+  const identityRecord: Record<PlayerId, PlayerIdentity> = {};
+  for (const [pid, ident] of room.identity.entries()) {
+    identityRecord[pid] = {
+      ...(ident.guestId ? { guestId: ident.guestId } : {}),
+      ...(ident.displayName ? { displayName: ident.displayName } : {}),
+    };
+  }
+
   const file: PersistedSnapshotFile = {
     meta: {
       roomId: room.roomId,
@@ -228,6 +294,7 @@ async function persistSnapshot(gamesDir: string, room: Room): Promise<void> {
       rules: room.rules,
       visibility: room.visibility,
       watchToken: room.watchToken ?? undefined,
+      identity: identityRecord,
       presence: presenceRecord,
       disconnectGrace: graceRecord,
       timeControl: room.timeControl,
@@ -468,10 +535,12 @@ export function createLascaApp(opts: ServerOpts = {}): {
   }
 
   function broadcastRoomSnapshot(room: Room): void {
-    const payload = {
+      const identity = publicIdentityForRoom(room);
+      const payload = {
       roomId: room.roomId,
       snapshot: snapshotForRoom(room),
       presence: presenceForRoom(room),
+        identity: Object.keys(identity).length > 0 ? identity : undefined,
       rules: room.rules,
       timeControl: room.timeControl,
       clock: room.clock ?? undefined,
@@ -675,6 +744,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
     const loadedPresence = (loaded.meta as any).presence as Record<string, { connected: boolean; lastSeenAt: string }> | undefined;
     const loadedGrace = (loaded.meta as any).disconnectGrace as Record<string, { graceUntilIso: string }> | undefined;
+    const loadedIdentityRaw = (loaded.meta as any).identity as Record<string, PlayerIdentity> | undefined;
     const loadedTimeControlRaw = (loaded.meta as any).timeControl;
     const loadedTimeControl: TimeControl = isValidTimeControl(loadedTimeControlRaw) ? loadedTimeControlRaw : { mode: "none" };
     const loadedClock = ((loaded.meta as any).clock as ClockState | undefined) ?? null;
@@ -702,6 +772,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       stateVersion: loaded.meta.stateVersion,
       rulesVersion: loaded.meta.rulesVersion,
       lastGameOverVersion: -1,
+      identity: new Map(),
       presence: new Map(),
       disconnectGrace: new Map(),
       timeControl: loadedTimeControl,
@@ -712,6 +783,19 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
     // Repair any stale colorsTaken from older snapshots.
     room.colorsTaken = new Set<PlayerColor>(Array.from(room.players.values()));
+
+    // Restore identity (informational only).
+    for (const [playerId] of room.players.entries()) {
+      const raw = loadedIdentityRaw?.[playerId];
+      const guestId = sanitizeGuestId((raw as any)?.guestId);
+      const displayName = sanitizeDisplayName((raw as any)?.displayName);
+      if (guestId || displayName) {
+        setIdentity(room, playerId, {
+          ...(guestId ? { guestId } : {}),
+          ...(displayName ? { displayName } : {}),
+        });
+      }
+    }
 
     // Restore presence (but server restart means no active connections).
     for (const [playerId] of room.players.entries()) {
@@ -943,7 +1027,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
   app.use((req, _res, next) => {
     // eslint-disable-next-line no-console
-    console.log(`[lasca-server] ${req.method} ${req.path}`);
+    console.log(`[lasca-server] ${req.method} ${safeUrlForLog(req.originalUrl || req.url || req.path)}`);
     next();
   });
 
@@ -1091,6 +1175,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         stateVersion: 0,
         rulesVersion: SUPPORTED_RULES_VERSION,
         lastGameOverVersion: -1,
+        identity: new Map(),
         presence: new Map(),
         disconnectGrace: new Map(),
         timeControl,
@@ -1106,6 +1191,16 @@ export function createLascaApp(opts: ServerOpts = {}): {
         actionChain: Promise.resolve(),
         persistChain: Promise.resolve(),
       };
+
+      const guestId = sanitizeGuestId((body as any).guestId);
+      const displayName = sanitizeDisplayName((body as any).displayName);
+      if (guestId || displayName) {
+        setIdentity(room, playerId, {
+          ...(guestId ? { guestId } : {}),
+          ...(displayName ? { displayName } : {}),
+        });
+      }
+
       setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
       rooms.set(roomId, room);
 
@@ -1126,6 +1221,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         color: creatorColor,
         snapshot: snapshotForRoom(room),
         presence: presenceForRoom(room),
+        identity: publicIdentityForRoom(room),
         rules: room.rules,
         timeControl: room.timeControl,
         clock: room.clock ?? undefined,
@@ -1167,6 +1263,16 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const playerId: PlayerId = randId();
         room.players.set(playerId, color);
         room.colorsTaken.add(color);
+
+        const guestId = sanitizeGuestId((body as any).guestId);
+        const displayName = sanitizeDisplayName((body as any).displayName);
+        if (guestId || displayName) {
+          setIdentity(room, playerId, {
+            ...(guestId ? { guestId } : {}),
+            ...(displayName ? { displayName } : {}),
+          });
+        }
+
         setPresence(room, playerId, { connected: true, lastSeenAt: nowIso() });
         clearGrace(room, playerId);
         updateClockPause(room);
@@ -1181,6 +1287,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
           color,
           snapshot: snapshotForRoom(room),
           presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
           rules: room.rules,
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
@@ -1418,6 +1525,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
       const response: GetRoomSnapshotResponse = {
         snapshot: snapshotForRoom(room),
         presence: presenceForRoom(room),
+        identity: publicIdentityForRoom(room),
         rules: room.rules,
         timeControl: room.timeControl,
         clock: room.clock ?? undefined,
@@ -1474,6 +1582,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
             receivedAtIso: nowIso(),
             roomId,
             playerId: (body as any).playerId ?? null,
+            identityByPlayerId: Object.fromEntries(room.identity.entries()),
             ip: (req as any).ip ?? null,
             debug,
           };
@@ -1608,6 +1717,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
           snapshot: snapshotForRoom(room),
           didPromote: Boolean(next.didPromote) || undefined,
           presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
         };
@@ -1672,6 +1782,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
           snapshot: snapshotForRoom(room),
           didPromote: Boolean(next.didPromote) || undefined,
           presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
         };
@@ -1745,6 +1856,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const resp: EndTurnResponse = {
           snapshot: snapshotForRoom(room),
           presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
         };
@@ -1810,6 +1922,7 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const resp: ResignResponse = {
           snapshot: snapshotForRoom(room),
           presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
           timeControl: room.timeControl,
           clock: room.clock ?? undefined,
         };
