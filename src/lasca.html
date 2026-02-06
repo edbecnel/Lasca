@@ -456,7 +456,7 @@
 
       /* Board height adjustment for Android tablets */
       #centerArea.reduced-height svg#lascaBoard {
-        transform: scale(0.88) translateY(-52px);
+        transform: scale(0.88);
         transform-origin: center center;
       }
 
@@ -843,9 +843,9 @@
           max-height: calc(100dvh - 150px);
         }
 
-        /* Safari: avoid clipping the top border in reduced-height mode. */
+        /* Safari: avoid clipping in reduced-height mode. */
         #centerArea.reduced-height svg#lascaBoard {
-          transform: scale(0.88) translateY(-44px);
+          transform: scale(0.88);
         }
 
         .panelSection {
