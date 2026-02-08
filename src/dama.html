@@ -210,31 +210,65 @@
         gap: 10px;
       }
 
-      /* Let Move History consume the remaining vertical space on the right panel. */
-      #rightSidebar .sidebarBody {
-        overflow: hidden;
-        min-height: 0;
-      }
+      /* Desktop/fine-pointer layout: let Move History consume remaining vertical space.
+         On touch devices, the right panel should scroll normally (see coarse-pointer rules below).
+      */
+      @media (any-pointer: fine) {
+        #rightSidebar .sidebarBody {
+          overflow: hidden;
+          min-height: 0;
+        }
 
-      #rightSidebar .panelSection[data-section="moveHistory"] {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-      }
+        /* Ensure the (resizable) Stack Inspector can't get clipped in tight layouts. */
+        #rightSidebar #inspectorPanel {
+          flex: 0 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
 
-      #rightSidebar .panelSection[data-section="moveHistory"] .sectionContent {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        max-height: none;
-        overflow: hidden;
-      }
+        #rightSidebar #inspectorPanel .sectionContent {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
 
-      #rightSidebar #moveHistory {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
+        #rightSidebar #zoomHint {
+          flex: 0 0 auto;
+        }
+
+        #rightSidebar #zoomBody {
+          flex: 1 1 auto;
+          min-height: 0;
+          max-height: 100%;
+          overflow: auto;
+          resize: vertical;
+        }
+
+        #rightSidebar .panelSection[data-section="moveHistory"] {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        #rightSidebar
+          .panelSection[data-section="moveHistory"]
+          .sectionContent {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          max-height: none;
+          overflow: hidden;
+        }
+
+        #rightSidebar #moveHistory {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+        }
       }
 
       /* Mobile portrait: allow the whole Info panel to scroll, and cap Move History height.
@@ -259,6 +293,41 @@
         #rightSidebar #moveHistory {
           flex: 0 0 auto;
           max-height: 35vh;
+        }
+      }
+
+      /* Coarse-pointer (touch) devices: right panel should scroll as a whole.
+         This avoids flex-shrink edge cases where expanded sections can visually overlap
+         when the panel is height-constrained (e.g., Android tablets in landscape). */
+      @media (any-pointer: coarse) {
+        #rightSidebar .sidebarBody {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          padding: 8px;
+        }
+
+        #rightSidebar .panelSection {
+          padding: 8px;
+        }
+
+        #rightSidebar .panelSection[data-section="moveHistory"] {
+          flex: 0 0 auto;
+        }
+
+        #rightSidebar
+          .panelSection[data-section="moveHistory"]
+          .sectionContent {
+          flex: 0 0 auto;
+        }
+
+        #rightSidebar #moveHistory {
+          flex: 0 0 auto;
+          max-height: 35vh;
+        }
+
+        #rightSidebar #zoomBody {
+          resize: none;
         }
       }
 

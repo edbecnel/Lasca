@@ -162,9 +162,13 @@ export function createThemeDropdown(opts: DropdownOptions) {
     if (!open) return;
     const t = e.target as Node | null;
     if (!t) return;
-    if (!rootEl.contains(t)) {
-      setExpanded(false);
-    }
+
+    // Close when clicking anywhere outside the button/menu.
+    // This includes other controls inside the same panel, which prevents
+    // stacked/overlapping popups on tight tablet layouts.
+    if (btn.contains(t)) return;
+    if (menu.contains(t)) return;
+    setExpanded(false);
   }
 
   function onBtnClick() {
