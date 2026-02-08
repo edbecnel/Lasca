@@ -67,12 +67,15 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSiz
   const minX = findAnyColX(svg, boardSize, 0) ?? 140;
   const maxY = findAnyRowY(svg, boardSize, boardSize - 1) ?? 860;
 
-  // Place column labels below the bottom-row node circles.
-  // Clamp so we don't render past the 1000×1000 viewBox.
-  const colLabelY = Math.min(990, maxY + step * 0.75);
-  const rowLabelX = minX - step * 0.65; // left of column A, in the board's margin
-
   const fontSize = step * 0.42;
+
+  // Place column labels below the bottom-row node circles.
+  // Keep text fully inside the 1000×1000 viewBox; on some mobile browsers,
+  // positioning the baseline too close to the bottom edge causes visible clipping.
+  const viewBoxMax = 1000;
+  const safeBottomY = viewBoxMax - fontSize * 0.65;
+  const colLabelY = Math.min(safeBottomY, maxY + step * 0.75);
+  const rowLabelX = minX - step * 0.65; // left of column A, in the board's margin
 
   clearLayer(layer);
 

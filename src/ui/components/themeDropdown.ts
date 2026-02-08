@@ -22,14 +22,104 @@ export function createThemeDropdown(opts: DropdownOptions) {
   let open = false;
   let selectedId = initialId ?? items[0].id;
 
+  function viewportSize(): { width: number; height: number; offsetTop: number; offsetLeft: number } {
+    // Prefer VisualViewport on mobile (accounts for browser UI / onscreen keyboard).
+    const vv = window.visualViewport;
+    if (vv) {
+      return {
+        width: vv.width,
+        height: vv.height,
+        offsetTop: vv.offsetTop,
+        offsetLeft: vv.offsetLeft,
+      };
+    }
+    return { width: window.innerWidth, height: window.innerHeight, offsetTop: 0, offsetLeft: 0 };
+  }
+
+  function positionMenuFixed() {
+    if (menu.hidden) return;
+
+    const rect = btn.getBoundingClientRect();
+    const { width: vpW, height: vpH, offsetTop, offsetLeft } = viewportSize();
+    const gap = 6;
+    const minMenuHeight = 140;
+
+    const spaceBelow = vpH - (rect.bottom - offsetTop) - gap;
+    const spaceAbove = (rect.top - offsetTop) - gap;
+    const openUp = spaceBelow < minMenuHeight && spaceAbove > spaceBelow;
+
+    // Use fixed positioning so the menu isn't clipped by sidebar/section overflow.
+    // Clamp horizontally to viewport.
+    const desiredLeft = rect.left + offsetLeft;
+    const maxLeft = Math.max(0, vpW - rect.width);
+    const left = Math.max(0, Math.min(desiredLeft, maxLeft));
+
+    menu.style.position = "fixed";
+    menu.style.left = `${left}px`;
+    menu.style.right = "auto";
+    menu.style.width = `${rect.width}px`;
+    menu.style.zIndex = "10000";
+    menu.style.overflowY = "auto";
+    (menu.style as any).webkitOverflowScrolling = "touch";
+
+    if (openUp) {
+      const bottom = vpH - (rect.top - offsetTop) + offsetTop + gap;
+      menu.style.top = "auto";
+      menu.style.bottom = `${bottom}px`;
+      menu.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
+    } else {
+      const top = rect.bottom + offsetTop + gap;
+      menu.style.bottom = "auto";
+      menu.style.top = `${top}px`;
+      menu.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
+    }
+  }
+
+  function clearMenuPositioning() {
+    menu.style.position = "";
+    menu.style.left = "";
+    menu.style.right = "";
+    menu.style.top = "";
+    menu.style.bottom = "";
+    menu.style.width = "";
+    menu.style.maxHeight = "";
+    menu.style.overflowY = "";
+    (menu.style as any).webkitOverflowScrolling = "";
+    menu.style.zIndex = "";
+  }
+
+  function attachRepositionHandlers() {
+    const onMove = () => positionMenuFixed();
+    // Capture scroll events from any ancestor scroller.
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    window.visualViewport?.addEventListener("resize", onMove);
+    window.visualViewport?.addEventListener("scroll", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+      window.visualViewport?.removeEventListener("resize", onMove);
+      window.visualViewport?.removeEventListener("scroll", onMove);
+    };
+  }
+
+  let detachReposition: (() => void) | null = null;
+
   function setExpanded(v: boolean) {
     open = v;
     btn.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
       menu.hidden = false;
+      // Position after it becomes visible (so height/scrollbars compute correctly).
+      requestAnimationFrame(() => positionMenuFixed());
+      detachReposition?.();
+      detachReposition = attachRepositionHandlers();
       menu.focus({ preventScroll: true });
     } else {
       menu.hidden = true;
+      detachReposition?.();
+      detachReposition = null;
+      clearMenuPositioning();
     }
   }
 
@@ -111,6 +201,7 @@ export function createThemeDropdown(opts: DropdownOptions) {
       btn.removeEventListener("click", onBtnClick);
       document.removeEventListener("pointerdown", onDocPointerDown);
       menu.removeEventListener("keydown", onKeyDown);
+      detachReposition?.();
     },
   };
 }
