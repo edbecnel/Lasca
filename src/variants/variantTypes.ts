@@ -1,10 +1,11 @@
-export type RulesetId = "lasca" | "dama" | "damasca" | "damasca_classic";
+export type RulesetId = "lasca" | "dama" | "damasca" | "damasca_classic" | "columns_chess";
 
 export type DamaCaptureRemoval = "immediate" | "end_of_sequence";
 
 export type VariantId =
   | "lasca_7_classic"
   | "lasca_8_dama_board"
+  | "columns_chess"
   | "dama_8_classic"
   | "dama_8_classic_standard"
   | "dama_8_classic_international"
@@ -25,7 +26,7 @@ export interface VariantSpec {
   subtitle: string;
   rulesetId: RulesetId;
   boardSize: 7 | 8;
-  piecesPerSide: 11 | 12;
+  piecesPerSide: 11 | 12 | 16;
   svgAsset?: string;
   entryUrl?: string;
   defaultSaveName: string;

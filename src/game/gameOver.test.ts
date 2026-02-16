@@ -116,6 +116,30 @@ describe("getWinner", () => {
 });
 
 describe("checkCurrentPlayerLost", () => {
+  it("should use the requested Columns Chess checkmate reason text", () => {
+    // Black to move, in check, with no legal moves.
+    const state: GameState = {
+      board: new Map([
+        ["r0c0", [{ owner: "B", rank: "K" }]], // a8 black king
+        ["r1c1", [{ owner: "W", rank: "Q" }]], // b7 white queen delivering check
+        ["r2c2", [{ owner: "W", rank: "K" }]], // c6 white king defending the queen
+      ]),
+      toMove: "B",
+      phase: "select",
+      meta: { variantId: "columns_chess", rulesetId: "columns_chess", boardSize: 8 },
+      chess: {
+        castling: {
+          W: { kingSide: false, queenSide: false },
+          B: { kingSide: false, queenSide: false },
+        },
+      },
+    };
+
+    const result = checkCurrentPlayerLost(state);
+    expect(result.winner).toBe("W");
+    expect(result.reason).toBe("Checkmate! Light Wins");
+  });
+
   it("should detect that current player has lost when they have no pieces", () => {
     const state: GameState = {
       board: new Map([

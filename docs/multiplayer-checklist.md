@@ -236,9 +236,9 @@ Regression/tests to keep green
 - [x] Generate `roomId` / `playerId` / `watchToken` using a CSPRNG
   - Implemented with `crypto.randomBytes(16).toString("hex")`.
   - Acceptance: tokens are unguessable, and tests/typing remain unchanged.
-- [ ] Decide where seat tokens live client-side
-  - Option A: localStorage per room (simple; works for refresh).
-  - Option B: in-memory only (more private; worse UX).
+- [x] Decide where seat tokens live client-side
+  - Implemented: localStorage per room (simple; works for refresh/rejoin).
+  - Start Page persists `serverUrl`/`roomId`/`playerId` resume records under `lasca.online.resume.*` (see `src/indexMain.ts`).
   - Acceptance: refresh/reconnect keeps control of the same seat without re-joining into the other color.
 - [ ] Optional: rotate / invalidate tokens on “leave room”
   - Only if/when there’s a real concept of leaving (today seats are persistent for the game).
@@ -256,12 +256,17 @@ Regression/tests to keep green
 
 ### MP4C — Accounts (authn/authz)
 
-- [ ] User registration/login (email or OAuth)
-- [ ] Session management (cookie-based sessions recommended)
+- [~] User registration/login (email/password)
+  - Server endpoints: `POST /api/auth/register`, `POST /api/auth/login`.
+  - Implementation: `server/src/app.ts` + `server/src/auth/*`.
+- [~] Session management (cookie-based sessions)
+  - HttpOnly cookie `lasca.sid`; `GET /api/auth/me` and `POST /api/auth/logout`.
+  - Note: session store is currently in-memory (restart logs you out).
   - Avoid putting long-lived secrets into query params.
-- [ ] Account-bound profile basics: display name, avatar (optional)
-- [ ] Abuse protections for auth endpoints
-  - Rate limits, lockouts, email verification (if email/password).
+- [~] Account-bound profile basics: display name, avatar (optional)
+  - `PATCH /api/auth/me` supports `displayName` (+ optional `avatarUrl`).
+- [~] Abuse protections for auth endpoints
+  - Basic per-IP rate limiting for `/api/auth/*`.
 
 ### MP4D — Multi-session and seat ownership rules
 

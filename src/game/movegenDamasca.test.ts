@@ -3,12 +3,59 @@ import { generateLegalMoves } from "./movegen.ts";
 import type { GameState } from "./state.ts";
 import type { Stack } from "../types";
 
+function remap8x8Id(id: string): string {
+  const m = /^r(\d+)c(\d+)$/.exec(id);
+  if (!m) return id;
+  const r = Number(m[1]);
+  const c = Number(m[2]);
+  const c2 = 7 - c;
+  return `r${r}c${c2}`;
+}
+
+function toEngineBoardEntries(entries: Array<[string, Stack]>): Array<[string, Stack]> {
+  return entries.map(([id, stack]) => [remap8x8Id(id), stack]);
+}
+
+function toTestMove(m: any): any {
+  if (!m || typeof m !== "object") return m;
+  const out: any = { ...m };
+  if (typeof out.from === "string") out.from = remap8x8Id(out.from);
+  if (typeof out.to === "string") out.to = remap8x8Id(out.to);
+  if (typeof out.over === "string") out.over = remap8x8Id(out.over);
+  return out;
+}
+
+function toTestMoves(ms: any[]): any[] {
+  return ms.map(toTestMove);
+}
+
+function toEngineConstraints(constraints: any | undefined): any | undefined {
+  if (!constraints) return constraints;
+  const out: any = { ...constraints };
+  if (typeof out.forcedFrom === "string") out.forcedFrom = remap8x8Id(out.forcedFrom);
+  if (out.excludedJumpSquares instanceof Set) {
+    out.excludedJumpSquares = new Set(Array.from(out.excludedJumpSquares).map((id) => remap8x8Id(String(id))));
+  }
+  if (out.lastCaptureDir && typeof out.lastCaptureDir === "object") {
+    const dr = Number((out.lastCaptureDir as any).dr);
+    const dc = Number((out.lastCaptureDir as any).dc);
+    if (Number.isFinite(dr) && Number.isFinite(dc)) {
+      out.lastCaptureDir = { dr, dc: -dc };
+    }
+  }
+  return out;
+}
+
+function genMovesForTest(s: GameState, constraints?: any): any[] {
+  return toTestMoves(generateLegalMoves(s, toEngineConstraints(constraints)) as any);
+}
+
 function mkDamascaState(
   boardEntries: Array<[string, Stack]>,
   toMove: "B" | "W" = "B"
 ): GameState {
   return {
-    board: new Map(boardEntries),
+    board: new Map(toEngineBoardEntries(boardEntries)),
     toMove,
     phase: "idle",
     meta: {
@@ -31,7 +78,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves.length).toBeGreaterThan(0);
     expect(moves.every((m) => m.kind === "capture")).toBe(true);
   });
@@ -45,7 +92,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves).toEqual(
       expect.arrayContaining([
         { kind: "capture", from: "r3c3", over: "r2c2", to: "r1c1" },
@@ -55,7 +102,7 @@ describe("movegen Damasca", () => {
 
   it("officers have flying quiet moves", () => {
     const s = mkDamascaState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
 
     expect(moves.every((m) => m.kind === "move")).toBe(true);
     expect(moves).toEqual(
@@ -80,7 +127,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves.every((m) => m.kind === "capture")).toBe(true);
     expect(moves).toEqual(
       expect.arrayContaining([
@@ -103,7 +150,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s, {
+    const moves = genMovesForTest(s, {
       forcedFrom: "r3c3",
       excludedJumpSquares: new Set(),
       lastCaptureDir: { dr: 1, dc: 1 },
@@ -125,7 +172,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves).toEqual([{ kind: "capture", from: "r2c2", over: "r3c3", to: "r4c4" }]);
   });
 
@@ -139,7 +186,7 @@ describe("movegen Damasca", () => {
       "B"
     );
 
-    const cont = generateLegalMoves(afterFirst, {
+    const cont = genMovesForTest(afterFirst, {
       forcedFrom: "r4c4",
       excludedJumpSquares: new Set(["r3c3"]),
     }).filter((m) => m.kind === "capture");

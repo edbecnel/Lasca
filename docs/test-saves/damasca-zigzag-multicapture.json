@@ -5,11 +5,11 @@
   "boardSize": 8,
   "current": {
     "board": [
-      ["r2c2", [{ "owner": "B", "rank": "O" }]],
-      ["r3c3", [{ "owner": "W", "rank": "S" }]],
-      ["r5c3", [{ "owner": "W", "rank": "S" }]],
-      ["r5c5", [{ "owner": "W", "rank": "S" }]],
-      ["r1c1", [{ "owner": "W", "rank": "S" }]]
+      ["r2c3", [{ "owner": "B", "rank": "O" }]],
+      ["r3c2", [{ "owner": "W", "rank": "S" }]],
+      ["r5c2", [{ "owner": "W", "rank": "S" }]],
+      ["r5c4", [{ "owner": "W", "rank": "S" }]],
+      ["r1c0", [{ "owner": "W", "rank": "S" }]]
     ],
     "toMove": "B",
     "phase": "idle",

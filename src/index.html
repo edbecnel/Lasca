@@ -311,6 +311,67 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+      .accountStatus {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      .accountStatus.isError {
+        color: var(--error);
+        font-weight: 750;
+      }
+
+      .accountActions {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .inputWithIcon {
+        position: relative;
+        width: 100%;
+      }
+
+      .inputWithIcon > .panelSelect {
+        padding-right: 34px;
+      }
+
+      .iconBtn {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.75);
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 4px;
+        border-radius: 8px;
+        cursor: pointer;
+        line-height: 0;
+      }
+
+      .iconBtn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .iconBtn:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.5);
+        outline-offset: 2px;
+      }
+
+      .iconBtn svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+      }
+
+      .iconBtn.isRevealed .slash {
+        display: none;
+      }
     </style>
     <script type="module" src="./indexMain.ts"></script>
   </head>
@@ -393,6 +454,14 @@
             <label for="launchBoardCoords">Show board coordinates</label>
           </div>
           <div class="hint">Column letters and row numbers</div>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchBoard8x8Checkered" />
+            <label for="launchBoard8x8Checkered"
+              >Use checkered board for 8×8 games</label
+            >
+          </div>
+          <div class="hint">Renders 8×8 games on a chess-style square grid</div>
 
           <div class="checkRow">
             <input type="checkbox" id="launchThreefold" checked />
@@ -512,6 +581,141 @@
             </button>
           </div>
           <div id="launchLobbyList" class="lobbyList"></div>
+        </section>
+
+        <section
+          class="panelSection"
+          aria-label="Account"
+          id="launchAccountSection"
+        >
+          <h2>Account (optional)</h2>
+
+          <div id="launchAccountStatus" class="accountStatus">—</div>
+
+          <form id="accountLoginForm" autocomplete="on" method="post">
+            <div class="row" style="margin-top: 10px">
+              <label for="accountEmail">Email</label>
+              <input
+                id="accountEmail"
+                name="username"
+                class="panelSelect"
+                type="email"
+                autocomplete="username"
+                inputmode="email"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="you@example.com"
+              />
+
+              <label for="accountPassword">Password</label>
+              <div class="inputWithIcon">
+                <input
+                  id="accountPassword"
+                  name="password"
+                  class="panelSelect"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="••••••••"
+                />
+                <button
+                  id="accountPasswordToggle"
+                  class="iconBtn"
+                  type="button"
+                  aria-label="Show password"
+                  aria-pressed="false"
+                  title="Show password"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="3"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    />
+                    <path
+                      class="slash"
+                      d="M4 4l16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div class="row" style="margin-top: 10px">
+            <label for="accountDisplayName">Display</label>
+            <input
+              id="accountDisplayName"
+              class="panelSelect"
+              type="text"
+              autocomplete="nickname"
+              inputmode="text"
+              placeholder="Player"
+            />
+
+            <label for="accountAvatarUrl">Avatar</label>
+            <input
+              id="accountAvatarUrl"
+              class="panelSelect"
+              type="url"
+              autocomplete="off"
+              inputmode="url"
+              placeholder="(optional) https://…"
+            />
+
+            <label for="accountAvatarFile">Avatar file</label>
+            <input
+              id="accountAvatarFile"
+              class="panelSelect"
+              type="file"
+              accept=".png,.svg,image/png,image/svg+xml"
+            />
+          </div>
+
+          <div class="accountActions">
+            <button id="accountRefresh" class="panelBtn" type="button">
+              Refresh
+            </button>
+            <button id="accountRegister" class="panelBtn" type="button">
+              Register
+            </button>
+            <button
+              id="accountLogin"
+              class="panelBtn"
+              type="submit"
+              form="accountLoginForm"
+            >
+              Login
+            </button>
+            <button id="accountUpdateProfile" class="panelBtn" type="button">
+              Update profile
+            </button>
+            <button id="accountUploadAvatar" class="panelBtn" type="button">
+              Upload avatar
+            </button>
+            <button id="accountLogout" class="panelBtn" type="button">
+              Logout
+            </button>
+          </div>
+
+          <div class="hint" style="margin-left: 0">
+            Uses cookie sessions on the multiplayer server (port 8788). This
+            panel is for testing MP4C auth; it does not change seat tokens or
+            online authority rules yet.
+          </div>
         </section>
 
         <section class="panelSection" aria-label="AI">

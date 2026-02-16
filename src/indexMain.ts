@@ -4,6 +4,7 @@ import type { VariantId } from "./variants/variantTypes";
 import type { GetLobbyResponse, GetRoomMetaResponse, LobbyRoomSummary, RoomVisibility } from "./shared/onlineProtocol.ts";
 import { getGuestDisplayName, setGuestDisplayName } from "./shared/guestIdentity.ts";
 import { createSfxManager } from "./ui/sfx";
+import type { AuthMeResponse, AuthOkResponse, AuthErrorResponse } from "./shared/authProtocol.ts";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -20,6 +21,7 @@ const LS_KEYS = {
   optAnimations: "lasca.opt.animations",
   optShowResizeIcon: "lasca.opt.showResizeIcon",
   optBoardCoords: "lasca.opt.boardCoords",
+  optBoard8x8Checkered: "lasca.opt.board8x8Checkered",
   optThreefold: "lasca.opt.threefold",
   optToasts: "lasca.opt.toasts",
   optSfx: "lasca.opt.sfx",
@@ -340,8 +342,25 @@ window.addEventListener("DOMContentLoaded", () => {
   const elLobbyList = (document.getElementById("launchLobbyList") as HTMLElement | null) ?? null;
   const elLobbyMineOnly = (document.getElementById("launchLobbyMineOnly") as HTMLInputElement | null) ?? null;
 
+  const elAccountSection = (document.getElementById("launchAccountSection") as HTMLElement | null) ?? null;
+  const elAccountStatus = (document.getElementById("launchAccountStatus") as HTMLElement | null) ?? null;
+  const elAccountEmail = (document.getElementById("accountEmail") as HTMLInputElement | null) ?? null;
+  const elAccountPassword = (document.getElementById("accountPassword") as HTMLInputElement | null) ?? null;
+  const elAccountPasswordToggle = (document.getElementById("accountPasswordToggle") as HTMLButtonElement | null) ?? null;
+  const elAccountLoginForm = (document.getElementById("accountLoginForm") as HTMLFormElement | null) ?? null;
+  const elAccountDisplayName = (document.getElementById("accountDisplayName") as HTMLInputElement | null) ?? null;
+  const elAccountAvatarUrl = (document.getElementById("accountAvatarUrl") as HTMLInputElement | null) ?? null;
+  const elAccountAvatarFile = (document.getElementById("accountAvatarFile") as HTMLInputElement | null) ?? null;
+  const elAccountRefresh = (document.getElementById("accountRefresh") as HTMLButtonElement | null) ?? null;
+  const elAccountRegister = (document.getElementById("accountRegister") as HTMLButtonElement | null) ?? null;
+  const elAccountLogin = (document.getElementById("accountLogin") as HTMLButtonElement | null) ?? null;
+  const elAccountUpdateProfile = (document.getElementById("accountUpdateProfile") as HTMLButtonElement | null) ?? null;
+  const elAccountUploadAvatar = (document.getElementById("accountUploadAvatar") as HTMLButtonElement | null) ?? null;
+  const elAccountLogout = (document.getElementById("accountLogout") as HTMLButtonElement | null) ?? null;
+
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
+  const elBoard8x8Checkered = byId<HTMLInputElement>("launchBoard8x8Checkered");
   const elThreefold = byId<HTMLInputElement>("launchThreefold");
   const elToasts = byId<HTMLInputElement>("launchToasts");
   const elSfx = byId<HTMLInputElement>("launchSfx");
@@ -370,6 +389,343 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!elLobbyStatus) return;
     elLobbyStatus.textContent = (text || "").trim() || "—";
   };
+
+  const setAccountStatus = (text: string, opts?: { isError?: boolean }): void => {
+    if (!elAccountStatus) return;
+    elAccountStatus.textContent = (text || "").trim() || "—";
+    elAccountStatus.classList.toggle("isError", Boolean(opts?.isError));
+  };
+
+  const resolveServerUrlForAccount = (): string | null => {
+    const s = normalizeServerUrl(elOnlineServerUrl.value || "");
+    if (!s) return null;
+    try {
+      // eslint-disable-next-line no-new
+      new URL(s);
+      return s;
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchAuthJson = async <TRes>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; json: TRes | AuthErrorResponse }> => {
+      const serverUrl = resolveServerUrlForAccount();
+      if (!serverUrl) return { ok: false, status: 0, json: { error: "Invalid Server URL" } };
+
+      const res = await fetch(`${serverUrl}${path}`,
+        {
+          credentials: "include",
+          ...(init ?? {}),
+          headers: {
+            ...(init?.headers ?? {}),
+          },
+        }
+      );
+
+      const raw = await res.text();
+      let json: any = null;
+      try {
+        json = raw ? JSON.parse(raw) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!res.ok) {
+        const msg = typeof json?.error === "string" ? json.error : raw?.trim() || `HTTP ${res.status}`;
+        return { ok: false, status: res.status, json: { error: msg } };
+      }
+
+      return { ok: true, status: res.status, json: (json ?? ({} as any)) as TRes };
+    };
+
+  const refreshAccountUi = async (): Promise<void> => {
+    if (!elAccountSection || !elAccountStatus) return;
+
+    const serverUrl = resolveServerUrlForAccount();
+    if (!serverUrl) {
+      setAccountStatus("Account: set a valid Server URL first.", { isError: true });
+      return;
+    }
+
+    setAccountStatus("Account: checking session…");
+    const r = await fetchAuthJson<AuthMeResponse>("/api/auth/me");
+    if (!r.ok) {
+      setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Request failed")}`, { isError: true });
+      return;
+    }
+
+    const me = r.json as any;
+    if (!me || me.ok !== true) {
+      setAccountStatus("Account: unexpected response", { isError: true });
+      return;
+    }
+
+    const user = me.user;
+    if (!user) {
+      setAccountStatus("Account: signed out");
+      return;
+    }
+
+    const name = typeof user.displayName === "string" ? user.displayName : "(no name)";
+    const email = typeof user.email === "string" ? user.email : "";
+    setAccountStatus(`Account: signed in as ${name}${email ? ` (${email})` : ""}`);
+
+    // Convenience: if the Online Name input is blank or still the default placeholder value,
+    // prefill it from the account display name so MP4C can be exercised end-to-end in UI.
+    const currentOnlineName = (elOnlineName.value || "").trim();
+    if (!currentOnlineName || currentOnlineName.toLowerCase() === "guest") {
+      elOnlineName.value = name;
+    }
+  };
+
+  const withAccountBusy = async (fn: () => Promise<void>): Promise<void> => {
+    const btns = [
+      elAccountRefresh,
+      elAccountRegister,
+      elAccountLogin,
+      elAccountUpdateProfile,
+      elAccountUploadAvatar,
+      elAccountLogout,
+    ].filter(Boolean) as HTMLButtonElement[];
+    for (const b of btns) b.disabled = true;
+    try {
+      await fn();
+    } finally {
+      for (const b of btns) b.disabled = false;
+    }
+  };
+
+  const inferAvatarContentType = (file: File): "image/png" | "image/svg+xml" | null => {
+    const t = (file.type || "").toLowerCase();
+    if (t === "image/png") return "image/png";
+    if (t === "image/svg+xml") return "image/svg+xml";
+    const n = (file.name || "").toLowerCase();
+    if (n.endsWith(".png")) return "image/png";
+    if (n.endsWith(".svg")) return "image/svg+xml";
+    return null;
+  };
+
+  if (elAccountSection && elAccountStatus) {
+    const tryOfferToSavePassword = async (email: string, password: string): Promise<void> => {
+      // Chrome often won't offer to save when login happens via fetch() (especially cross-origin).
+      // If Credential Management API is available, explicitly store a PasswordCredential.
+      const e = (email || "").trim();
+      if (!e || !password) return;
+
+      try {
+        const navAny = navigator as any;
+        if (!navAny?.credentials || typeof navAny.credentials.store !== "function") return;
+
+        const PwCred = (window as any).PasswordCredential as any;
+        if (typeof PwCred !== "function") return;
+
+        let cred: any = null;
+        try {
+          // Prefer constructing from the form so the browser can associate fields.
+          if (elAccountLoginForm) cred = new PwCred(elAccountLoginForm);
+        } catch {
+          cred = null;
+        }
+
+        if (!cred) {
+          // Fallback for browsers that don't support the form constructor.
+          cred = new PwCred({ id: e, password, name: e });
+        }
+
+        await navAny.credentials.store(cred);
+      } catch {
+        // Ignore: browser may reject, user may have disabled password saving, etc.
+      }
+    };
+
+    const syncPasswordToggleUi = (): void => {
+      if (!elAccountPassword || !elAccountPasswordToggle) return;
+      const isRevealed = elAccountPassword.type === "text";
+      elAccountPasswordToggle.classList.toggle("isRevealed", isRevealed);
+      elAccountPasswordToggle.setAttribute("aria-pressed", String(isRevealed));
+      const label = isRevealed ? "Hide password" : "Show password";
+      elAccountPasswordToggle.setAttribute("aria-label", label);
+      elAccountPasswordToggle.title = label;
+    };
+
+    syncPasswordToggleUi();
+
+    elAccountPasswordToggle?.addEventListener("click", () => {
+      if (!elAccountPassword) return;
+      elAccountPassword.type = (elAccountPassword.type === "password") ? "text" : "password";
+      syncPasswordToggleUi();
+      elAccountPassword.focus();
+    });
+
+    const doAccountLogin = async (): Promise<void> => {
+      const email = (elAccountEmail?.value || "").trim();
+      const password = elAccountPassword?.value || "";
+
+      setAccountStatus("Account: logging in…");
+      const r = await fetchAuthJson<AuthOkResponse>("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!r.ok) {
+        setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Login failed")}`, { isError: true });
+        return;
+      }
+
+      const ok = r.json as any;
+      setAccountStatus(`Account: signed in as ${ok?.user?.displayName ?? "(unknown)"}`);
+
+      // Best-effort: nudge the browser to offer saving credentials.
+      void tryOfferToSavePassword(email, password);
+
+      await refreshAccountUi();
+    };
+
+    elAccountLoginForm?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void withAccountBusy(async () => {
+        await doAccountLogin();
+      });
+    });
+
+    elAccountRefresh?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        await refreshAccountUi();
+      });
+    });
+
+    elAccountRegister?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        const email = (elAccountEmail?.value || "").trim();
+        const password = elAccountPassword?.value || "";
+        const displayName = (elAccountDisplayName?.value || "").trim();
+
+        setAccountStatus("Account: registering…");
+        const r = await fetchAuthJson<AuthOkResponse>("/api/auth/register", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password, ...(displayName ? { displayName } : {}) }),
+        });
+
+        if (!r.ok) {
+          setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Register failed")}`, { isError: true });
+          return;
+        }
+
+        const ok = r.json as any;
+        if (!ok?.ok || !ok?.user) {
+          setAccountStatus("Account: unexpected response", { isError: true });
+          return;
+        }
+        setAccountStatus(`Account: registered as ${ok.user.displayName} (${ok.user.email})`);
+
+        // Best-effort: on first registration, offer to save immediately.
+        void tryOfferToSavePassword(email, password);
+
+        await refreshAccountUi();
+      });
+    });
+
+    elAccountLogin?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        await doAccountLogin();
+      });
+    });
+
+    elAccountUpdateProfile?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        const displayName = (elAccountDisplayName?.value || "").trim();
+        const avatarUrl = (elAccountAvatarUrl?.value || "").trim();
+
+        if (!displayName && !avatarUrl) {
+          setAccountStatus("Account: nothing to update (set Display and/or Avatar)", { isError: true });
+          return;
+        }
+
+        setAccountStatus("Account: updating profile…");
+        const r = await fetchAuthJson<AuthOkResponse>("/api/auth/me", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...(displayName ? { displayName } : {}),
+            ...(avatarUrl ? { avatarUrl } : {}),
+          }),
+        });
+
+        if (!r.ok) {
+          setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Update failed")}`, { isError: true });
+          return;
+        }
+
+        const ok = r.json as any;
+        setAccountStatus(`Account: updated (${ok?.user?.displayName ?? ""})`);
+        await refreshAccountUi();
+      });
+    });
+
+    elAccountUploadAvatar?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        const file = elAccountAvatarFile?.files?.[0] ?? null;
+        if (!file) {
+          setAccountStatus("Account: choose a PNG or SVG file first", { isError: true });
+          return;
+        }
+
+        if (file.size > 512 * 1024) {
+          setAccountStatus("Account: avatar too large (max 512KB)", { isError: true });
+          return;
+        }
+
+        const ct = inferAvatarContentType(file);
+        if (!ct) {
+          setAccountStatus("Account: unsupported file (use .png or .svg)", { isError: true });
+          return;
+        }
+
+        setAccountStatus("Account: uploading avatar…");
+        const r = await fetchAuthJson<AuthOkResponse>("/api/auth/me/avatar", {
+          method: "PUT",
+          headers: { "content-type": ct },
+          body: file,
+        });
+
+        if (!r.ok) {
+          setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Upload failed")}`, { isError: true });
+          return;
+        }
+
+        const ok = r.json as any;
+        const nextUrl = typeof ok?.user?.avatarUrl === "string" ? ok.user.avatarUrl : "";
+        if (elAccountAvatarUrl && nextUrl) elAccountAvatarUrl.value = nextUrl;
+
+        setAccountStatus("Account: avatar uploaded");
+        await refreshAccountUi();
+      });
+    });
+
+    elAccountLogout?.addEventListener("click", () => {
+      void withAccountBusy(async () => {
+        setAccountStatus("Account: logging out…");
+        const r = await fetchAuthJson<{ ok: true }>("/api/auth/logout", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+        if (!r.ok) {
+          setAccountStatus(`Account: ${String((r.json as any)?.error ?? "Logout failed")}`, { isError: true });
+          return;
+        }
+        setAccountStatus("Account: signed out");
+        await refreshAccountUi();
+      });
+    });
+
+    // Auto-refresh once on load so it behaves like a real UI.
+    void withAccountBusy(async () => {
+      await refreshAccountUi();
+    });
+  }
 
   const roomCreatedAtMs = (r: LobbyRoomSummary): number => {
     const ms = typeof r.createdAt === "string" ? Date.parse(r.createdAt) : NaN;
@@ -738,18 +1094,55 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   // Populate theme select
-  elTheme.textContent = "";
-  for (const t of THEMES) {
-    const opt = document.createElement("option");
-    opt.value = t.id;
-    opt.textContent = t.label;
-    elTheme.appendChild(opt);
-  }
+  const populateThemeSelect = (themeIds: readonly string[]): void => {
+    elTheme.textContent = "";
+    for (const id of themeIds) {
+      const t = getThemeById(id);
+      if (!t) continue;
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      elTheme.appendChild(opt);
+    }
+  };
+
+  const visibleThemeIds = (): string[] => THEMES.filter((t) => !t.hidden).map((t) => t.id);
+
+  populateThemeSelect(visibleThemeIds());
 
   // Read saved settings (or defaults matching lasca.html)
   const savedTheme = localStorage.getItem(LS_KEYS.theme);
-  const initialTheme = (savedTheme && getThemeById(savedTheme)) ? savedTheme : DEFAULT_THEME_ID;
+  const initialTheme = (savedTheme && getThemeById(savedTheme) && !getThemeById(savedTheme)?.hidden) ? savedTheme : DEFAULT_THEME_ID;
   elTheme.value = initialTheme;
+
+  type ThemeSelectMode = "all" | "columns_chess_only";
+  let themeSelectMode: ThemeSelectMode = "all";
+  let savedThemeBeforeColumnsChess: string = initialTheme;
+
+  const syncThemeConstraintsForVariant = (variantId: VariantId): void => {
+    const isColumnsChess = variantId === "columns_chess";
+
+    if (isColumnsChess) {
+      if (themeSelectMode !== "columns_chess_only") {
+        if (elTheme.value && elTheme.value !== "columns_classic") savedThemeBeforeColumnsChess = elTheme.value;
+        themeSelectMode = "columns_chess_only";
+        populateThemeSelect(["columns_classic"]);
+      }
+      elTheme.value = "columns_classic";
+      elTheme.disabled = true;
+      syncGlassThemeOptions();
+    } else {
+      if (themeSelectMode !== "all") {
+        themeSelectMode = "all";
+        populateThemeSelect(visibleThemeIds());
+      }
+      elTheme.disabled = false;
+      if (savedThemeBeforeColumnsChess && getThemeById(savedThemeBeforeColumnsChess)) {
+        elTheme.value = savedThemeBeforeColumnsChess;
+      }
+      syncGlassThemeOptions();
+    }
+  };
 
   if (elGlassBg) {
     elGlassBg.value = readGlassBg(LS_KEYS.glassBg, "original");
@@ -771,6 +1164,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elTheme.addEventListener("change", () => {
     syncGlassThemeOptions();
+    if (themeSelectMode === "all") savedThemeBeforeColumnsChess = elTheme.value;
   });
 
   elGlassColors?.addEventListener("change", () => {
@@ -815,6 +1209,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
+  elBoard8x8Checkered.checked = readBool(LS_KEYS.optBoard8x8Checkered, false);
   elThreefold.checked = readBool(LS_KEYS.optThreefold, true);
   elToasts.checked = readBool(LS_KEYS.optToasts, true);
   elSfx.checked = readBool(LS_KEYS.optSfx, false);
@@ -844,20 +1239,33 @@ window.addEventListener("DOMContentLoaded", () => {
     const vId = (isVariantId(elGame.value) ? elGame.value : DEFAULT_VARIANT_ID) as VariantId;
     const v = getVariantById(vId);
 
+    syncThemeConstraintsForVariant(vId);
+
     elGameNote.textContent = v.subtitle;
     localStorage.setItem(LS_KEYS.variantId, v.variantId);
 
     const baseOk = Boolean(v.available && v.entryUrl);
 
+    const isColumnsChess = vId === "columns_chess";
+
+    if (isColumnsChess) {
+      elAiWhite.value = "human";
+      elAiBlack.value = "human";
+    }
+
     const isAiGame = elAiWhite.value !== "human" || elAiBlack.value !== "human";
+
+    elAiWhite.disabled = isColumnsChess;
+    elAiBlack.disabled = isColumnsChess;
+    elAiDelay.disabled = isColumnsChess;
 
     // Online (2 players) requires both sides Human.
     const onlineOpt = Array.from(elPlayMode.options).find((o) => o.value === "online") ?? null;
-    if (onlineOpt) onlineOpt.disabled = isAiGame;
-    if (isAiGame && elPlayMode.value === "online") {
+    if (onlineOpt) onlineOpt.disabled = isAiGame || isColumnsChess;
+    if ((isAiGame || isColumnsChess) && elPlayMode.value === "online") {
       elPlayMode.value = "local";
     }
-    elPlayMode.disabled = isAiGame;
+    elPlayMode.disabled = isAiGame || isColumnsChess;
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
@@ -945,6 +1353,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elShowResizeIcon.addEventListener("change", () => {
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
+  });
+
+  elBoard8x8Checkered.addEventListener("change", () => {
+    writeBool(LS_KEYS.optBoard8x8Checkered, elBoard8x8Checkered.checked);
   });
 
   elToasts.addEventListener("change", () => {

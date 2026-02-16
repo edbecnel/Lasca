@@ -149,6 +149,36 @@ describe("HistoryManager", () => {
     expect(stored?.meta?.variantId).toBe("lasca_8_dama_board");
   });
 
+  it("should preserve chess state when cloning", () => {
+    const withChess: GameState = {
+      board: new Map([["r7c4", [{ owner: "W", rank: "K" }]]]),
+      toMove: "W",
+      phase: "idle",
+      meta: {
+        variantId: "columns_chess" as any,
+        rulesetId: "columns_chess" as any,
+        boardSize: 8,
+      },
+      chess: {
+        castling: {
+          W: { kingSide: true, queenSide: false },
+          B: { kingSide: false, queenSide: true },
+        },
+        enPassantTarget: "r2c3",
+        enPassantPawn: "r3c3",
+      },
+    };
+
+    history.push(withChess);
+    const stored = history.getCurrent();
+    expect(stored?.chess?.castling.W.kingSide).toBe(true);
+    expect(stored?.chess?.castling.W.queenSide).toBe(false);
+    expect(stored?.chess?.castling.B.kingSide).toBe(false);
+    expect(stored?.chess?.castling.B.queenSide).toBe(true);
+    expect(stored?.chess?.enPassantTarget).toBe("r2c3");
+    expect(stored?.chess?.enPassantPawn).toBe("r3c3");
+  });
+
   it("should provide history overview", () => {
     history.push(state1);
     history.push(state2);

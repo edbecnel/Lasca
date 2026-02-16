@@ -198,9 +198,7 @@ function renderLobby(rooms: LobbyRoomSummary[]): void {
     delBtn.className = "panelBtn";
     delBtn.textContent = "Delete";
     delBtn.onclick = async () => {
-      const ok = confirm(`Delete room ${room.roomId}? This cannot be undone.`);
-      if (!ok) return;
-      await deleteRoom(room.roomId, { refreshAfter: true, source: "row" });
+      requestDeleteRoomConfirm(room.roomId, { refreshAfter: true, source: "row" });
     };
 
     right.append(copyBtn, delBtn);
@@ -214,6 +212,33 @@ function renderLobby(rooms: LobbyRoomSummary[]): void {
     empty.textContent = "No rooms returned.";
     list.append(empty);
   }
+}
+
+let pendingDelete: { roomId: string; refreshAfter: boolean; source: "row" | "input" } | null = null;
+
+function setDeleteConfirmVisible(isVisible: boolean): void {
+  const bar = document.getElementById("adminDeleteConfirm") as HTMLDivElement | null;
+  if (!bar) return;
+  bar.hidden = !isVisible;
+}
+
+function requestDeleteRoomConfirm(roomIdRaw: string, opts: { refreshAfter: boolean; source: "row" | "input" }): void {
+  const roomId = (roomIdRaw || "").trim();
+  if (!roomId) {
+    setStatus("Enter a Room ID", "error");
+    return;
+  }
+
+  // Put the roomId into the input so the user sees what will be deleted.
+  const elRoomId = document.getElementById("adminDeleteRoomId") as HTMLInputElement | null;
+  if (elRoomId) elRoomId.value = roomId;
+
+  pendingDelete = { roomId, refreshAfter: opts.refreshAfter, source: opts.source };
+
+  const text = document.getElementById("adminDeleteConfirmText") as HTMLDivElement | null;
+  if (text) text.textContent = `Delete room ${roomId}? This cannot be undone.`;
+
+  setDeleteConfirmVisible(true);
 }
 
 async function deleteRoom(roomIdRaw: string, opts: { refreshAfter: boolean; source: "row" | "input" }): Promise<void> {
@@ -379,10 +404,28 @@ function init(): void {
 
   byId<HTMLButtonElement>("adminDeleteBtn").onclick = async () => {
     const roomId = byId<HTMLInputElement>("adminDeleteRoomId").value;
-    const ok = confirm(`Delete room ${roomId}? This cannot be undone.`);
-    if (!ok) return;
-    await deleteRoom(roomId, { refreshAfter: true, source: "input" });
+    requestDeleteRoomConfirm(roomId, { refreshAfter: true, source: "input" });
   };
+
+  const elConfirmYes = document.getElementById("adminDeleteConfirmYes") as HTMLButtonElement | null;
+  const elConfirmNo = document.getElementById("adminDeleteConfirmNo") as HTMLButtonElement | null;
+
+  elConfirmNo?.addEventListener("click", () => {
+    pendingDelete = null;
+    setDeleteConfirmVisible(false);
+    setStatus("Delete cancelled", "info");
+  });
+
+  elConfirmYes?.addEventListener("click", () => {
+    const p = pendingDelete;
+    pendingDelete = null;
+    setDeleteConfirmVisible(false);
+    if (!p) {
+      setStatus("Nothing to confirm", "error");
+      return;
+    }
+    void deleteRoom(p.roomId, { refreshAfter: p.refreshAfter, source: p.source });
+  });
 
   byId<HTMLButtonElement>("adminCopyRoomIdBtn").onclick = async () => {
     const roomId = (byId<HTMLInputElement>("adminDeleteRoomId").value || "").trim();

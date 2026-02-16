@@ -1,6 +1,7 @@
 import type { GameState } from "./state.ts";
 import type { Player } from "../types.ts";
 import { generateLegalMoves } from "./movegen.ts";
+import { isKingInCheckColumnsChess } from "./movegenColumnsChess.ts";
 
 /**
  * Check if the current player (state.toMove) has lost the game.
@@ -11,6 +12,24 @@ import { generateLegalMoves } from "./movegen.ts";
 export function checkCurrentPlayerLost(state: GameState): { winner: Player | null; reason: string | null } {
   if ((state as any).forcedGameOver?.message) {
     return { winner: (state as any).forcedGameOver.winner ?? null, reason: (state as any).forcedGameOver.message };
+  }
+
+  const rulesetId = state.meta?.rulesetId ?? "lasca";
+  if (rulesetId === "columns_chess") {
+    const currentPlayer = state.toMove;
+    const opponent: Player = currentPlayer === "B" ? "W" : "B";
+
+    const moves = generateLegalMoves(state);
+    if (moves.length === 0) {
+      const inCheck = isKingInCheckColumnsChess(state, currentPlayer);
+      if (inCheck) {
+        const winnerName = opponent === "B" ? "Dark" : "Light";
+        return { winner: opponent, reason: `Checkmate! ${winnerName} Wins` };
+      }
+      return { winner: null, reason: "Stalemate — draw" };
+    }
+
+    return { winner: null, reason: null };
   }
 
   const currentPlayer = state.toMove;
@@ -60,6 +79,24 @@ export function checkCurrentPlayerLost(state: GameState): { winner: Player | nul
 export function getWinner(state: GameState): { winner: Player | null; reason: string | null } {
   if ((state as any).forcedGameOver?.message) {
     return { winner: (state as any).forcedGameOver.winner ?? null, reason: (state as any).forcedGameOver.message };
+  }
+
+  const rulesetId = state.meta?.rulesetId ?? "lasca";
+  if (rulesetId === "columns_chess") {
+    const currentPlayer = state.toMove;
+    const opponent: Player = currentPlayer === "B" ? "W" : "B";
+
+    const opponentState: GameState = { ...state, toMove: opponent };
+    const oppMoves = generateLegalMoves(opponentState);
+    if (oppMoves.length === 0) {
+      const inCheck = isKingInCheckColumnsChess(opponentState, opponent);
+      if (inCheck) {
+        const winnerName = currentPlayer === "B" ? "Dark" : "Light";
+        return { winner: currentPlayer, reason: `Checkmate! ${winnerName} Wins` };
+      }
+      return { winner: null, reason: "Stalemate — draw" };
+    }
+    return { winner: null, reason: null };
   }
 
   const currentPlayer = state.toMove;

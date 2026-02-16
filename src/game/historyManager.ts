@@ -160,6 +160,16 @@ export class HistoryManager {
       toMove: state.toMove,
       phase: state.phase,
       meta: state.meta ? { ...state.meta } : undefined,
+      chess: state.chess
+        ? {
+            castling: {
+              W: { ...state.chess.castling.W },
+              B: { ...state.chess.castling.B },
+            },
+            enPassantTarget: state.chess.enPassantTarget,
+            enPassantPawn: state.chess.enPassantPawn,
+          }
+        : undefined,
       forcedGameOver: (state as any).forcedGameOver ? { ...(state as any).forcedGameOver } : undefined,
       damascaDeadPlay: (state as any).damascaDeadPlay ? { ...(state as any).damascaDeadPlay } : undefined,
       captureChain: state.captureChain ? { ...state.captureChain } : undefined,

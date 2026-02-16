@@ -27,3 +27,15 @@ export function makeUse(href: string, x: number, y: number, size: number): SVGUs
   }
   return use;
 }
+
+export function makeUseWithTitle(href: string, x: number, y: number, size: number, titleText: string | null | undefined): SVGUseElement {
+  const use = makeUse(href, x, y, size);
+  if (titleText) {
+    // Prefer our explicit title over the generic Light/Dark fallback.
+    while (use.firstChild) use.removeChild(use.firstChild);
+    const title = document.createElementNS(SVG_NS, "title");
+    title.textContent = titleText;
+    use.appendChild(title);
+  }
+  return use;
+}

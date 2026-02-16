@@ -1,13 +1,16 @@
 import type { RulesetId, VariantId, VariantSpec } from "./variantTypes";
 
 import lascaBoardSvgUrl from "../assets/lasca_board.svg?url";
-import damascaBoardSvgUrl from "../assets/damasca_board.svg?url";
+import chessBoardSvgUrl from "../assets/chess_board.svg?url";
+import graphBoard8x8SvgUrl from "../assets/graph_board_8x8.svg?url";
+import columnsChessBoardSvgUrl from "../assets/columns_chess_board.svg?url";
 
 const RULESET_LABEL: Record<RulesetId, string> = {
   lasca: "Lasca",
   dama: "Dama Classic",
   damasca: "Damasca International",
   damasca_classic: "Damasca Classic",
+  columns_chess: "Columns Chess",
 };
 
 export const VARIANTS: readonly VariantSpec[] = [
@@ -24,13 +27,25 @@ export const VARIANTS: readonly VariantSpec[] = [
     available: true,
   },
   {
+    variantId: "columns_chess",
+    displayName: "Columns Chess",
+    subtitle: "Chess moves + stacking captures (captured discs stack under the mover).",
+    rulesetId: "columns_chess",
+    boardSize: 8,
+    piecesPerSide: 16,
+    svgAsset: columnsChessBoardSvgUrl,
+    entryUrl: "./columnsChess.html",
+    defaultSaveName: "columns_chess-preview.json",
+    available: true,
+  },
+  {
     variantId: "lasca_8_dama_board",
     displayName: "Lasca 8×8",
     subtitle: "Lasca rules on an 8×8 board (stacking captures).",
     rulesetId: "lasca",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: damascaBoardSvgUrl,
+    svgAsset: graphBoard8x8SvgUrl,
     entryUrl: "./lasca8x8.html",
     defaultSaveName: "lasca_8_dama_board-save.json",
     available: true,
@@ -42,7 +57,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: damascaBoardSvgUrl,
+    svgAsset: graphBoard8x8SvgUrl,
     entryUrl: "./dama.html",
     defaultSaveName: "dama_8_classic_standard-save.json",
     damaCaptureRemoval: "immediate",
@@ -55,7 +70,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "dama",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: damascaBoardSvgUrl,
+    svgAsset: graphBoard8x8SvgUrl,
     entryUrl: "./dama.html",
     defaultSaveName: "dama_8_classic_international-save.json",
     damaCaptureRemoval: "end_of_sequence",
@@ -68,7 +83,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "damasca_classic",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: damascaBoardSvgUrl,
+    svgAsset: graphBoard8x8SvgUrl,
     entryUrl: "./damasca.html",
     defaultSaveName: "damasca_8_classic-save.json",
     available: true,
@@ -80,7 +95,7 @@ export const VARIANTS: readonly VariantSpec[] = [
     rulesetId: "damasca",
     boardSize: 8,
     piecesPerSide: 12,
-    svgAsset: damascaBoardSvgUrl,
+    svgAsset: graphBoard8x8SvgUrl,
     entryUrl: "./damasca.html",
     defaultSaveName: "damasca_8-save.json",
     available: true,

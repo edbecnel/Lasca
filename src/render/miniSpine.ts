@@ -1,6 +1,7 @@
 import { MINI_SPINE_MAX_SHOWN, MINI_SPINE_KEEP_BOTTOM, MINI_SPINE_KEEP_TOP } from "../config/constants";
 import { pieceToHref } from "../pieces/pieceToHref";
-import { makeUse } from "./svgUse";
+import { makeUseWithTitle } from "./svgUse";
+import { pieceTooltip } from "../pieces/pieceLabel";
 import { maybeVariantStonePieceHref } from "./stonePieceVariant";
 import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
@@ -102,7 +103,8 @@ export function drawMiniStackSpine(
 
   const minis = document.createElementNS(SVG_NS, "g") as SVGGElement;
   minis.setAttribute("clip-path", `url(#${clipId})`);
-  minis.setAttribute("pointer-events", "none");
+  // Enable pointer events so <title> tooltips work on the mini pieces.
+  minis.setAttribute("pointer-events", "auto");
 
   const innerLeft = x + spinePad;
   const innerBottom = y + spineH - spinePad;
@@ -128,7 +130,7 @@ export function drawMiniStackSpine(
     const miniY = innerBottom - miniSize - yOffset;
     const miniX = innerLeft;
 
-    minis.appendChild(makeUse(href, miniX, miniY, miniSize));
+    minis.appendChild(makeUseWithTitle(href, miniX, miniY, miniSize, pieceTooltip(p, { rulesetId })));
   }
 
   g.appendChild(minis);

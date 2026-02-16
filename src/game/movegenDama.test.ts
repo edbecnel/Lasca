@@ -4,12 +4,66 @@ import { applyMove } from "./applyMove.ts";
 import type { GameState } from "./state.ts";
 import type { Stack } from "../types";
 
+// 8×8 boards now use the opposite playable parity so that A1 is playable.
+// These tests were originally written against the old parity; keep the
+// coordinates stable by remapping IDs when talking to the engine.
+//
+// Important: `c ^ 1` is not safe at the edges (c=7) and breaks expected
+// diagonal relationships for some positions. A horizontal mirror keeps all
+// coordinates in-bounds and preserves adjacency.
+function remap8x8Id(id: string): string {
+  const m = /^r(\d+)c(\d+)$/.exec(id);
+  if (!m) return id;
+  const r = Number(m[1]);
+  const c = Number(m[2]);
+  const c2 = 7 - c;
+  return `r${r}c${c2}`;
+}
+
+function toEngineBoardEntries(entries: Array<[string, Stack]>): Array<[string, Stack]> {
+  return entries.map(([id, stack]) => [remap8x8Id(id), stack]);
+}
+
+function toTestMove(m: any): any {
+  if (!m || typeof m !== "object") return m;
+  const out: any = { ...m };
+  if (typeof out.from === "string") out.from = remap8x8Id(out.from);
+  if (typeof out.to === "string") out.to = remap8x8Id(out.to);
+  if (typeof out.over === "string") out.over = remap8x8Id(out.over);
+  return out;
+}
+
+function toTestMoves(ms: any[]): any[] {
+  return ms.map(toTestMove);
+}
+
+function toEngineConstraints(constraints: any | undefined): any | undefined {
+  if (!constraints) return constraints;
+  const out: any = { ...constraints };
+  if (typeof out.forcedFrom === "string") out.forcedFrom = remap8x8Id(out.forcedFrom);
+  if (out.excludedJumpSquares instanceof Set) {
+    out.excludedJumpSquares = new Set(Array.from(out.excludedJumpSquares).map((id) => remap8x8Id(String(id))));
+  }
+  if (out.lastCaptureDir && typeof out.lastCaptureDir === "object") {
+    const dr = Number((out.lastCaptureDir as any).dr);
+    const dc = Number((out.lastCaptureDir as any).dc);
+    if (Number.isFinite(dr) && Number.isFinite(dc)) {
+      out.lastCaptureDir = { dr, dc: -dc };
+    }
+  }
+  return out;
+}
+
+function genMovesForTest(s: GameState, constraints?: any): any[] {
+  return toTestMoves(generateLegalMoves(s, toEngineConstraints(constraints)) as any);
+}
+
 function mkDamaState(
   boardEntries: Array<[string, Stack]>,
   toMove: "B" | "W" = "B"
 ): GameState {
   return {
-    board: new Map(boardEntries),
+    board: new Map(toEngineBoardEntries(boardEntries)),
     toMove,
     phase: "idle",
     meta: {
@@ -23,7 +77,7 @@ function mkDamaState(
 describe("movegen Dama (Phase 4)", () => {
   it("men move forward only (quiet moves)", () => {
     const s = mkDamaState([["r3c3", [{ owner: "B", rank: "S" }]]], "B");
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves).toEqual(
       expect.arrayContaining([
         { kind: "move", from: "r3c3", to: "r4c2" },
@@ -41,7 +95,7 @@ describe("movegen Dama (Phase 4)", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves).toEqual(
       expect.arrayContaining([
         { kind: "capture", from: "r3c3", over: "r2c2", to: "r1c1" },
@@ -58,7 +112,7 @@ describe("movegen Dama (Phase 4)", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     // Must be captures (mandatory capture), and king can land beyond the captured piece.
     expect(moves).toEqual(
       expect.arrayContaining([
@@ -84,7 +138,7 @@ describe("movegen Dama (Phase 4)", () => {
       "B"
     );
 
-    const cont = generateLegalMoves(s, {
+    const cont = genMovesForTest(s, {
       forcedFrom: "r3c3",
       excludedJumpSquares: new Set(),
       lastCaptureDir: { dr: 1, dc: 1 },
@@ -96,7 +150,7 @@ describe("movegen Dama (Phase 4)", () => {
 
   it("kings have flying quiet moves (multiple squares)", () => {
     const s = mkDamaState([["r3c3", [{ owner: "B", rank: "O" }]]], "B");
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
 
     // With no captures available, a king should be able to slide any distance diagonally.
     expect(moves).toEqual(
@@ -128,7 +182,7 @@ describe("movegen Dama (Phase 4)", () => {
       "B"
     );
 
-    const moves = generateLegalMoves(s);
+    const moves = genMovesForTest(s);
     expect(moves).toEqual([{ kind: "capture", from: "r2c2", over: "r3c3", to: "r4c4" }]);
   });
 
@@ -144,7 +198,7 @@ describe("movegen Dama (Phase 4)", () => {
       "W"
     );
 
-    const first = generateLegalMoves(before);
+    const first = genMovesForTest(before);
     expect(first).toEqual(
       expect.arrayContaining([
         { kind: "capture", from: "r2c2", over: "r1c1", to: "r0c0" },
@@ -152,7 +206,7 @@ describe("movegen Dama (Phase 4)", () => {
     );
 
     // Now lock continuation from the landing square.
-    const cont = generateLegalMoves(before, { forcedFrom: "r0c0", excludedJumpSquares: new Set(["r1c1"]) });
+    const cont = genMovesForTest(before, { forcedFrom: "r0c0", excludedJumpSquares: new Set(["r1c1"]) });
     // No further captures should be available for a man at r0c0 in this position.
     expect(cont.filter((m) => m.kind === "capture")).toEqual([]);
   });
@@ -164,11 +218,13 @@ describe("movegen Dama (Phase 4)", () => {
     // If black captures r3c3 and lands at r1c1:
     // - immediate: r3c3 is removed, king can later capture r5c5.
     // - end_of_sequence: r3c3 remains and is excluded, so it blocks the diagonal and king cannot see r5c5.
-    const baseBoard = new Map<string, any>([
-      ["r4c4", mk("B", "O")],
-      ["r3c3", mk("W", "S")],
-      ["r5c5", mk("W", "S")],
-    ]);
+    const baseBoard = new Map<string, any>(
+      [
+        ["r4c4", mk("B", "O")],
+        ["r3c3", mk("W", "S")],
+        ["r5c5", mk("W", "S")],
+      ].map(([id, stack]) => [remap8x8Id(id), stack])
+    );
 
     const first: any = { kind: "capture", from: "r4c4", over: "r3c3", to: "r1c1" };
 
@@ -178,9 +234,11 @@ describe("movegen Dama (Phase 4)", () => {
       phase: "idle",
       meta: { variantId: "dama_8_classic_standard", rulesetId: "dama", boardSize: 8, damaCaptureRemoval: "immediate" },
     };
-    const afterImmediate = applyMove(sImmediate, first);
-    expect(afterImmediate.board.has("r3c3")).toBe(false);
-    const nextCapsImmediate = generateLegalMoves(afterImmediate, { forcedFrom: "r1c1" }).filter((m: any) => m.kind === "capture");
+    const afterImmediate = applyMove(sImmediate, toTestMove(first));
+    expect(afterImmediate.board.has(remap8x8Id("r3c3"))).toBe(false);
+    const nextCapsImmediate = genMovesForTest(afterImmediate as any, { forcedFrom: "r1c1" }).filter(
+      (m: any) => m.kind === "capture"
+    );
     expect(nextCapsImmediate.some((m: any) => m.over === "r5c5")).toBe(true);
 
     const sEnd: any = {
@@ -194,9 +252,9 @@ describe("movegen Dama (Phase 4)", () => {
         damaCaptureRemoval: "end_of_sequence",
       },
     };
-    const afterEnd = applyMove(sEnd, first);
-    expect(afterEnd.board.has("r3c3")).toBe(true);
-    const nextCapsEnd = generateLegalMoves(afterEnd, {
+    const afterEnd = applyMove(sEnd, toTestMove(first));
+    expect(afterEnd.board.has(remap8x8Id("r3c3"))).toBe(true);
+    const nextCapsEnd = genMovesForTest(afterEnd as any, {
       forcedFrom: "r1c1",
       excludedJumpSquares: new Set(["r3c3"]),
     }).filter((m: any) => m.kind === "capture");
@@ -222,10 +280,10 @@ describe("movegen Dama (Phase 4)", () => {
     };
 
     const first: any = { kind: "capture", from: "r2c2", over: "r3c3", to: "r4c4" };
-    const after = applyMove(before, first);
-    expect(after.board.has("r3c3")).toBe(true);
+    const after = applyMove(before, toTestMove(first));
+    expect(after.board.has(remap8x8Id("r3c3"))).toBe(true);
 
-    const cont = generateLegalMoves(after, {
+    const cont = genMovesForTest(after as any, {
       forcedFrom: "r4c4",
       excludedJumpSquares: new Set(["r3c3"]),
     }).filter((m: any) => m.kind === "capture");

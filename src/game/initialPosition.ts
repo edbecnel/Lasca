@@ -10,15 +10,17 @@ export const WHITE_START_NODE_IDS_7X7_11: readonly string[] = [
   "r6c0", "r6c2", "r6c4", "r6c6",
 ];
 
+import { isPlayable } from "./coords.ts";
+
 function computePlayableNodeIdsForRow(boardSize: 7 | 8, r: number): string[] {
   const res: string[] = [];
   for (let c = 0; c < boardSize; c++) {
-    if ((r + c) % 2 === 0) res.push(`r${r}c${c}`);
+    if (isPlayable(r, c, boardSize)) res.push(`r${r}c${c}`);
   }
   return res;
 }
 
-function computeStartNodesFromTop(boardSize: 7 | 8, piecesPerSide: 11 | 12): string[] {
+function computeStartNodesFromTop(boardSize: 7 | 8, piecesPerSide: 11 | 12 | 16): string[] {
   const out: string[] = [];
   for (let r = 0; r < boardSize; r++) {
     for (const id of computePlayableNodeIdsForRow(boardSize, r)) {
@@ -29,7 +31,7 @@ function computeStartNodesFromTop(boardSize: 7 | 8, piecesPerSide: 11 | 12): str
   return out;
 }
 
-function computeStartNodesFromBottom(boardSize: 7 | 8, piecesPerSide: 11 | 12): string[] {
+function computeStartNodesFromBottom(boardSize: 7 | 8, piecesPerSide: 11 | 12 | 16): string[] {
   const out: string[] = [];
   for (let r = boardSize - 1; r >= 0; r--) {
     for (const id of computePlayableNodeIdsForRow(boardSize, r)) {
@@ -47,7 +49,7 @@ function computeStartNodesFromBottom(boardSize: 7 | 8, piecesPerSide: 11 | 12): 
  */
 export function computeStartNodeIds(params: {
   boardSize: 7 | 8;
-  piecesPerSide: 11 | 12;
+  piecesPerSide: 11 | 12 | 16;
 }): { blackStartNodeIds: readonly string[]; whiteStartNodeIds: readonly string[] } {
   const { boardSize, piecesPerSide } = params;
 

@@ -15,6 +15,7 @@ import { nodeIdToA1 } from "../../src/game/coordFormat.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
 import { checkCurrentPlayerLost } from "../../src/game/gameOver.ts";
 import { hashGameState } from "../../src/game/hashState.ts";
+import { wouldCreateThreefoldRepetition, wouldRepeatPreviousPosition } from "../../src/game/repetition.ts";
 import { adjudicateDamascaDeadPlay } from "../../src/game/damascaDeadPlay.ts";
 import type { Move } from "../../src/game/moveTypes.ts";
 import type { VariantId } from "../../src/variants/variantTypes.ts";
@@ -76,6 +77,100 @@ import {
   SUPPORTED_RULES_VERSION,
 } from "./persistence.ts";
 
+import type {
+  AuthMeResponse,
+  AuthOkResponse,
+  LoginRequest,
+  RegisterRequest,
+  UpdateProfileRequest,
+} from "../../src/shared/authProtocol.ts";
+import {
+  createUser,
+  ensureAuthDir,
+  findUserByEmail,
+  findUserById,
+  publicUser,
+  resolveAuthDir,
+  updateUserProfile,
+} from "./auth/authStore.ts";
+import { hashPassword, verifyPassword } from "./auth/password.ts";
+import { SessionStore } from "./auth/sessionStore.ts";
+import { clearCookie, parseCookieHeader, setCookie } from "./auth/httpCookies.ts";
+import { makeIpRateLimiter } from "./auth/rateLimit.ts";
+
+function avatarsDirPath(authDir: string): string {
+  return path.join(authDir, "avatars");
+}
+
+function normalizeAvatarContentType(raw: unknown): "image/png" | "image/svg+xml" | null {
+  if (typeof raw !== "string") return null;
+  const ct = raw.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (ct === "image/png") return "image/png";
+  if (ct === "image/svg+xml") return "image/svg+xml";
+  return null;
+}
+
+function avatarExtForContentType(ct: "image/png" | "image/svg+xml"): "png" | "svg" {
+  return ct === "image/png" ? "png" : "svg";
+}
+
+function isValidAvatarFileId(s: string): boolean {
+  // userId is 16 random bytes -> 32 hex chars.
+  return /^[0-9a-f]{32}\.(png|svg)$/i.test(s);
+}
+
+function isProbablyPng(buf: Buffer): boolean {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (buf.length < 8) return false;
+  return (
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  );
+}
+
+function isProbablySvg(buf: Buffer): boolean {
+  const s = buf.toString("utf8").trimStart();
+  // Allow optional XML prolog.
+  if (s.startsWith("<?xml")) {
+    const idx = s.indexOf("?>");
+    if (idx >= 0) {
+      const rest = s.slice(idx + 2).trimStart();
+      return rest.startsWith("<svg");
+    }
+  }
+  return s.startsWith("<svg");
+}
+
+async function writeAvatarFileAtomic(args: {
+  authDir: string;
+  userId: string;
+  ext: "png" | "svg";
+  bytes: Buffer;
+}): Promise<void> {
+  const dir = avatarsDirPath(args.authDir);
+  await fs.mkdir(dir, { recursive: true });
+
+  const finalPath = path.join(dir, `${args.userId}.${args.ext}`);
+  const tmpPath = `${finalPath}.tmp.${process.pid}.${Date.now()}.${secureRandomHex(6)}`;
+  await fs.writeFile(tmpPath, args.bytes);
+  await fs.rename(tmpPath, finalPath);
+
+  // Remove the other extension if it exists.
+  const otherExt: "png" | "svg" = args.ext === "png" ? "svg" : "png";
+  const otherPath = path.join(dir, `${args.userId}.${otherExt}`);
+  try {
+    await fs.rm(otherPath, { force: true });
+  } catch {
+    // ignore
+  }
+}
+
 type Room = {
   roomId: RoomId;
   history: HistoryManager;
@@ -103,11 +198,39 @@ type Room = {
 
 type ServerOpts = {
   gamesDir?: string;
+  authDir?: string;
   snapshotEvery?: number;
   disconnectGraceMs?: number;
+  sessionTtlMs?: number;
 };
 
 const randId = () => secureRandomHex(16);
+
+const AUTH_COOKIE_NAME = "lasca.sid";
+const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+
+function isRequestSecure(req: express.Request): boolean {
+  if ((req as any).secure) return true;
+  const xfProtoRaw = typeof req.headers["x-forwarded-proto"] === "string" ? req.headers["x-forwarded-proto"] : "";
+  const xfProto = xfProtoRaw.split(",")[0]?.trim().toLowerCase();
+  if (xfProto === "https") return true;
+  return process.env.LASCA_COOKIE_SECURE === "1";
+}
+
+function isValidEmail(raw: any): raw is string {
+  if (typeof raw !== "string") return false;
+  const s = raw.trim();
+  if (!s || s.length > 120) return false;
+  // Minimal sanity check.
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+}
+
+function isValidPassword(raw: any): raw is string {
+  if (typeof raw !== "string") return false;
+  if (raw.length < 8) return false;
+  if (raw.length > 200) return false;
+  return true;
+}
 
 
 function nowIso(): string {
@@ -396,10 +519,14 @@ export function createLascaApp(opts: ServerOpts = {}): {
   app: express.Express;
   rooms: Map<RoomId, Room>;
   gamesDir: string;
+  authDir: string;
   attachWebSockets: (server: Server) => void;
   shutdown: () => Promise<void>;
 } {
   const gamesDir = resolveGamesDir(opts.gamesDir);
+  const authDir = resolveAuthDir({ gamesDir, authDir: opts.authDir });
+  const sessionTtlMs = Number.isFinite(opts.sessionTtlMs as any) ? Number(opts.sessionTtlMs) : DEFAULT_SESSION_TTL_MS;
+  const sessions = new SessionStore(sessionTtlMs);
   const snapshotEvery = Math.max(1, Number(opts.snapshotEvery ?? 20));
   const disconnectGraceMs = Math.max(0, Number(opts.disconnectGraceMs ?? 120_000));
 
@@ -1156,8 +1283,26 @@ export function createLascaApp(opts: ServerOpts = {}): {
   const app = express();
   // Reflect the request origin to keep browser fetch happy across dev modes
   // (including file:// where Origin can be "null").
-  app.use(cors({ origin: true }));
+  app.use(
+    cors({
+      origin: (origin, cb) => cb(null, origin ?? true),
+      credentials: true,
+    })
+  );
   app.use(express.json({ limit: "1mb" }));
+
+  // Attach auth session (cookie-based). Session state is currently in-memory.
+  app.use((req, _res, next) => {
+    try {
+      const cookies = parseCookieHeader(typeof req.headers.cookie === "string" ? req.headers.cookie : undefined);
+      const sid = cookies[AUTH_COOKIE_NAME];
+      const session = sid ? sessions.get(String(sid)) : null;
+      (req as any).auth = session ? { userId: session.userId, sessionId: session.sessionId } : null;
+    } catch {
+      (req as any).auth = null;
+    }
+    next();
+  });
 
   app.use((req, _res, next) => {
     // eslint-disable-next-line no-console
@@ -1167,6 +1312,191 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // MP4C: accounts + cookie sessions (authn/authz).
+  // Minimal endpoints: register/login/logout/me + profile update.
+  const authLimiter = makeIpRateLimiter({ windowMs: 10 * 60 * 1000, max: 30, keyPrefix: "auth" });
+
+  app.post("/api/auth/register", authLimiter, async (req, res) => {
+    try {
+      const body = req.body as RegisterRequest;
+      if (!isValidEmail(body?.email)) throw new Error("Invalid email");
+      if (!isValidPassword(body?.password)) throw new Error("Invalid password");
+
+      const displayName = sanitizeDisplayName(body?.displayName) ?? "Player";
+      const pw = await hashPassword(String(body.password));
+      const user = await createUser({ authDir, email: body.email, password: pw, displayName });
+
+      const secure = isRequestSecure(req);
+      const sameSite = secure ? "None" : "Lax";
+      const session = sessions.create(user.userId);
+      setCookie({
+        res,
+        name: AUTH_COOKIE_NAME,
+        value: session.sessionId,
+        maxAgeSeconds: Math.floor(sessionTtlMs / 1000),
+        secure,
+        sameSite,
+      });
+
+      const response: AuthOkResponse = { ok: true, user: publicUser(user) };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Register failed";
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  app.post("/api/auth/login", authLimiter, async (req, res) => {
+    try {
+      const body = req.body as LoginRequest;
+      if (!isValidEmail(body?.email)) throw new Error("Invalid email");
+      if (!isValidPassword(body?.password)) throw new Error("Invalid password");
+
+      const user = await findUserByEmail(authDir, body.email);
+      if (!user) throw new Error("Invalid credentials");
+      const ok = await verifyPassword(String(body.password), user.password);
+      if (!ok) throw new Error("Invalid credentials");
+
+      const secure = isRequestSecure(req);
+      const sameSite = secure ? "None" : "Lax";
+      const session = sessions.create(user.userId);
+      setCookie({
+        res,
+        name: AUTH_COOKIE_NAME,
+        value: session.sessionId,
+        maxAgeSeconds: Math.floor(sessionTtlMs / 1000),
+        secure,
+        sameSite,
+      });
+
+      const response: AuthOkResponse = { ok: true, user: publicUser(user) };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Login failed";
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    try {
+      const auth = (req as any).auth as { sessionId: string } | null;
+      if (auth?.sessionId) sessions.delete(auth.sessionId);
+      clearCookie(res, AUTH_COOKIE_NAME);
+      res.json({ ok: true });
+    } catch {
+      clearCookie(res, AUTH_COOKIE_NAME);
+      res.json({ ok: true });
+    }
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const auth = (req as any).auth as { userId: string } | null;
+      if (!auth?.userId) {
+        const response: AuthMeResponse = { ok: true, user: null };
+        res.json(response);
+        return;
+      }
+
+      const user = await findUserById(authDir, auth.userId);
+      if (!user) {
+        const response: AuthMeResponse = { ok: true, user: null };
+        res.json(response);
+        return;
+      }
+
+      const response: AuthMeResponse = { ok: true, user: publicUser(user) };
+      res.json(response);
+    } catch {
+      const response: AuthMeResponse = { ok: true, user: null };
+      res.json(response);
+    }
+  });
+
+  app.patch("/api/auth/me", authLimiter, async (req, res) => {
+    try {
+      const auth = (req as any).auth as { userId: string } | null;
+      if (!auth?.userId) throw new Error("Not authenticated");
+
+      const body = req.body as UpdateProfileRequest;
+      const displayName = body?.displayName != null ? sanitizeDisplayName(body.displayName) : undefined;
+      const avatarUrl = typeof body?.avatarUrl === "string" ? body.avatarUrl : undefined;
+
+      const updated = await updateUserProfile({ authDir, userId: auth.userId, displayName, avatarUrl });
+      const response: AuthOkResponse = { ok: true, user: publicUser(updated) };
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Update failed";
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  // MP4C: avatar upload (PNG or SVG). Stores under authDir/avatars and updates user.avatarUrl.
+  // Uses a raw body so we don't need multipart parsing.
+  app.put(
+    "/api/auth/me/avatar",
+    authLimiter,
+    express.raw({ type: ["image/png", "image/svg+xml"], limit: "512kb" }),
+    async (req, res) => {
+      try {
+        const auth = (req as any).auth as { userId: string } | null;
+        if (!auth?.userId) throw new Error("Not authenticated");
+
+        const ct = normalizeAvatarContentType(req.headers["content-type"]);
+        if (!ct) {
+          res.status(415).json({ error: "Unsupported avatar content-type (use image/png or image/svg+xml)" });
+          return;
+        }
+
+        const bytes = Buffer.isBuffer(req.body) ? (req.body as Buffer) : Buffer.from([]);
+        if (!bytes.length) throw new Error("Missing avatar bytes");
+
+        if (ct === "image/png" && !isProbablyPng(bytes)) {
+          throw new Error("Invalid PNG file");
+        }
+        if (ct === "image/svg+xml" && !isProbablySvg(bytes)) {
+          throw new Error("Invalid SVG file");
+        }
+
+        const ext = avatarExtForContentType(ct);
+        await writeAvatarFileAtomic({ authDir, userId: auth.userId, ext, bytes });
+
+        // Store a relative URL; clients can prefix with their configured server base.
+        const avatarUrl = `/api/auth/avatar/${auth.userId}.${ext}?v=${Date.now()}`;
+        const updated = await updateUserProfile({ authDir, userId: auth.userId, avatarUrl });
+        const response: AuthOkResponse = { ok: true, user: publicUser(updated) };
+        res.json(response);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Avatar upload failed";
+        res.status(400).json({ error: msg });
+      }
+    }
+  );
+
+  // Serve avatar files (public). Path is `:userId.(png|svg)`.
+  app.get("/api/auth/avatar/:fileId", async (req, res) => {
+    try {
+      const fileId = String(req.params.fileId || "");
+      if (!isValidAvatarFileId(fileId)) {
+        res.status(400).json({ error: "Invalid avatar id" });
+        return;
+      }
+
+      const dir = avatarsDirPath(authDir);
+      const p = path.join(dir, fileId);
+      const ext = fileId.toLowerCase().endsWith(".png") ? "png" : "svg";
+      const ct = ext === "png" ? "image/png" : "image/svg+xml";
+
+      const bytes = await fs.readFile(p);
+      res.setHeader("content-type", ct);
+      res.setHeader("x-content-type-options", "nosniff");
+      res.setHeader("cache-control", "public, max-age=3600");
+      res.send(bytes);
+    } catch {
+      res.status(404).json({ error: "Not found" });
+    }
   });
 
   // Admin endpoint: delete a room (disk + memory).
@@ -1991,6 +2321,19 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
         const prevToMove = (room.state as any).toMove as PlayerColor;
         const next = applyMove(room.state as any, move as any) as any;
+
+        // Columns Chess: prohibit the 3rd occurrence of the same position (no draw).
+        const rulesetId = (room.state as any)?.meta?.rulesetId ?? "lasca";
+        if (rulesetId === "columns_chess") {
+          const snap = room.history.exportSnapshots();
+          if (
+            wouldRepeatPreviousPosition({ history: snap as any, nextState: next as any }) ||
+            wouldCreateThreefoldRepetition({ history: snap as any, nextState: next as any })
+          ) {
+            throw new Error("Move prohibited by repetition");
+          }
+        }
+
         room.state = next;
 
         // Record history for every applied move so capture-chain steps are visible in the UI.
@@ -2267,26 +2610,32 @@ export function createLascaApp(opts: ServerOpts = {}): {
     await Promise.all(Array.from(rooms.values()).map((r) => r.persistChain.catch(() => undefined)));
   }
 
-  return { app, rooms, gamesDir, attachWebSockets, shutdown };
+  return { app, rooms, gamesDir, authDir, attachWebSockets, shutdown };
 }
 
 export async function startLascaServer(args: {
   port?: number;
   gamesDir?: string;
+  authDir?: string;
   snapshotEvery?: number;
   disconnectGraceMs?: number;
+  sessionTtlMs?: number;
 }): Promise<{
   app: express.Express;
   server: Server;
   url: string;
   gamesDir: string;
+  authDir: string;
 }> {
-  const { app, gamesDir, attachWebSockets, shutdown } = createLascaApp({
+  const { app, gamesDir, authDir, attachWebSockets, shutdown } = createLascaApp({
     gamesDir: args.gamesDir,
+    authDir: args.authDir,
     snapshotEvery: args.snapshotEvery,
     disconnectGraceMs: args.disconnectGraceMs,
+    sessionTtlMs: args.sessionTtlMs,
   });
   await ensureGamesDir(gamesDir);
+  await ensureAuthDir(authDir);
 
   const port = Number.isFinite(args.port as any) ? Number(args.port) : 8788;
 
@@ -2323,5 +2672,5 @@ export async function startLascaServer(args: {
   };
 
   const actualPort = (server.address() as any)?.port ?? port;
-  return { app, server, url: `http://localhost:${actualPort}`, gamesDir };
+  return { app, server, url: `http://localhost:${actualPort}`, gamesDir, authDir };
 }

@@ -240,6 +240,12 @@ function readSavedThemeId(): string | null {
   return raw;
 }
 
+function isVisibleThemeId(id: string | null | undefined): boolean {
+  if (!id) return false;
+  const t = getThemeById(id);
+  return Boolean(t && !t.hidden);
+}
+
 function saveThemeId(id: string) {
   localStorage.setItem(LS_KEY, id);
 }
@@ -465,9 +471,9 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
 
   async function bindThemeDropdown(dropdownRootEl: HTMLElement | null | undefined) {
     if (!dropdownRootEl) return;
-    const items = THEMES.map((t) => ({ id: t.id, label: t.label }));
+    const items = THEMES.filter((t) => !t.hidden).map((t) => ({ id: t.id, label: t.label }));
     const saved = readSavedThemeId();
-    const initial = saved && getThemeById(saved) ? saved : DEFAULT_THEME_ID;
+    const initial = isVisibleThemeId(saved) ? (saved as string) : DEFAULT_THEME_ID;
     await setTheme(initial);
     const dropdown = createThemeDropdown({
       rootEl: dropdownRootEl,
@@ -481,14 +487,14 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
   async function bindThemeSelect(selectEl: HTMLSelectElement | null | undefined) {
     if (!selectEl) return;
     selectEl.textContent = "";
-    for (const t of THEMES) {
+    for (const t of THEMES.filter((t) => !t.hidden)) {
       const opt = document.createElement("option");
       opt.value = t.id;
       opt.textContent = t.label;
       selectEl.appendChild(opt);
     }
     const saved = readSavedThemeId();
-    const initial = saved && getThemeById(saved) ? saved : DEFAULT_THEME_ID;
+    const initial = isVisibleThemeId(saved) ? (saved as string) : DEFAULT_THEME_ID;
     selectEl.value = initial;
     await setTheme(initial);
     selectEl.addEventListener("change", async () => {

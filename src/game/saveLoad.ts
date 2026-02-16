@@ -9,6 +9,7 @@ export interface SerializedGameState {
   toMove: "B" | "W";
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
+  chess?: GameState["chess"];
   forcedGameOver?: {
     winner: "B" | "W" | null;
     reasonCode: string;
@@ -45,7 +46,7 @@ export interface SerializedSaveFileV3 {
 export type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
 
 function isRulesetId(raw: unknown): raw is RulesetId {
-  return raw === "lasca" || raw === "dama" || raw === "damasca" || raw === "damasca_classic";
+  return raw === "lasca" || raw === "dama" || raw === "damasca" || raw === "damasca_classic" || raw === "columns_chess";
 }
 
 function isLegacyHybridRulesetId(raw: unknown): boolean {
@@ -156,6 +157,7 @@ export function serializeGameState(state: GameState): SerializedGameState {
     toMove: state.toMove,
     phase: state.phase,
     meta: coerceMeta(state.meta) ?? undefined,
+    chess: (state as any).chess,
     forcedGameOver: (state as any).forcedGameOver,
     damascaDeadPlay: (state as any).damascaDeadPlay,
   };
@@ -171,6 +173,7 @@ export function deserializeGameState(data: SerializedGameState): GameState {
     toMove: data.toMove,
     phase,
     meta: coerceMeta((data as any).meta) ?? undefined,
+    chess: (data as any).chess,
     forcedGameOver: (data as any).forcedGameOver,
     damascaDeadPlay: (data as any).damascaDeadPlay,
   };

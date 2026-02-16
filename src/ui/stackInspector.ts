@@ -1,7 +1,8 @@
 import { MINI_SPINE_MAX_SHOWN, MINI_SPINE_KEEP_BOTTOM, MINI_SPINE_KEEP_TOP } from "../config/constants";
 import { nodeIdToA1 } from "../game/coordFormat";
 import { pieceToHref } from "../pieces/pieceToHref";
-import { makeUse } from "../render/svgUse";
+import { makeUseWithTitle } from "../render/svgUse";
+import { pieceTooltip } from "../pieces/pieceLabel";
 import type { Stack } from "../types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -19,10 +20,11 @@ export function createStackInspector(
     zoomSvg.removeAttribute("height");
   }
 
-  function show(nodeId: string, stack: Stack): void {
+  function show(nodeId: string, stack: Stack, opts: { rulesetId?: string; boardSize?: number } = {}): void {
     const n = stack.length;
+    const boardSize = opts.boardSize ?? 7;
 
-    zoomTitle.textContent = `Stack @ ${nodeIdToA1(nodeId)} (×${n})`;
+    zoomTitle.textContent = `Stack @ ${nodeIdToA1(nodeId, boardSize)} (×${n})`;
     zoomHint.textContent = n > MINI_SPINE_MAX_SHOWN
       ? "Full column order (bottom → top). Brackets mark pieces omitted in the mini preview spine."
       : "Full column order (bottom → top).";
@@ -77,9 +79,9 @@ export function createStackInspector(
 
     for (let i = 0; i < n; i++) {
       const p = stack[i];
-      const href = pieceToHref(p);
+      const href = pieceToHref(p, { rulesetId: opts.rulesetId });
       const y = columnY + (n - 1 - i) * (miniSize + gap);
-      zoomSvg.appendChild(makeUse(href, columnX, y, miniSize));
+      zoomSvg.appendChild(makeUseWithTitle(href, columnX, y, miniSize, pieceTooltip(p, { rulesetId: opts.rulesetId })));
     }
 
     if (n > MINI_SPINE_MAX_SHOWN) {

@@ -1,13 +1,14 @@
 import { pieceToHref } from "../pieces/pieceToHref";
-import { makeUse } from "./svgUse";
+import { makeUseWithTitle } from "./svgUse";
 import { drawMiniStackSpine } from "./miniSpine";
 import { maybeVariantStonePieceHref } from "./stonePieceVariant";
 import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
+import { pieceTooltip } from "../pieces/pieceLabel";
 
 type Inspector = {
   cancelHide: () => void;
-  show: (nodeId: string, stack: Stack) => void;
+  show: (nodeId: string, stack: Stack, opts?: { rulesetId?: string; boardSize?: number }) => void;
   hideSoon: () => void;
 };
 
@@ -17,9 +18,15 @@ export function renderStackAtNode(
   inspector: Inspector | null,
   nodeId: string,
   stack: Stack,
-  opts: { pieceSize?: number; rulesetId?: string; countsLayer?: SVGGElement | null } = {}
+  opts: {
+    pieceSize?: number;
+    rulesetId?: string;
+    boardSize?: number;
+    countsLayer?: SVGGElement | null;
+    spinesLayer?: SVGGElement | null;
+  } = {}
 ): void {
-  const { pieceSize = 86, rulesetId, countsLayer } = opts;
+  const { pieceSize = 86, rulesetId, boardSize, countsLayer, spinesLayer } = opts;
 
   const node = document.getElementById(nodeId) as SVGCircleElement | null;
   if (!node || !stack.length) return;
@@ -36,9 +43,37 @@ export function renderStackAtNode(
 
   const baseHref = pieceToHref(top, { rulesetId });
   const href = maybeVariantStonePieceHref(svgRoot, maybeVariantWoodenPieceHref(svgRoot, baseHref, nodeId), nodeId);
-  g.appendChild(makeUse(href, cx - half, cy - half, pieceSize));
+  g.appendChild(makeUseWithTitle(href, cx - half, cy - half, pieceSize, pieceTooltip(top, { rulesetId })));
 
-  drawMiniStackSpine(svgRoot, g, cx, cy, stack, {
+  const bindInspectorHover = (el: SVGGElement): void => {
+    if (!inspector || stack.length <= 1) return;
+    el.style.cursor = "pointer";
+    el.addEventListener("pointerover", (ev) => {
+      const rt = (ev as PointerEvent).relatedTarget as Node | null;
+      if (rt && el.contains(rt)) return;
+      inspector.cancelHide();
+      inspector.show(nodeId, stack, { rulesetId, boardSize });
+    });
+    el.addEventListener("pointerout", (ev) => {
+      const rt = (ev as PointerEvent).relatedTarget as Node | null;
+      if (rt && el.contains(rt)) return;
+      inspector.hideSoon();
+    });
+  };
+
+  const spineTarget = spinesLayer ?? g;
+  const spineG =
+    spineTarget === g
+      ? g
+      : (document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement);
+
+  if (spineG !== g) {
+    spineG.setAttribute("data-node", nodeId);
+    spineG.setAttribute("class", "miniSpine");
+    spineTarget.appendChild(spineG);
+  }
+
+  drawMiniStackSpine(svgRoot, spineG, cx, cy, stack, {
     pieceSize,
     miniSize: 18,
     rulesetId,
@@ -46,16 +81,8 @@ export function renderStackAtNode(
     countLayer: countsLayer ?? undefined,
   });
 
-  if (inspector && stack.length > 1) {
-    g.style.cursor = "pointer";
-    g.addEventListener("pointerenter", () => {
-      inspector.cancelHide();
-      inspector.show(nodeId, stack);
-    });
-    g.addEventListener("pointerleave", () => {
-      inspector.hideSoon();
-    });
-  }
+  bindInspectorHover(g);
+  if (spineG !== g) bindInspectorHover(spineG);
 
   piecesLayer.appendChild(g);
 }

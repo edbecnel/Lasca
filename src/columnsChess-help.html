@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Columns Chess Help</title>
+
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      sizes="any"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23111'/%3E%3Cg fill='%23fff'%3E%3Crect x='7.3' y='2' width='1.4' height='3.8' rx='.6'/%3E%3Crect x='5.6' y='3.1' width='4.8' height='1.4' rx='.6'/%3E%3Ccircle cx='8' cy='6' r='1.15'/%3E%3Cpath d='M6.2 7.6h3.6l.7 4.1H5.5l.7-4.1z'/%3E%3Crect x='4.6' y='11.3' width='6.8' height='2.4' rx='1'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --bg: #111;
+        --panel: rgba(255, 255, 255, 0.06);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: rgba(255, 255, 255, 0.92);
+        --sub: rgba(255, 255, 255, 0.74);
+        --mono:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        line-height: 1.5;
+      }
+      header {
+        padding: 18px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.18);
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.2px;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        margin: 12px 0;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 0 0 8px 0;
+        letter-spacing: 0.2px;
+      }
+      p {
+        margin: 8px 0;
+        color: var(--sub);
+      }
+      ul {
+        margin: 8px 0 0 18px;
+        color: var(--sub);
+      }
+      li {
+        margin: 6px 0;
+      }
+      .mono {
+        font-family: var(--mono);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .note {
+        color: rgba(255, 255, 255, 0.86);
+      }
+      a {
+        color: rgba(150, 210, 255, 0.95);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Columns Chess — Help</h1>
+    </header>
+
+    <main>
+      <div class="panel">
+        <h2>What Is Columns Chess?</h2>
+        <p>
+          Columns Chess is chess-like movement (including check) combined with
+          stacking captures. Squares can hold a
+          <span class="note">stack</span> (a “column”) of pieces.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Movement</h2>
+        <ul>
+          <li>
+            Pieces move like chess: King, Queen, Rook, Bishop, Knight, Pawn.
+          </li>
+          <li>
+            Check rules apply: you may not make a move that leaves your king in
+            check.
+          </li>
+          <li>
+            Castling and en passant exist when allowed by the current state.
+          </li>
+          <li>
+            Promotion: pawns promote on reaching the final rank (as in chess).
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Stacks (Columns)</h2>
+        <ul>
+          <li>
+            Only the <span class="note">top piece</span> of a stack determines
+            who controls that square.
+          </li>
+          <li>
+            Hover a stacked square to open the Stack Inspector and see the full
+            bottom → top order.
+          </li>
+          <li>
+            A small “mini spine” preview is drawn next to stacked squares on the
+            board.
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Captures With Stacks</h2>
+        <p>
+          A capture targets an occupied square. The capture removes only the
+          <span class="note">top</span> piece of the captured stack and places
+          it <span class="note">under</span> the capturing stack on the
+          destination square.
+        </p>
+        <ul>
+          <li>
+            If the captured stack had more than one piece, the remaining pieces
+            (the “remainder”) are moved back to the capturer’s origin square.
+          </li>
+          <li>
+            If the captured stack had exactly one piece, the origin square
+            becomes empty.
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Repetition Rules (No Draw)</h2>
+        <p>
+          Columns Chess does <span class="note">not</span> declare a draw by
+          repetition. Instead, some repeating moves are prohibited.
+        </p>
+
+        <p class="note"><b>Ko (immediate recapture ban)</b></p>
+        <ul>
+          <li>
+            Ko is only checked immediately after a
+            <span class="note">capture</span>.
+          </li>
+          <li>
+            A move is illegal if it would recreate the
+            <span class="note">exact</span> full position that existed
+            immediately before the last capture.
+          </li>
+          <li>
+            Ko is cleared as soon as a
+            <span class="note">non-capture</span> move is made.
+          </li>
+        </ul>
+
+        <p class="note"><b>Threefold prohibition</b></p>
+        <ul>
+          <li>
+            A move is also illegal if it would make the resulting full position
+            occur for the <span class="note">third</span> time in the recorded
+            history.
+          </li>
+        </ul>
+
+        <p>
+          “Full position” means the entire board (including stack order) plus
+          side-to-move and chess aux state (castling/en passant).
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Controls</h2>
+        <ul>
+          <li>
+            Click a piece/stack to select it, then click a highlighted target to
+            move.
+          </li>
+          <li>Hover stacked squares to open the Stack Inspector.</li>
+          <li>
+            Use the Start link in the top bar to return to the Start Page.
+          </li>
+        </ul>
+        <p>
+          Tip: if something looks wrong, include the exact move sequence and (if
+          online) the room ID when reporting a bug.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Notation</h2>
+        <p>
+          In move history, <span class="mono">→</span> indicates a non-capture
+          move and <span class="mono">×</span> indicates a capture.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

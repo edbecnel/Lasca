@@ -4,6 +4,8 @@ export interface ThemeDef {
   piecesDefs: URL;
   boardDefs: URL;
   css: URL;
+  /** Hidden from general theme pickers (used for variant-specific themes). */
+  hidden?: boolean;
 }
 
 export const DEFAULT_THEME_ID = "classic" as const;
@@ -13,6 +15,15 @@ export const THEMES: ThemeDef[] = [
     id: "classic",
     label: "Classic",
     piecesDefs: new URL("../assets/themes/classic/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/classic/theme.css", import.meta.url),
+  },
+  {
+    id: "columns_classic",
+    label: "Classic",
+    hidden: true,
+    // Columns Chess-only: chess glyphs printed on stackable discs.
+    piecesDefs: new URL("../assets/themes/columns_classic/pieces_defs.svg", import.meta.url),
     boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
   },

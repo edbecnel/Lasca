@@ -5,8 +5,8 @@
   "boardSize": 8,
   "current": {
     "board": [
-      ["r2c2", [{ "owner": "B", "rank": "S" }]],
-      ["r3c3", [{ "owner": "W", "rank": "S" }, { "owner": "W", "rank": "S" }]]
+      ["r2c3", [{ "owner": "B", "rank": "S" }]],
+      ["r3c2", [{ "owner": "W", "rank": "S" }, { "owner": "W", "rank": "S" }]]
     ],
     "toMove": "B",
     "phase": "idle",

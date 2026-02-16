@@ -45,8 +45,20 @@ describe("renderGameState", () => {
 
     renderGameState(svg, pieces, null, state);
 
-    expect(pieces.children.length).toBe(1);
-    const stackG = pieces.children[0] as SVGGElement;
+    // renderGameState creates internal layers within #pieces
+    const pieceStacksLayer = pieces.querySelector('g[data-layer="pieceStacks"]') as
+      | SVGGElement
+      | null;
+    const miniSpinesLayer = pieces.querySelector('g[data-layer="miniSpines"]') as
+      | SVGGElement
+      | null;
+
+    expect(pieceStacksLayer).toBeTruthy();
+    expect(miniSpinesLayer).toBeTruthy();
+
+    // Should only render our single stack into the pieceStacks layer
+    expect(pieceStacksLayer!.children.length).toBe(1);
+    const stackG = pieceStacksLayer!.children[0] as SVGGElement;
     expect(stackG.getAttribute("class")).toBe("stack");
     expect(stackG.getAttribute("data-node")).toBe("r3c3");
 

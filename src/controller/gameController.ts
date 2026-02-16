@@ -8,6 +8,9 @@ import { RULES } from "../game/ruleset.ts";
 import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
+import { applyMove } from "../game/applyMove.ts";
+import { wouldCreateThreefoldRepetition, wouldRepeatPreviousPosition } from "../game/repetition.ts";
+import { isKingInCheckColumnsChess } from "../game/movegenColumnsChess.ts";
 import {
   adjudicateDamascaDeadPlay,
   DAMASCA_NO_PROGRESS_LIMIT_PLIES,
@@ -87,6 +90,21 @@ export class GameController {
 
   private sfx: SfxManager | null = null;
 
+  private isColumnsChessRuleset(): boolean {
+    return (this.state.meta?.rulesetId ?? "lasca") === "columns_chess";
+  }
+
+  private recomputeMandatoryCapture(constraints?: any, precomputedMoves?: Array<{ kind: string }>): void {
+    // Columns Chess uses chess-like move freedom (no mandatory capture).
+    if (this.isColumnsChessRuleset()) {
+      this.mandatoryCapture = false;
+      return;
+    }
+
+    const moves = precomputedMoves ?? generateLegalMoves(this.state, constraints);
+    this.mandatoryCapture = moves.some((m) => m.kind === "capture");
+  }
+
   private lastOpponentPresent: boolean | null = null;
   private lastOpponentConnected: boolean | null = null;
   private everSawOpponentPresent: boolean = false;
@@ -100,6 +118,10 @@ export class GameController {
   private replayPlayersSummary: string | null = null;
 
   private debugEl: HTMLDivElement | null = null;
+
+  public getStateForDebug(): GameState {
+    return this.state;
+  }
 
   setSfxManager(sfx: SfxManager | null): void {
     this.sfx = sfx;
@@ -912,8 +934,7 @@ export class GameController {
       this.clearSelection();
       this.renderAuthoritative();
 
-      const allLegal = generateLegalMoves(this.state);
-      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeMandatoryCapture();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
       this.updatePanel();
@@ -946,8 +967,7 @@ export class GameController {
         this.clearSelection();
         this.renderAuthoritative();
 
-        const allLegal = generateLegalMoves(this.state);
-        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        this.recomputeMandatoryCapture();
         this.recomputeRepetitionCounts();
         this.checkAndHandleCurrentPlayerLost();
         this.updatePanel();
@@ -1182,21 +1202,33 @@ export class GameController {
       this.lastToastToMove = toMove;
       if (!shouldToast) return;
 
-      const legal = this.getLegalMovesForTurn();
-      const hasCapture = legal.some((m) => m.kind === "capture");
+      const isColumnsChess = this.isColumnsChessRuleset();
+      const checkPrefix =
+        isColumnsChess && isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
+      const legal = isColumnsChess ? [] : this.getLegalMovesForTurn();
+      const hasCapture = isColumnsChess ? false : legal.some((m) => m.kind === "capture");
 
       const localColor = (this.driver as OnlineGameDriver).getPlayerColor();
       if (localColor === "W" || localColor === "B") {
         const isLocalTurn = toMove === localColor;
         if (isLocalTurn) {
-          this.showToast(hasCapture ? "Your turn — must capture" : "Your turn", 1500);
+          if (isColumnsChess) {
+            this.showToast(`${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`, 1500);
+          } else {
+            this.showToast(hasCapture ? "Your turn — must capture" : "Your turn", 1500);
+          }
           return;
         }
       }
 
       // If we don't know local color (spectator / reconnect edge), fall back
       // to explicit side-to-move messaging.
-      this.showToast(`${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`, 1500);
+      this.showToast(
+        isColumnsChess
+          ? `${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`
+          : `${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`,
+        1500
+      );
       return;
     }
 
@@ -1206,9 +1238,14 @@ export class GameController {
     this.lastToastToMove = toMove;
 
     if (shouldToast) {
-      const legal = this.getLegalMovesForTurn();
-      const hasCapture = legal.some((m) => m.kind === "capture");
-      this.showToast(`${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`, 1500);
+      if (this.isColumnsChessRuleset()) {
+        const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
+        this.showToast(`${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`, 1500);
+      } else {
+        const legal = this.getLegalMovesForTurn();
+        const hasCapture = legal.some((m) => m.kind === "capture");
+        this.showToast(`${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`, 1500);
+      }
     }
   }
 
@@ -1404,8 +1441,7 @@ export class GameController {
     }
 
     // Check for mandatory captures at game start
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.recomputeRepetitionCounts();
     this.updatePanel();
     this.refreshSelectableCursors();
@@ -1546,7 +1582,8 @@ export class GameController {
 
   private checkAndHandleCurrentPlayerLost(): boolean {
     const result = checkCurrentPlayerLost(this.state);
-    if (result.winner) {
+    const isTerminal = Boolean(result.winner) || (this.isColumnsChessRuleset() && Boolean(result.reason));
+    if (isTerminal) {
       if (this.isGameOver) return true;
       this.isGameOver = true;
       this.clearSelection();
@@ -1694,8 +1731,7 @@ export class GameController {
       this.currentTurnHasCapture = false;
       this.clearSelection();
       this.renderAuthoritative();
-      const allLegal = generateLegalMoves(this.state);
-      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeMandatoryCapture();
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
@@ -1729,8 +1765,7 @@ export class GameController {
       this.currentTurnHasCapture = false;
       this.clearSelection();
       this.renderAuthoritative();
-      const allLegal = generateLegalMoves(this.state);
-      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeMandatoryCapture();
       this.updatePanel();
       this.recomputeRepetitionCounts();
       this.checkAndHandleCurrentPlayerLost();
@@ -1764,8 +1799,7 @@ export class GameController {
     this.currentTurnHasCapture = false;
     this.clearSelection();
     this.renderAuthoritative();
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.updatePanel();
     this.recomputeRepetitionCounts();
     this.checkAndHandleCurrentPlayerLost();
@@ -1829,7 +1863,7 @@ export class GameController {
     
     // When loading a game, check if the current player has already lost
     const currentPlayerResult = checkCurrentPlayerLost(this.state);
-    if (currentPlayerResult.winner) {
+    if (currentPlayerResult.winner || (this.isColumnsChessRuleset() && currentPlayerResult.reason)) {
       this.isGameOver = true;
       const msg = currentPlayerResult.reason || "Game Over";
       this.playSfx("gameOver");
@@ -1846,8 +1880,7 @@ export class GameController {
     this.recomputeRepetitionCounts();
     
     // Check if captures are available for the current player
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.updatePanel();
 
     this.maybeToastTurnChange();
@@ -1904,8 +1937,7 @@ export class GameController {
     this.renderAuthoritative();
     
     // Check for mandatory captures at game start
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.updatePanel();
 
     // Always re-toast at new game start.
@@ -1942,8 +1974,7 @@ export class GameController {
     this.renderAuthoritative();
     
     // Recompute mandatory captures
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.updatePanel();
 
     this.recomputeRepetitionCounts();
@@ -2004,8 +2035,9 @@ export class GameController {
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
+    const isColumnsChess = this.isColumnsChessRuleset();
     const toMoveLabel = this.state.toMove === "W" ? "Light" : "Dark";
-    let turnTooltipText: string | undefined = `${toMoveLabel} to move`;
+    let turnTooltipText: string | undefined = `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
     if (this.driver.mode === "online") {
       const remote = this.driver as OnlineGameDriver;
       const selfId = remote.getPlayerId();
@@ -2013,7 +2045,8 @@ export class GameController {
 
       if ((localColor === "W" || localColor === "B") && selfId && selfId !== "spectator") {
         const youLabel = localColor === "W" ? "Light" : "Dark";
-        const yourTurnText = this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to move`;
+        const yourTurnText =
+          this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
         turnTooltipText = `You are ${youLabel} — ${yourTurnText}`;
       }
     }
@@ -2426,13 +2459,29 @@ export class GameController {
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
     drawSelection(this.overlayLayer, nodeId);
-    const allLegal = generateLegalMoves(
+    let allLegal = generateLegalMoves(
       this.state,
       this.lockedCaptureFrom
         ? { forcedFrom: this.lockedCaptureFrom, excludedJumpSquares: this.jumpedSquares }
         : undefined
     );
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+
+    // Columns Chess: hide moves that are repetition-prohibited.
+    if (this.isColumnsChessRuleset()) {
+      const snap = this.driver.exportHistorySnapshots();
+      allLegal = allLegal.filter((m) => {
+        try {
+          const predicted = applyMove(this.state as any, m as any) as GameState;
+          return !(
+            wouldRepeatPreviousPosition({ history: snap, nextState: predicted }) ||
+            wouldCreateThreefoldRepetition({ history: snap, nextState: predicted })
+          );
+        } catch {
+          return false;
+        }
+      });
+    }
+    this.recomputeMandatoryCapture(undefined, allLegal);
     
     // If in a capture chain, only allow moves from the locked position
     let movesForNode = allLegal.filter(m => m.from === nodeId);
@@ -2473,8 +2522,7 @@ export class GameController {
     this.currentTargets = [];
     this.currentMoves = [];
     // Recalculate mandatory capture based on current state, don't just set to false
-    const allLegal = generateLegalMoves(this.state);
-    this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+    this.recomputeMandatoryCapture();
     this.lockedCaptureFrom = null;
     this.lockedCaptureDir = null;
     this.jumpedSquares.clear();
@@ -2510,6 +2558,24 @@ export class GameController {
   }
 
   private async applyChosenMove(move: Move): Promise<void> {
+    // Columns Chess: prohibit the 3rd occurrence of the same position (no draw).
+    if (this.isColumnsChessRuleset()) {
+      try {
+        const predicted = applyMove(this.state as any, move as any) as GameState;
+        const snap = this.driver.exportHistorySnapshots();
+        if (
+          wouldRepeatPreviousPosition({ history: snap, nextState: predicted }) ||
+          wouldCreateThreefoldRepetition({ history: snap, nextState: predicted })
+        ) {
+          this.playSfx("error");
+          this.showBanner("Move prohibited by repetition", 2500);
+          return;
+        }
+      } catch {
+        // If local prediction fails, fall through and let the authoritative driver/server validate.
+      }
+    }
+
     // Track node path for notation
     if (this.currentTurnNodes.length === 0) {
       this.currentTurnNodes.push(move.from);
@@ -2543,8 +2609,7 @@ export class GameController {
           this.clearSelection();
           this.renderAuthoritative();
 
-          const allLegal = generateLegalMoves(this.state);
-          this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+          this.recomputeMandatoryCapture();
           this.recomputeRepetitionCounts();
 
           // If the resynced state is actually over, lock the UI permanently.
@@ -2625,6 +2690,40 @@ export class GameController {
     clearOverlays(this.overlayLayer);
     
     if (move.kind === "capture") {
+      // Columns Chess has no multi-capture chains; a capture ends the turn immediately.
+      if (this.isColumnsChessRuleset()) {
+        this.clearSelection();
+
+        // Record state in history at turn boundary (like quiet moves).
+        const separator = this.currentTurnHasCapture ? " × " : " → ";
+        const boardSize = this.state.meta?.boardSize ?? 8;
+        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        if (this.driver.mode !== "online") {
+          this.driver.pushHistory(this.state, notation);
+        }
+        this.currentTurnNodes = [];
+        this.currentTurnHasCapture = false;
+        this.fireHistoryChange("move");
+
+        // No mandatory capture for chess.
+        this.mandatoryCapture = false;
+
+        // Check for checkmate/stalemate.
+        const gameResult = checkCurrentPlayerLost(this.state);
+        if (gameResult.winner || gameResult.reason) {
+          this.isGameOver = true;
+          const msg = gameResult.reason || "Game Over";
+          this.showBanner(msg, 0);
+          this.showGameOverToast(msg);
+          this.fireHistoryChange("gameOver");
+          return;
+        }
+
+        this.updatePanel();
+        this.maybeToastTurnChange();
+        return;
+      }
+
       // Track the jumped-over square to prevent re-jumping it
       this.jumpedSquares.add(move.over);
 
@@ -2762,8 +2861,7 @@ export class GameController {
         }
         
         // Update mandatory capture for new turn
-        const allLegal = generateLegalMoves(this.state);
-        this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+        this.recomputeMandatoryCapture();
         
         // Check for game over - check if the player who now has the turn can play
         const gameResult = checkCurrentPlayerLost(this.state);
@@ -2905,8 +3003,7 @@ export class GameController {
       }
       
       // Update mandatory capture for new turn
-      const allLegal = generateLegalMoves(this.state);
-      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeMandatoryCapture();
       
       // Check for game over - check if the player who now has the turn can play
       const gameResult = checkCurrentPlayerLost(this.state);
@@ -2941,7 +3038,7 @@ export class GameController {
       this.fireHistoryChange("move");
       
       // Check for threefold repetition draw
-      if (this.recordRepetitionForCurrentState()) {
+      if (!this.isColumnsChessRuleset() && this.recordRepetitionForCurrentState()) {
         this.isGameOver = true;
         this.clearSelection();
         this.showBanner("Draw by threefold repetition", 0);
@@ -2951,12 +3048,11 @@ export class GameController {
       }
       
       // Update mandatory capture for new turn
-      const allLegal = generateLegalMoves(this.state);
-      this.mandatoryCapture = allLegal.length > 0 && allLegal[0].kind === "capture";
+      this.recomputeMandatoryCapture();
       
       // Check for game over after quiet move - check if current player can play
       const gameResult = checkCurrentPlayerLost(this.state);
-      if (gameResult.winner) {
+      if (gameResult.winner || (this.isColumnsChessRuleset() && gameResult.reason)) {
         this.isGameOver = true;
         {
           const msg = gameResult.reason || "Game Over";

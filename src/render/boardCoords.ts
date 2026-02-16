@@ -57,12 +57,27 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSiz
   }
 
   // Derive a reasonable step from the node grid.
-  const p00 = readCircle(svg, "r0c0");
-  const p02 = readCircle(svg, "r0c2");
-  const p20 = readCircle(svg, "r2c0");
-  const stepX = p00 && p02 ? Math.abs(p02.cx - p00.cx) / 2 : 120;
-  const stepY = p00 && p20 ? Math.abs(p20.cy - p00.cy) / 2 : 120;
-  const step = Math.min(stepX, stepY);
+  // Not all boards include a node at r0c0 (e.g. 8×8 playable parity).
+  let step = 120;
+  const row0Nodes: Array<{ col: number; cx: number; cy: number }> = [];
+  for (let col = 0; col < boardSize; col++) {
+    const p = readCircle(svg, `r0c${col}`);
+    if (p) row0Nodes.push({ col, cx: p.cx, cy: p.cy });
+  }
+  if (row0Nodes.length >= 2) {
+    row0Nodes.sort((a, b) => a.col - b.col);
+    const dx = Math.abs(row0Nodes[1].cx - row0Nodes[0].cx);
+    const dc = Math.abs(row0Nodes[1].col - row0Nodes[0].col);
+    // Some boards include a full node grid (dc=1), while checkers-style boards
+    // only include playable parity nodes (often dc=2). Derive spacing from the
+    // actual column gap to keep label placement consistent across variants.
+    if (dc > 0) step = dx / dc;
+  } else {
+    // Fall back: try vertical distance between the first two rows that have nodes.
+    const p0 = readCircle(svg, "r0c0") ?? readCircle(svg, "r0c1");
+    const p2 = readCircle(svg, "r2c0") ?? readCircle(svg, "r2c1");
+    if (p0 && p2) step = Math.abs(p2.cy - p0.cy) / 2;
+  }
 
   const minX = findAnyColX(svg, boardSize, 0) ?? 140;
   const maxY = findAnyRowY(svg, boardSize, boardSize - 1) ?? 860;

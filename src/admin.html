@@ -267,6 +267,30 @@
       .danger h2 {
         color: rgba(255, 90, 90, 0.9);
       }
+
+      .confirmBar {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 90, 90, 0.22);
+        background: rgba(255, 90, 90, 0.08);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .confirmText {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .confirmActions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-shrink: 0;
+      }
     </style>
     <script type="module" src="./adminMain.ts"></script>
   </head>
@@ -380,6 +404,18 @@
             >
               Copy
             </button>
+          </div>
+
+          <div id="adminDeleteConfirm" class="confirmBar" hidden>
+            <div id="adminDeleteConfirmText" class="confirmText">—</div>
+            <div class="confirmActions">
+              <button class="panelBtn" id="adminDeleteConfirmYes" type="button">
+                Confirm delete
+              </button>
+              <button class="panelBtn" id="adminDeleteConfirmNo" type="button">
+                Cancel
+              </button>
+            </div>
           </div>
           <div class="hint">
             Calls DELETE /api/admin/room/:roomId and evicts the room

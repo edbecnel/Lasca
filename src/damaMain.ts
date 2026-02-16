@@ -5,6 +5,8 @@ import { initSplitLayout } from "./ui/layout/splitLayout";
 import { initCollapsibleSections } from "./ui/layout/collapsibleSections";
 import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager, THEME_CHANGE_EVENT } from "./theme/themeManager";
+import chessBoardSvgUrl from "./assets/chess_board.svg?url";
+import graphBoard8x8SvgUrl from "./assets/graph_board_8x8.svg?url";
 import type { Player } from "./types";
 import { GameController } from "./controller/gameController.ts";
 import { ensureOverlayLayer } from "./render/overlays.ts";
@@ -41,6 +43,7 @@ const LS_OPT_KEYS = {
   animations: "lasca.opt.animations",
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
+  board8x8Checkered: "lasca.opt.board8x8Checkered",
   threefold: "lasca.opt.threefold",
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
@@ -83,8 +86,21 @@ window.addEventListener("DOMContentLoaded", async () => {
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
-  const svgAsset = activeVariant.svgAsset ?? "./assets/damasca_board.svg";
+  const useCheckered8x8 = readOptionalBoolPref(LS_OPT_KEYS.board8x8Checkered) ?? false;
+  const svgAsset =
+    activeVariant.boardSize === 8 && useCheckered8x8
+      ? chessBoardSvgUrl
+      : (activeVariant.svgAsset ?? graphBoard8x8SvgUrl);
   const svg = await loadSvgFileInto(boardWrap, svgAsset);
+
+  const board8x8CheckeredToggle = document.getElementById("board8x8CheckeredToggle") as HTMLInputElement | null;
+  if (board8x8CheckeredToggle) {
+    board8x8CheckeredToggle.checked = useCheckered8x8;
+    board8x8CheckeredToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.board8x8Checkered, board8x8CheckeredToggle.checked);
+      window.location.reload();
+    });
+  }
 
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
   const savedBoardCoords = readOptionalBoolPref(LS_OPT_KEYS.boardCoords);

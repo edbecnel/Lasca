@@ -6,10 +6,10 @@
   "damaCaptureRemoval": "immediate",
   "current": {
     "board": [
-      ["r3c1", [{ "owner": "B", "rank": "S" }]],
-      ["r4c2", [{ "owner": "W", "rank": "S" }]],
-      ["r6c4", [{ "owner": "W", "rank": "S" }]],
-      ["r6c6", [{ "owner": "W", "rank": "S" }]]
+      ["r3c0", [{ "owner": "B", "rank": "S" }]],
+      ["r4c3", [{ "owner": "W", "rank": "S" }]],
+      ["r6c5", [{ "owner": "W", "rank": "S" }]],
+      ["r6c7", [{ "owner": "W", "rank": "S" }]]
     ],
     "toMove": "B",
     "phase": "idle",

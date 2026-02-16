@@ -1,5 +1,6 @@
 import type { Stack } from "../types.ts";
 import type { GameMeta } from "../variants/variantTypes";
+import type { GameState } from "../game/state.ts";
 
 export type WireCaptureChain = {
   promotionEarned?: boolean;
@@ -10,6 +11,8 @@ export type WireGameState = {
   toMove: "B" | "W";
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
+  /** Columns Chess / chess-like aux state (castling, en passant). */
+  chess?: GameState["chess"];
   forcedGameOver?: {
     winner: "B" | "W" | null;
     reasonCode: string;
@@ -40,6 +43,7 @@ export function serializeWireGameState(state: any): WireGameState {
     toMove: state.toMove,
     phase: state.phase,
     meta: state.meta,
+    chess: state.chess,
     forcedGameOver: state.forcedGameOver,
     captureChain: state.captureChain,
     damascaDeadPlay: state.damascaDeadPlay,
@@ -52,6 +56,7 @@ export function deserializeWireGameState(wire: WireGameState): any {
     toMove: wire.toMove,
     phase: wire.phase,
     meta: wire.meta,
+    chess: (wire as any).chess,
     forcedGameOver: (wire as any).forcedGameOver,
     captureChain: wire.captureChain,
     damascaDeadPlay: (wire as any).damascaDeadPlay,

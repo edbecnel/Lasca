@@ -14,6 +14,18 @@ export interface GameState {
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
 
+  /** Columns Chess / chess-like ruleset state (serialized). */
+  chess?: {
+    castling: {
+      W: { kingSide: boolean; queenSide: boolean };
+      B: { kingSide: boolean; queenSide: boolean };
+    };
+    /** En passant target square (the landing square for the capturing pawn), if any. */
+    enPassantTarget?: NodeId;
+    /** For en passant, the pawn square to be captured if a pawn moves to enPassantTarget. */
+    enPassantPawn?: NodeId;
+  };
+
   /**
    * Server-enforced game over (e.g., disconnect timeout).
    * When present, the game should be treated as finished.
@@ -48,6 +60,42 @@ export interface GameState {
 export function createInitialGameStateForVariant(variantId: VariantId): GameState {
   const board: BoardState = new Map();
   const variant = getVariantById(variantId);
+
+  // Columns Chess: standard chess starting position on a full 8×8 grid.
+  if (variant.rulesetId === "columns_chess") {
+    const backRank: Array<"R" | "N" | "B" | "Q" | "K" | "B" | "N" | "R"> = ["R", "N", "B", "Q", "K", "B", "N", "R"];
+    const set = (r: number, c: number, owner: Player, rank: "P" | "N" | "B" | "R" | "Q" | "K"): void => {
+      board.set(`r${r}c${c}`, [{ owner, rank }]);
+    };
+
+    // Black pieces
+    for (let c = 0; c < 8; c++) {
+      set(0, c, "B", backRank[c]);
+      set(1, c, "B", "P");
+    }
+    // White pieces
+    for (let c = 0; c < 8; c++) {
+      set(6, c, "W", "P");
+      set(7, c, "W", backRank[c]);
+    }
+
+    return {
+      board,
+      toMove: "W",
+      phase: "select",
+      meta: {
+        variantId,
+        rulesetId: variant.rulesetId,
+        boardSize: variant.boardSize,
+      },
+      chess: {
+        castling: {
+          W: { kingSide: true, queenSide: true },
+          B: { kingSide: true, queenSide: true },
+        },
+      },
+    };
+  }
 
   const { blackStartNodeIds, whiteStartNodeIds } = computeStartNodeIds({
     boardSize: variant.boardSize,

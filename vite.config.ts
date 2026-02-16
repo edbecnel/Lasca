@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => ({
         index: path.resolve(__dirname, "src/index.html"),
         ...(process.env.VITE_EMIT_ADMIN === "1" ? { admin: path.resolve(__dirname, "src/admin.html") } : {}),
         lasca: path.resolve(__dirname, "src/lasca.html"),
+        columnsChess: path.resolve(__dirname, "src/columnsChess.html"),
         lasca8x8: path.resolve(__dirname, "src/lasca8x8.html"),
         dama: path.resolve(__dirname, "src/dama.html"),
         damasca: path.resolve(__dirname, "src/damasca.html"),
