@@ -367,6 +367,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elBoard8x8Checkered = byId<HTMLInputElement>("launchBoard8x8Checkered");
+  const elBoard8x8CheckeredRow = (elBoard8x8Checkered.closest(".checkRow") as HTMLElement | null) ?? null;
+  const elBoard8x8CheckeredHint = (elBoard8x8CheckeredRow?.nextElementSibling as HTMLElement | null) ?? null;
   const elToasts = byId<HTMLInputElement>("launchToasts");
   const elSfx = byId<HTMLInputElement>("launchSfx");
 
@@ -1310,6 +1312,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const isColumnsChess = vId === "columns_chess";
 
+    // "Use checkered board for 8×8 games" does not apply to Columns Chess (it has its own board SVG).
+    // Keep the option for other 8×8 variants.
+    {
+      const show = !isColumnsChess;
+      if (elBoard8x8CheckeredRow) elBoard8x8CheckeredRow.style.display = show ? "" : "none";
+      if (elBoard8x8CheckeredHint) elBoard8x8CheckeredHint.style.display = show ? "" : "none";
+      elBoard8x8Checkered.disabled = !show;
+    }
+
     if (isColumnsChess) {
       elAiWhite.value = "human";
       elAiBlack.value = "human";
@@ -1323,11 +1334,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
     // Online (2 players) requires both sides Human.
     const onlineOpt = Array.from(elPlayMode.options).find((o) => o.value === "online") ?? null;
-    if (onlineOpt) onlineOpt.disabled = isAiGame || isColumnsChess;
-    if ((isAiGame || isColumnsChess) && elPlayMode.value === "online") {
+    if (onlineOpt) onlineOpt.disabled = isAiGame;
+    if (isAiGame && elPlayMode.value === "online") {
       elPlayMode.value = "local";
     }
-    elPlayMode.disabled = isAiGame || isColumnsChess;
+    elPlayMode.disabled = isAiGame;
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);

@@ -350,6 +350,30 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Undo / Redo
+  const undoBtn = document.getElementById("undoBtn") as HTMLButtonElement | null;
+  const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
+
+  const updateHistoryUI = () => {
+    if (undoBtn) undoBtn.disabled = !controller.canUndo();
+    if (redoBtn) redoBtn.disabled = !controller.canRedo();
+  };
+
+  if (undoBtn) {
+    undoBtn.addEventListener("click", () => {
+      controller.undo();
+    });
+  }
+
+  if (redoBtn) {
+    redoBtn.addEventListener("click", () => {
+      controller.redo();
+    });
+  }
+
+  controller.addHistoryChangeCallback(updateHistoryUI);
+  updateHistoryUI();
+
   if (import.meta.hot) {
     import.meta.hot.accept(() => {
       applyBoardCoords();

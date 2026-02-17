@@ -2,6 +2,7 @@ import type { GameState, NodeId } from "./state.ts";
 import type { Move } from "./moveTypes.ts";
 import type { Piece, Player, Stack } from "../types.ts";
 import { parseNodeId, makeNodeId } from "./coords.ts";
+import { hashGameStateForKo } from "./hashState.ts";
 
 function cloneStack(s: Stack): Stack {
   return s.slice();
@@ -73,6 +74,27 @@ export function applyMoveColumnsChess(state: GameState, move: Move): GameState &
   const boardSize = state.meta?.boardSize ?? 8;
   if (boardSize !== 8) throw new Error("Columns Chess requires an 8×8 board");
 
+  const koProhibitHash = typeof state.chess?.koProhibitHash === "string" ? state.chess.koProhibitHash : undefined;
+
+  const finalize = (next: GameState & { didPromote?: boolean }): GameState & { didPromote?: boolean } => {
+    // If the previous move was a capture, prohibit recreating the pre-capture position.
+    if (koProhibitHash && hashGameStateForKo(next) === koProhibitHash) {
+      throw new Error("applyMoveColumnsChess: ko (immediate recapture prohibited)");
+    }
+
+    // After any capture, set a new ko target for the opponent: the (ko-normalized) hash
+    // of the position before this capture. After any non-capture, ko is cleared.
+    if (move.kind === "capture") {
+      if (next.chess) next.chess.koProhibitHash = hashGameStateForKo(state);
+    } else {
+      if (next.chess && typeof (next.chess as any).koProhibitHash !== "undefined") {
+        delete (next.chess as any).koProhibitHash;
+      }
+    }
+
+    return next;
+  };
+
   const moving0 = state.board.get(move.from);
   if (!moving0 || moving0.length === 0) throw new Error(`applyMoveColumnsChess: no moving stack at ${move.from}`);
 
@@ -135,14 +157,14 @@ export function applyMoveColumnsChess(state: GameState, move: Move): GameState &
     nextChess.castling[movedTop.owner].kingSide = false;
     nextChess.castling[movedTop.owner].queenSide = false;
 
-    return {
+    return finalize({
       ...state,
       board: nextBoard,
       toMove: opponentOf(state.toMove),
       phase: "idle",
       chess: nextChess,
       didPromote: false,
-    };
+    });
   }
 
   if (move.kind === "move") {
@@ -173,14 +195,14 @@ export function applyMoveColumnsChess(state: GameState, move: Move): GameState &
       capturedSquare: null,
     });
 
-    return {
+    return finalize({
       ...state,
       board: nextBoard,
       toMove: opponentOf(state.toMove),
       phase: "idle",
       chess: nextChess,
       didPromote,
-    };
+    });
   }
 
   // Capture
@@ -231,12 +253,12 @@ export function applyMoveColumnsChess(state: GameState, move: Move): GameState &
     capturedSquare: captureSquare,
   });
 
-  return {
+  return finalize({
     ...state,
     board: nextBoard,
     toMove: opponentOf(state.toMove),
     phase: "idle",
     chess: nextChess,
     didPromote,
-  };
+  });
 }

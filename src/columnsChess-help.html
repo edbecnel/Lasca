@@ -1,10 +1,9 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Columns Chess Help</title>
-
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Columns Chess - Help &amp; Rules</title>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -12,144 +11,242 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%23111'/%3E%3Cg fill='%23fff'%3E%3Crect x='7.3' y='2' width='1.4' height='3.8' rx='.6'/%3E%3Crect x='5.6' y='3.1' width='4.8' height='1.4' rx='.6'/%3E%3Ccircle cx='8' cy='6' r='1.15'/%3E%3Cpath d='M6.2 7.6h3.6l.7 4.1H5.5l.7-4.1z'/%3E%3Crect x='4.6' y='11.3' width='6.8' height='2.4' rx='1'/%3E%3C/g%3E%3C/svg%3E"
     />
     <style>
-      :root {
-        --bg: #111;
-        --panel: rgba(255, 255, 255, 0.06);
-        --border: rgba(255, 255, 255, 0.12);
-        --text: rgba(255, 255, 255, 0.92);
-        --sub: rgba(255, 255, 255, 0.74);
-        --mono:
-          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-          "Liberation Mono", "Courier New", monospace;
-      }
       * {
+        margin: 0;
+        padding: 0;
         box-sizing: border-box;
       }
+
       body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
         font-family:
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Arial,
-          sans-serif;
-        line-height: 1.5;
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #e8e6e3;
+        background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+        padding: 20px;
+        min-height: 100vh;
       }
-      header {
-        padding: 18px 16px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(0, 0, 0, 0.18);
-      }
-      h1 {
-        margin: 0;
-        font-size: 18px;
-        letter-spacing: 0.2px;
-      }
-      main {
+
+      .container {
         max-width: 900px;
         margin: 0 auto;
-        padding: 16px;
+        background: rgba(42, 42, 42, 0.95);
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
       }
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 14px;
-        margin: 12px 0;
+
+      h1 {
+        color: #fff;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        border-bottom: 3px solid #4a9eff;
+        padding-bottom: 10px;
       }
+
       h2 {
-        font-size: 14px;
-        margin: 0 0 8px 0;
-        letter-spacing: 0.2px;
+        color: #4a9eff;
+        font-size: 1.8em;
+        margin-top: 30px;
+        margin-bottom: 15px;
       }
+
+      h3 {
+        color: #7db3ff;
+        font-size: 1.3em;
+        margin-top: 20px;
+        margin-bottom: 10px;
+      }
+
       p {
-        margin: 8px 0;
-        color: var(--sub);
+        margin-bottom: 15px;
+        color: #d4d4d4;
       }
-      ul {
-        margin: 8px 0 0 18px;
-        color: var(--sub);
+
+      ul,
+      ol {
+        margin-left: 25px;
+        margin-bottom: 15px;
       }
+
       li {
-        margin: 6px 0;
+        margin-bottom: 8px;
+        color: #d4d4d4;
       }
-      .mono {
-        font-family: var(--mono);
-        color: rgba(255, 255, 255, 0.9);
+
+      .highlight {
+        background: rgba(74, 158, 255, 0.2);
+        padding: 15px;
+        border-left: 4px solid #4a9eff;
+        border-radius: 4px;
+        margin: 15px 0;
       }
-      .note {
-        color: rgba(255, 255, 255, 0.86);
+
+      .warning {
+        background: rgba(255, 184, 77, 0.2);
+        padding: 15px;
+        border-left: 4px solid #ffb84d;
+        border-radius: 4px;
+        margin: 15px 0;
       }
+
+      .rule-box {
+        background: rgba(74, 158, 255, 0.1);
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border: 1px solid rgba(74, 158, 255, 0.3);
+      }
+
       a {
-        color: rgba(150, 210, 255, 0.95);
+        color: #4a9eff;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .back-link {
+        display: inline-block;
+        margin-top: 30px;
+        padding: 12px 24px;
+        background: #4a9eff;
+        color: #fff;
+        border-radius: 6px;
+        font-weight: 700;
+        transition: background 0.2s;
+      }
+
+      .back-link:hover {
+        background: rgba(74, 158, 255, 0.85);
+        text-decoration: none;
+      }
+
+      code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: "Courier New", monospace;
+        font-size: 0.9em;
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Columns Chess — Help</h1>
-    </header>
+    <div class="container">
+      <h1>Columns Chess - Help &amp; Rules</h1>
 
-    <main>
-      <div class="panel">
-        <h2>What Is Columns Chess?</h2>
-        <p>
-          Columns Chess is chess-like movement (including check) combined with
-          stacking captures. Squares can hold a
-          <span class="note">stack</span> (a “column”) of pieces.
-        </p>
-      </div>
+      <p>
+        <b>Columns Chess</b> combines chess movement (including <b>check</b>)
+        with Lasca-style stacking captures. Squares can hold a <b>stack</b>
+        (a “column”) of pieces.
+      </p>
 
-      <div class="panel">
-        <h2>Movement</h2>
+      <h2>Table of Contents</h2>
+      <ul>
+        <li><a href="#overview">Rules Overview</a></li>
+        <li><a href="#movement">Movement &amp; Check</a></li>
+        <li><a href="#stacks">Stacks (Columns)</a></li>
+        <li><a href="#captures">Captures &amp; Remainders</a></li>
+        <li><a href="#repetition">Repetition &amp; Ko</a></li>
+        <li><a href="#interface">Using the Interface</a></li>
+        <li><a href="#notation">Notation</a></li>
+      </ul>
+
+      <h2 id="overview">Rules Overview</h2>
+      <div class="rule-box">
+        <h3>Movement (Chess)</h3>
         <ul>
           <li>
             Pieces move like chess: King, Queen, Rook, Bishop, Knight, Pawn.
           </li>
           <li>
-            Check rules apply: you may not make a move that leaves your king in
-            check.
+            <b>Check rules apply:</b> you may not make a move that leaves your
+            king in check.
           </li>
           <li>
             Castling and en passant exist when allowed by the current state.
           </li>
+          <li>Promotion happens on reaching the final rank (as in chess).</li>
+        </ul>
+
+        <h3>Stacks + Stacking Captures</h3>
+        <ul>
           <li>
-            Promotion: pawns promote on reaching the final rank (as in chess).
+            Only the <b>top piece</b> of a stack determines who controls that
+            square.
+          </li>
+          <li>
+            Captures remove only the <b>top</b> piece of the captured stack.
+          </li>
+          <li>
+            The captured top piece is inserted at the <b>bottom</b> of the
+            capturing stack on the destination square.
+          </li>
+          <li>
+            If the captured stack had a remainder (more pieces underneath), the
+            remainder is moved back to the capturer’s origin square.
+          </li>
+        </ul>
+
+        <h3>Repetition &amp; Draws (Chess-style) + Ko</h3>
+        <ul>
+          <li>
+            <b>Ko (immediate recapture ban):</b> immediately after a capture,
+            you may not make a move that recreates the exact position from
+            before that capture.
+          </li>
+          <li>
+            <b>Threefold repetition (claimable draw):</b> if the same position
+            occurs at least 3 times, the player to move may claim a draw.
+          </li>
+          <li>
+            <b>Fivefold repetition (automatic draw):</b> if the same position
+            occurs at least 5 times, the game is drawn automatically.
           </li>
         </ul>
       </div>
 
-      <div class="panel">
-        <h2>Stacks (Columns)</h2>
-        <ul>
-          <li>
-            Only the <span class="note">top piece</span> of a stack determines
-            who controls that square.
-          </li>
-          <li>
-            Hover a stacked square to open the Stack Inspector and see the full
-            bottom → top order.
-          </li>
-          <li>
-            A small “mini spine” preview is drawn next to stacked squares on the
-            board. It is shown inside the square on the right side, and stays on
-            the screen-right even when the board is flipped.
-          </li>
-        </ul>
+      <h2 id="movement">Movement &amp; Check</h2>
+      <p>
+        You move like chess. Legal destinations are highlighted after selecting
+        a piece/stack.
+      </p>
+      <div class="highlight">
+        <b>Check reminder:</b> Even if a move is otherwise legal by movement, it
+        is illegal if it leaves your king in check.
       </div>
 
-      <div class="panel">
-        <h2>Captures With Stacks</h2>
-        <p>
-          A capture targets an occupied square. The capture removes only the
-          <span class="note">top</span> piece of the captured stack and places
-          it <span class="note">under</span> the capturing stack on the
-          destination square.
-        </p>
+      <h2 id="stacks">Stacks (Columns)</h2>
+      <ul>
+        <li>A square can contain a stack of pieces (bottom → top).</li>
+        <li>
+          Only the <b>top piece</b> determines which player controls the square.
+        </li>
+        <li>
+          Hover a stacked square to open the <b>Stack Inspector</b> (right
+          panel) and see the full column order.
+        </li>
+        <li>
+          A small “mini spine” preview is drawn for stacks on the board. It is
+          shown <b>inside</b> the square on the right side, and stays on
+          <b>screen-right</b> even when the board is flipped.
+        </li>
+      </ul>
+
+      <h2 id="captures">Captures &amp; Remainders</h2>
+      <p>A capture targets an occupied square.</p>
+      <div class="rule-box">
+        <h3>What a capture does</h3>
         <ul>
+          <li>
+            Captures remove only the <b>top</b> piece of the captured stack.
+          </li>
+          <li>
+            That captured piece is inserted <b>under</b> the capturing stack on
+            the destination square.
+          </li>
           <li>
             If the captured stack had more than one piece, the remaining pieces
             (the “remainder”) are moved back to the capturer’s origin square.
@@ -161,102 +258,124 @@
         </ul>
       </div>
 
-      <div class="panel">
-        <h2>Repetition Rules (No Draw)</h2>
-        <p>
-          Columns Chess does <span class="note">not</span> declare a draw by
-          repetition. Instead, some repeating moves are prohibited.
-        </p>
+      <h2 id="repetition">Repetition &amp; Ko</h2>
+      <p>
+        Columns Chess uses chess-style repetition draws (threefold claimable,
+        fivefold automatic). This is about repeating the <b>same position</b>,
+        not repeating the same moves.
+      </p>
 
-        <p class="note"><b>Ko (immediate recapture ban)</b></p>
+      <div class="warning">
+        A position counts as “the same” only if the <b>same legal moves</b>
+        exist. In practice that means the same board (including stack order),
+        the same player to move, and the same chess rights (castling + en
+        passant availability).
+      </div>
+
+      <ul>
+        <li><b>The same player</b> is to move.</li>
+        <li>
+          The same pieces (type + color) are on the same squares, with the same
+          <b>stack order</b> in each column.
+        </li>
+        <li>
+          The same legal moves exist — which means <b>castling rights</b> and
+          <b>en passant</b> availability must match too.
+        </li>
+      </ul>
+
+      <div class="rule-box">
+        <h3>Ko (immediate recapture ban)</h3>
+        <ul>
+          <li>Ko is checked only immediately after a <b>capture</b>.</li>
+          <li>
+            A move is illegal if it would recreate the exact position that
+            existed immediately before the last capture.
+          </li>
+          <li>Ko is cleared as soon as a <b>non-capture</b> move is made.</li>
+        </ul>
+
+        <h3>Threefold repetition (claimable draw)</h3>
         <ul>
           <li>
-            Ko is only checked immediately after a
-            <span class="note">capture</span>.
-          </li>
-          <li>
-            A move is illegal if it would recreate the
-            <span class="note">exact</span> full position that existed
-            immediately before the last capture.
-          </li>
-          <li>
-            Ko is cleared as soon as a
-            <span class="note">non-capture</span> move is made.
+            If the same position occurs at least <b>3</b> times, the player to
+            move may <b>claim a draw</b>.
           </li>
         </ul>
 
-        <p class="note"><b>Threefold prohibition</b></p>
+        <h3>Fivefold repetition (automatic draw)</h3>
         <ul>
           <li>
-            A move is also illegal if it would make the resulting full position
-            occur for the <span class="note">third</span> time in the recorded
-            history.
+            If the same position occurs at least <b>5</b> times, the game is a
+            <b>draw automatically</b> (no claim needed).
           </li>
         </ul>
-
-        <p>
-          “Full position” means the entire board (including stack order) plus
-          side-to-move and chess aux state (castling/en passant).
-        </p>
       </div>
 
-      <div class="panel">
-        <h2>Controls</h2>
-        <ul>
-          <li>
-            Click a piece/stack to select it, then click a highlighted target to
-            move.
-          </li>
-          <li>
-            Hover stacked squares to open the Stack Inspector (right panel) and
-            see the full bottom → top order.
-          </li>
-          <li>
-            Use the Start link in the top bar to return to the Start Page.
-          </li>
-          <li>
-            Left panel → <span class="note">Options</span>:
-            <ul>
-              <li>
-                <span class="note">Show board coordinates</span> toggles A–H and
-                1–8 labels.
-              </li>
-              <li>
-                <span class="note">Flip Board</span> rotates the board 180° so
-                Black is on bottom; coordinates update to match the viewer.
-              </li>
-              <li>
-                <span class="note">Show resize icon</span> enables the ↕️ button
-                on the board to adjust board height.
-              </li>
-            </ul>
-          </li>
-          <li>
-            Right panel → <span class="note">Theme</span>:
-            <ul>
-              <li>
-                <span class="note">Board</span> changes the checkerboard colors
-                (Classic/Green).
-              </li>
-              <li>
-                <span class="note">Theme</span> changes piece style (Discs/3D).
-              </li>
-            </ul>
-          </li>
-        </ul>
-        <p>
-          Tip: if something looks wrong, include the exact move sequence and (if
-          online) the room ID when reporting a bug.
-        </p>
-      </div>
+      <h2 id="interface">Using the Interface</h2>
+      <ul>
+        <li>
+          Click a piece/stack to select it, then click a highlighted target to
+          move.
+        </li>
+        <li>
+          Hover stacked squares to open the <b>Stack Inspector</b> and see the
+          full bottom → top order.
+        </li>
+        <li>
+          Use the <b>Start Page</b> link in the top bar to return to the Start
+          Page.
+        </li>
+      </ul>
 
-      <div class="panel">
-        <h2>Notation</h2>
-        <p>
-          In move history, <span class="mono">→</span> indicates a non-capture
-          move and <span class="mono">×</span> indicates a capture.
-        </p>
-      </div>
-    </main>
+      <h3>Left panel → Options</h3>
+      <ul>
+        <li><b>Show board coordinates</b> toggles A–H and 1–8 labels.</li>
+        <li>
+          <b>Flip Board</b> rotates the board 180° so Black is on bottom;
+          coordinates update to match the viewer.
+        </li>
+        <li>
+          <b>Show resize icon</b> enables the ↕️ button on the board to adjust
+          board height.
+        </li>
+        <li>
+          <b>Show toast notifications</b> shows center-screen toasts (e.g.
+          Check!).
+        </li>
+        <li><b>Sound effects</b> toggles subtle UI/move sounds.</li>
+      </ul>
+
+      <h3>Left panel → Option Actions</h3>
+      <ul>
+        <li><b>New Game</b> starts a fresh game.</li>
+        <li><b>Save Game</b> downloads a JSON save file.</li>
+        <li><b>Load Game</b> restores a previously saved JSON file.</li>
+        <li>
+          <b>Undo</b> / <b>Redo</b> step backward/forward through the local move
+          history. They enable only when an undo/redo is possible.
+        </li>
+        <li><b>Resign</b> concedes the game.</li>
+      </ul>
+
+      <h3>Right panel → Theme</h3>
+      <ul>
+        <li><b>Board</b> changes checkerboard colors (Classic/Green).</li>
+        <li><b>Theme</b> changes piece style (Discs/3D).</li>
+      </ul>
+
+      <p>
+        Tip: if something looks wrong, include the exact move sequence and (if
+        online) the room ID when reporting a bug.
+      </p>
+
+      <h2 id="notation">Notation</h2>
+      <p>
+        In move history, <code>→</code> indicates a non-capture move and
+        <code>×</code> indicates a capture.
+      </p>
+
+      <a class="back-link" href="./index.html">← Back to Start Page</a>
+    </div>
   </body>
 </html>

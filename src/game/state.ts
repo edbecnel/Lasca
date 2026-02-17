@@ -24,6 +24,13 @@ export interface GameState {
     enPassantTarget?: NodeId;
     /** For en passant, the pawn square to be captured if a pawn moves to enPassantTarget. */
     enPassantPawn?: NodeId;
+
+    /**
+     * Columns Chess ko rule (immediate recapture ban).
+     * When set, the next player may not make a move that recreates the position whose
+     * (ko-normalized) hash equals this value.
+     */
+    koProhibitHash?: string;
   };
 
   /**

@@ -106,7 +106,7 @@
 
   <g id="pieces"></g>
 
-  <g id="nodes" fill="none" stroke="#404040" stroke-width="7" pointer-events="all">
+  <g id="nodes" fill="transparent" stroke="#404040" stroke-width="7" pointer-events="all">
     <!-- playable nodes where (r+c)%2==1 (8×8 so A1 is playable) -->
     <circle id="r0c1" cx="250" cy="150" r="40" />
     <circle id="r0c3" cx="450" cy="150" r="40" />
