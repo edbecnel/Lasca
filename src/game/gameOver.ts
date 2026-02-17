@@ -1,7 +1,11 @@
 import type { GameState } from "./state.ts";
 import type { Player } from "../types.ts";
 import { generateLegalMoves } from "./movegen.ts";
-import { isKingInCheckColumnsChess } from "./movegenColumnsChess.ts";
+import { isKingInCheckChess } from "./movegenChess.ts";
+
+function sideLabelChess(color: Player): string {
+  return color === "W" ? "White" : "Black";
+}
 
 /**
  * Check if the current player (state.toMove) has lost the game.
@@ -15,16 +19,15 @@ export function checkCurrentPlayerLost(state: GameState): { winner: Player | nul
   }
 
   const rulesetId = state.meta?.rulesetId ?? "lasca";
-  if (rulesetId === "columns_chess") {
+  if (rulesetId === "columns_chess" || rulesetId === "chess") {
     const currentPlayer = state.toMove;
     const opponent: Player = currentPlayer === "B" ? "W" : "B";
 
     const moves = generateLegalMoves(state);
     if (moves.length === 0) {
-      const inCheck = isKingInCheckColumnsChess(state, currentPlayer);
+      const inCheck = isKingInCheckChess(state, currentPlayer);
       if (inCheck) {
-        const winnerName = opponent === "B" ? "Dark" : "Light";
-        return { winner: opponent, reason: `Checkmate! ${winnerName} Wins` };
+        return { winner: opponent, reason: `Checkmate! ${sideLabelChess(opponent)} Wins` };
       }
       return { winner: null, reason: "Stalemate — draw" };
     }
@@ -82,17 +85,16 @@ export function getWinner(state: GameState): { winner: Player | null; reason: st
   }
 
   const rulesetId = state.meta?.rulesetId ?? "lasca";
-  if (rulesetId === "columns_chess") {
+  if (rulesetId === "columns_chess" || rulesetId === "chess") {
     const currentPlayer = state.toMove;
     const opponent: Player = currentPlayer === "B" ? "W" : "B";
 
     const opponentState: GameState = { ...state, toMove: opponent };
     const oppMoves = generateLegalMoves(opponentState);
     if (oppMoves.length === 0) {
-      const inCheck = isKingInCheckColumnsChess(opponentState, opponent);
+      const inCheck = isKingInCheckChess(opponentState, opponent);
       if (inCheck) {
-        const winnerName = currentPlayer === "B" ? "Dark" : "Light";
-        return { winner: currentPlayer, reason: `Checkmate! ${winnerName} Wins` };
+        return { winner: currentPlayer, reason: `Checkmate! ${sideLabelChess(currentPlayer)} Wins` };
       }
       return { winner: null, reason: "Stalemate — draw" };
     }

@@ -101,9 +101,14 @@ export class GameController {
     return (this.state.meta?.rulesetId ?? "lasca") === "columns_chess";
   }
 
+  private isChessLikeRuleset(): boolean {
+    const r = this.state.meta?.rulesetId ?? "lasca";
+    return r === "columns_chess" || r === "chess";
+  }
+
   private recomputeMandatoryCapture(constraints?: any, precomputedMoves?: Array<{ kind: string }>): void {
     // Columns Chess uses chess-like move freedom (no mandatory capture).
-    if (this.isColumnsChessRuleset()) {
+    if (this.isChessLikeRuleset()) {
       this.mandatoryCapture = false;
       return;
     }
@@ -1199,7 +1204,7 @@ export class GameController {
 
   private sideLabel(color: "W" | "B"): string {
     // Chess nomenclature is White/Black; other variants use Light/Dark.
-    if (this.isColumnsChessRuleset()) return color === "W" ? "White" : "Black";
+    if (this.isChessLikeRuleset()) return color === "W" ? "White" : "Black";
     return color === "W" ? "Light" : "Dark";
   }
 
@@ -1215,17 +1220,17 @@ export class GameController {
       this.lastToastToMove = toMove;
       if (!shouldToast) return;
 
-      const isColumnsChess = this.isColumnsChessRuleset();
+      const isChessLike = this.isChessLikeRuleset();
       const checkPrefix =
-        isColumnsChess && isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
-      const legal = isColumnsChess ? [] : this.getLegalMovesForTurn();
-      const hasCapture = isColumnsChess ? false : legal.some((m) => m.kind === "capture");
+        isChessLike && isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
+      const legal = isChessLike ? [] : this.getLegalMovesForTurn();
+      const hasCapture = isChessLike ? false : legal.some((m) => m.kind === "capture");
 
       const localColor = (this.driver as OnlineGameDriver).getPlayerColor();
       if (localColor === "W" || localColor === "B") {
         const isLocalTurn = toMove === localColor;
         if (isLocalTurn) {
-          if (isColumnsChess) {
+          if (isChessLike) {
             this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
           } else {
             this.showToast(hasCapture ? "Your turn — must capture" : "Your turn", 1500);
@@ -1237,7 +1242,7 @@ export class GameController {
       // If we don't know local color (spectator / reconnect edge), fall back
       // to explicit side-to-move messaging.
       this.showToast(
-        isColumnsChess
+        isChessLike
           ? `${checkPrefix}${this.sideLabel(toMove)} to Play`
           : `${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`,
         1500
@@ -1251,7 +1256,7 @@ export class GameController {
     this.lastToastToMove = toMove;
 
     if (shouldToast) {
-      if (this.isColumnsChessRuleset()) {
+      if (this.isChessLikeRuleset()) {
         const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
         this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
       } else {
@@ -1602,7 +1607,7 @@ export class GameController {
 
   private checkAndHandleCurrentPlayerLost(): boolean {
     const result = checkCurrentPlayerLost(this.state);
-    const isTerminal = Boolean(result.winner) || (this.isColumnsChessRuleset() && Boolean(result.reason));
+    const isTerminal = Boolean(result.winner) || (this.isChessLikeRuleset() && Boolean(result.reason));
     if (isTerminal) {
       if (this.isGameOver) return true;
       this.isGameOver = true;
@@ -2055,9 +2060,10 @@ export class GameController {
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
+    const isChessLike = this.isChessLikeRuleset();
     const isColumnsChess = this.isColumnsChessRuleset();
     const toMoveLabel = this.sideLabel(this.state.toMove);
-    let turnTooltipText: string | undefined = `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
+    let turnTooltipText: string | undefined = `${toMoveLabel} to ${isChessLike ? "play" : "move"}`;
     if (this.driver.mode === "online") {
       const remote = this.driver as OnlineGameDriver;
       const selfId = remote.getPlayerId();
@@ -2066,7 +2072,7 @@ export class GameController {
       if ((localColor === "W" || localColor === "B") && selfId && selfId !== "spectator") {
         const youLabel = this.sideLabel(localColor);
         const yourTurnText =
-          this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
+          this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to ${isChessLike ? "play" : "move"}`;
         turnTooltipText = `You are ${youLabel} — ${yourTurnText}`;
       }
     }
@@ -2074,8 +2080,8 @@ export class GameController {
     renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, {
       hidden: this.isGameOver,
       tooltipText: turnTooltipText,
-      icon: isColumnsChess ? "pawn" : "stone",
-      labels: isColumnsChess ? { W: "White", B: "Black" } : { W: "Light", B: "Dark" },
+      icon: isChessLike ? "pawn" : "stone",
+      labels: isChessLike ? { W: "White", B: "Black" } : { W: "Light", B: "Dark" },
     });
 
     // Board HUD: show opponent presence under the turn indicator.
@@ -2927,7 +2933,7 @@ export class GameController {
     
     if (move.kind === "capture") {
       // Columns Chess has no multi-capture chains; a capture ends the turn immediately.
-      if (this.isColumnsChessRuleset()) {
+      if (this.isChessLikeRuleset()) {
         this.clearSelection();
 
         // Record state in history at turn boundary (like quiet moves).
@@ -2944,7 +2950,7 @@ export class GameController {
         this.syncRepetitionRules();
         if (this.isGameOver) return;
 
-        // No mandatory capture for chess.
+        // No mandatory capture for chess-like rulesets.
         this.mandatoryCapture = false;
 
         // Check for checkmate/stalemate.

@@ -3,6 +3,7 @@ import type { Move, CaptureMove } from "./moveTypes.ts";
 import { generateCaptureMovesLasca, generateLegalMovesLasca } from "./movegenLasca.ts";
 import { generateCaptureMovesDama, generateLegalMovesDama } from "./movegenDama.ts";
 import { generateCaptureMovesColumnsChess, generateLegalMovesColumnsChess } from "./movegenColumnsChess.ts";
+import { generateCaptureMovesChess, generateLegalMovesChess } from "./movegenChess.ts";
 import {
   generateCaptureMovesDamasca,
   generateCaptureMovesDamascaClassic,
@@ -30,6 +31,7 @@ export function generateCaptureMoves(
 ): CaptureMove[] {
   const rulesetId = getRulesetId(state);
   if (rulesetId === "columns_chess") return generateCaptureMovesColumnsChess(state);
+  if (rulesetId === "chess") return generateCaptureMovesChess(state);
   if (rulesetId === "dama") return generateCaptureMovesDama(state, constraints);
   if (rulesetId === "damasca") return generateCaptureMovesDamasca(state, constraints);
   if (rulesetId === "damasca_classic") return generateCaptureMovesDamascaClassic(state, constraints);
@@ -42,6 +44,7 @@ export function generateLegalMoves(
 ): Move[] {
   const rulesetId = getRulesetId(state);
   if (rulesetId === "columns_chess") return generateLegalMovesColumnsChess(state);
+  if (rulesetId === "chess") return generateLegalMovesChess(state);
   if (rulesetId === "dama") return generateLegalMovesDama(state, constraints);
   if (rulesetId === "damasca") return generateLegalMovesDamasca(state, constraints);
   if (rulesetId === "damasca_classic") return generateLegalMovesDamascaClassic(state, constraints);

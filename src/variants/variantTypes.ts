@@ -1,4 +1,4 @@
-export type RulesetId = "lasca" | "dama" | "damasca" | "damasca_classic" | "columns_chess";
+export type RulesetId = "lasca" | "dama" | "damasca" | "damasca_classic" | "columns_chess" | "chess";
 
 export type DamaCaptureRemoval = "immediate" | "end_of_sequence";
 
@@ -6,6 +6,7 @@ export type VariantId =
   | "lasca_7_classic"
   | "lasca_8_dama_board"
   | "columns_chess"
+  | "chess_classic"
   | "dama_8_classic"
   | "dama_8_classic_standard"
   | "dama_8_classic_international"

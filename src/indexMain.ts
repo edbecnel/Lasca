@@ -1152,9 +1152,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const initialTheme = (savedTheme && getThemeById(savedTheme) && !getThemeById(savedTheme)?.hidden) ? savedTheme : DEFAULT_THEME_ID;
   elTheme.value = initialTheme;
 
-  type ThemeSelectMode = "all" | "columns_chess_only";
+  type ThemeSelectMode = "all" | "columns_chess_only" | "chess_only";
   let themeSelectMode: ThemeSelectMode = "all";
   let savedThemeBeforeColumnsChess: string = initialTheme;
+  let savedThemeBeforeChess: string = initialTheme;
 
   const normalizeColumnsChessTheme = (raw: string | null | undefined): "columns_classic" | "raster3d" => {
     const v = String(raw ?? "").trim().toLowerCase();
@@ -1165,11 +1166,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const syncThemeConstraintsForVariant = (variantId: VariantId): void => {
     const isColumnsChess = variantId === "columns_chess";
+    const isClassicChess = variantId === "chess_classic";
+    const usesColumnsChessBoard = isColumnsChess || isClassicChess;
 
-    if (elColumnsChessBoardThemeRow) elColumnsChessBoardThemeRow.style.display = isColumnsChess ? "" : "none";
+    if (elColumnsChessBoardThemeRow) elColumnsChessBoardThemeRow.style.display = usesColumnsChessBoard ? "" : "none";
     if (elColumnsChessBoardTheme) {
-      elColumnsChessBoardTheme.disabled = !isColumnsChess;
-      if (isColumnsChess) {
+      elColumnsChessBoardTheme.disabled = !usesColumnsChessBoard;
+      if (usesColumnsChessBoard) {
         elColumnsChessBoardTheme.value = normalizeCheckerboardThemeId(localStorage.getItem(LS_KEYS.optCheckerboardTheme));
       }
     }
@@ -1184,14 +1187,24 @@ window.addEventListener("DOMContentLoaded", () => {
       elTheme.value = normalizeColumnsChessTheme(savedColumnsTheme);
       elTheme.disabled = false;
       syncGlassThemeOptions();
+    } else if (isClassicChess) {
+      if (themeSelectMode !== "chess_only") {
+        if (elTheme.value && elTheme.value !== "raster3d") savedThemeBeforeChess = elTheme.value;
+        themeSelectMode = "chess_only";
+        populateThemeSelect(["raster3d"]);
+      }
+      elTheme.value = "raster3d";
+      elTheme.disabled = false;
+      syncGlassThemeOptions();
     } else {
       if (themeSelectMode !== "all") {
         themeSelectMode = "all";
         populateThemeSelect(visibleThemeIds());
       }
       elTheme.disabled = false;
-      if (savedThemeBeforeColumnsChess && getThemeById(savedThemeBeforeColumnsChess)) {
-        elTheme.value = savedThemeBeforeColumnsChess;
+      const restore = savedThemeBeforeColumnsChess || savedThemeBeforeChess;
+      if (restore && getThemeById(restore)) {
+        elTheme.value = restore;
       }
       syncGlassThemeOptions();
     }
@@ -1222,6 +1235,11 @@ window.addEventListener("DOMContentLoaded", () => {
       const next = (elTheme.value === "raster3d") ? "raster3d" : "columns_classic";
       elTheme.value = next;
       localStorage.setItem(LS_KEYS.columnsChessTheme, next);
+      return;
+    }
+
+    if (themeSelectMode === "chess_only") {
+      elTheme.value = "raster3d";
       return;
     }
 
@@ -1311,26 +1329,28 @@ window.addEventListener("DOMContentLoaded", () => {
     const baseOk = Boolean(v.available && v.entryUrl);
 
     const isColumnsChess = vId === "columns_chess";
+    const isClassicChess = vId === "chess_classic";
+    const usesColumnsChessBoard = isColumnsChess || isClassicChess;
 
-    // "Use checkered board for 8×8 games" does not apply to Columns Chess (it has its own board SVG).
+    // "Use checkered board for 8×8 games" does not apply to Columns Chess / Classic Chess (they have their own board SVG).
     // Keep the option for other 8×8 variants.
     {
-      const show = !isColumnsChess;
+      const show = !usesColumnsChessBoard;
       if (elBoard8x8CheckeredRow) elBoard8x8CheckeredRow.style.display = show ? "" : "none";
       if (elBoard8x8CheckeredHint) elBoard8x8CheckeredHint.style.display = show ? "" : "none";
       elBoard8x8Checkered.disabled = !show;
     }
 
-    if (isColumnsChess) {
+    if (usesColumnsChessBoard) {
       elAiWhite.value = "human";
       elAiBlack.value = "human";
     }
 
     const isAiGame = elAiWhite.value !== "human" || elAiBlack.value !== "human";
 
-    elAiWhite.disabled = isColumnsChess;
-    elAiBlack.disabled = isColumnsChess;
-    elAiDelay.disabled = isColumnsChess;
+    elAiWhite.disabled = usesColumnsChessBoard;
+    elAiBlack.disabled = usesColumnsChessBoard;
+    elAiDelay.disabled = usesColumnsChessBoard;
 
     // Online (2 players) requires both sides Human.
     const onlineOpt = Array.from(elPlayMode.options).find((o) => o.value === "online") ?? null;

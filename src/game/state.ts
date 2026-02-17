@@ -68,8 +68,8 @@ export function createInitialGameStateForVariant(variantId: VariantId): GameStat
   const board: BoardState = new Map();
   const variant = getVariantById(variantId);
 
-  // Columns Chess: standard chess starting position on a full 8×8 grid.
-  if (variant.rulesetId === "columns_chess") {
+  // Chess-like rulesets: standard chess starting position on a full 8×8 grid.
+  if (variant.rulesetId === "columns_chess" || variant.rulesetId === "chess") {
     const backRank: Array<"R" | "N" | "B" | "Q" | "K" | "B" | "N" | "R"> = ["R", "N", "B", "Q", "K", "B", "N", "R"];
     const set = (r: number, c: number, owner: Player, rank: "P" | "N" | "B" | "R" | "Q" | "K"): void => {
       board.set(`r${r}c${c}`, [{ owner, rank }]);

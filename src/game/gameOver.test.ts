@@ -137,7 +137,7 @@ describe("checkCurrentPlayerLost", () => {
 
     const result = checkCurrentPlayerLost(state);
     expect(result.winner).toBe("W");
-    expect(result.reason).toBe("Checkmate! Light Wins");
+    expect(result.reason).toBe("Checkmate! White Wins");
   });
 
   it("should detect that current player has lost when they have no pieces", () => {

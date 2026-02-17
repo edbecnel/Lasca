@@ -1,7 +1,6 @@
 import type { RulesetId, VariantId, VariantSpec } from "./variantTypes";
 
 import lascaBoardSvgUrl from "../assets/lasca_board.svg?url";
-import chessBoardSvgUrl from "../assets/chess_board.svg?url";
 import graphBoard8x8SvgUrl from "../assets/graph_board_8x8.svg?url";
 import columnsChessBoardSvgUrl from "../assets/columns_chess_board.svg?url";
 
@@ -11,6 +10,7 @@ const RULESET_LABEL: Record<RulesetId, string> = {
   damasca: "Damasca International",
   damasca_classic: "Damasca Classic",
   columns_chess: "Columns Chess",
+  chess: "Classic Chess",
 };
 
 export const VARIANTS: readonly VariantSpec[] = [
@@ -36,6 +36,18 @@ export const VARIANTS: readonly VariantSpec[] = [
     svgAsset: columnsChessBoardSvgUrl,
     entryUrl: "./columnsChess.html",
     defaultSaveName: "columns_chess-preview.json",
+    available: true,
+  },
+  {
+    variantId: "chess_classic",
+    displayName: "Classic Chess",
+    subtitle: "Standard chess (no stacks/columns). Check, castling, en passant, promotion.",
+    rulesetId: "chess",
+    boardSize: 8,
+    piecesPerSide: 16,
+    svgAsset: columnsChessBoardSvgUrl,
+    entryUrl: "./chess.html",
+    defaultSaveName: "chess_classic-save.json",
     available: true,
   },
   {

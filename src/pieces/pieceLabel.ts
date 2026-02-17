@@ -4,7 +4,7 @@ type RulesetIdLike = string | null | undefined;
 
 function ownerLabel(owner: Piece["owner"], rulesetId?: RulesetIdLike): string {
   // Columns Chess uses chess nomenclature.
-  if (rulesetId === "columns_chess") return owner === "W" ? "White" : "Black";
+  if (rulesetId === "columns_chess" || rulesetId === "chess") return owner === "W" ? "White" : "Black";
   return owner === "W" ? "Light" : "Dark";
 }
 

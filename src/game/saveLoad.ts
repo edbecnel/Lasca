@@ -46,7 +46,7 @@ export interface SerializedSaveFileV3 {
 export type SerializedSaveFile = SerializedGameState | SerializedSaveFileV2 | SerializedSaveFileV3;
 
 function isRulesetId(raw: unknown): raw is RulesetId {
-  return raw === "lasca" || raw === "dama" || raw === "damasca" || raw === "damasca_classic" || raw === "columns_chess";
+  return raw === "lasca" || raw === "dama" || raw === "damasca" || raw === "damasca_classic" || raw === "columns_chess" || raw === "chess";
 }
 
 function isLegacyHybridRulesetId(raw: unknown): boolean {
