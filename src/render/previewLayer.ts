@@ -13,7 +13,9 @@ export function ensurePreviewLayer(svg: SVGSVGElement): SVGGElement {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.id = "previewStacks";
   g.setAttribute("pointer-events", "none");
-  svg.appendChild(g);
+
+  const view = svg.querySelector("#boardView") as SVGGElement | null;
+  (view ?? svg).appendChild(g);
   return g;
 }
 

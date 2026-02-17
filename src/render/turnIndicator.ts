@@ -30,7 +30,12 @@ export function renderTurnIndicator(
   svg: SVGSVGElement,
   layer: SVGGElement,
   toMove: "W" | "B",
-  opts?: { hidden?: boolean; tooltipText?: string }
+  opts?: {
+    hidden?: boolean;
+    tooltipText?: string;
+    icon?: "stone" | "pawn";
+    labels?: { W: string; B: string };
+  }
 ): void {
   while (layer.firstChild) layer.removeChild(layer.firstChild);
   if (opts?.hidden) return;
@@ -59,12 +64,17 @@ export function renderTurnIndicator(
 
   backing.setAttribute("pointer-events", "all");
   const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = opts?.tooltipText ?? (toMove === "W" ? "Light to move" : "Dark to move");
+  const labels = opts?.labels ?? { W: "Light", B: "Dark" };
+  title.textContent = opts?.tooltipText ?? `${toMove === "W" ? labels.W : labels.B} to move`;
   backing.appendChild(title);
   layer.appendChild(backing);
 
   const use = document.createElementNS(SVG_NS, "use") as SVGUseElement;
-  const href = toMove === "W" ? "#W_S" : "#B_S";
+  const icon = opts?.icon ?? "stone";
+  const href =
+    icon === "pawn"
+      ? (toMove === "W" ? "#W_P" : "#B_P")
+      : (toMove === "W" ? "#W_S" : "#B_S");
   use.setAttribute("href", href);
   // Fallback for older SVG implementations
   use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", href);

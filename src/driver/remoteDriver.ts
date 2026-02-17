@@ -2,6 +2,8 @@ import type { GameDriver, HistorySnapshots } from "./gameDriver.ts";
 import type { GameState, Move } from "../core/index.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import type {
+  ClaimDrawRequest,
+  ClaimDrawResponse,
   CreateRoomResponse,
   EndTurnRequest,
   EndTurnResponse,
@@ -693,6 +695,32 @@ export class RemoteDriver implements GameDriver {
     let res: ResignResponse;
     try {
       res = await this.postJson<ResignRequest, ResignResponse>("/api/resign", req);
+    } catch (e) {
+      if (this.isStaleCasErrorMessage((e as any)?.message)) {
+        try {
+          await this.fetchLatest();
+        } catch {
+          // ignore
+        }
+      }
+      throw e;
+    }
+    if ((res as any).presence) this.lastPresence = (res as any).presence as PresenceByPlayerId;
+    if ((res as any).identity && typeof (res as any).identity === "object") this.lastIdentity = (res as any).identity as IdentityByPlayerId;
+    return this.applySnapshot((res as any).snapshot).next;
+  }
+
+  async claimDrawRemote(args: { kind: "threefold" }): Promise<GameState> {
+    const ids = this.requireIds();
+    const req: ClaimDrawRequest = {
+      roomId: ids.roomId,
+      playerId: ids.playerId,
+      kind: args.kind,
+      expectedStateVersion: this.lastStateVersion >= 0 ? this.lastStateVersion : undefined,
+    };
+    let res: ClaimDrawResponse;
+    try {
+      res = await this.postJson<ClaimDrawRequest, ClaimDrawResponse>("/api/claimDraw", req);
     } catch (e) {
       if (this.isStaleCasErrorMessage((e as any)?.message)) {
         try {

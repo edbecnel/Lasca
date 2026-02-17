@@ -1,5 +1,5 @@
 import { MINI_SPINE_MAX_SHOWN, MINI_SPINE_KEEP_BOTTOM, MINI_SPINE_KEEP_TOP } from "../config/constants";
-import { nodeIdToA1 } from "../game/coordFormat";
+import { nodeIdToA1View } from "../game/coordFormat";
 import { pieceToHref } from "../pieces/pieceToHref";
 import { makeUseWithTitle } from "../render/svgUse";
 import { pieceTooltip } from "../pieces/pieceLabel";
@@ -20,11 +20,15 @@ export function createStackInspector(
     zoomSvg.removeAttribute("height");
   }
 
-  function show(nodeId: string, stack: Stack, opts: { rulesetId?: string; boardSize?: number } = {}): void {
+  function show(
+    nodeId: string,
+    stack: Stack,
+    opts: { rulesetId?: string; boardSize?: number; flipCoords?: boolean } = {}
+  ): void {
     const n = stack.length;
     const boardSize = opts.boardSize ?? 7;
 
-    zoomTitle.textContent = `Stack @ ${nodeIdToA1(nodeId, boardSize)} (×${n})`;
+    zoomTitle.textContent = `Stack @ ${nodeIdToA1View(nodeId, boardSize, Boolean(opts.flipCoords))} (×${n})`;
     zoomHint.textContent = n > MINI_SPINE_MAX_SHOWN
       ? "Full column order (bottom → top). Brackets mark pieces omitted in the mini preview spine."
       : "Full column order (bottom → top).";
@@ -52,7 +56,7 @@ export function createStackInspector(
     bg.setAttribute("width", String(miniSize + 16));
     bg.setAttribute("height", String(columnH + 20));
     bg.setAttribute("rx", "12");
-    bg.setAttribute("fill", "rgba(0,0,0,0.28)");
+    bg.setAttribute("fill", "rgba(56,56,56,0.55)");
     bg.setAttribute("stroke", "rgba(255,255,255,0.18)");
     bg.setAttribute("stroke-width", "1.4");
     zoomSvg.appendChild(bg);

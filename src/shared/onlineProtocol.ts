@@ -195,6 +195,23 @@ export type ResignResponse =
     }
   | OnlineError;
 
+export type ClaimDrawRequest = {
+  roomId: RoomId;
+  playerId: PlayerId;
+  kind: "threefold";
+  expectedStateVersion?: number;
+};
+
+export type ClaimDrawResponse =
+  | {
+      snapshot: WireSnapshot;
+      presence?: PresenceByPlayerId;
+      identity?: IdentityByPlayerId;
+      timeControl?: TimeControl;
+      clock?: ClockState;
+    }
+  | OnlineError;
+
 export type GetRoomSnapshotResponse =
   | {
       snapshot: WireSnapshot;

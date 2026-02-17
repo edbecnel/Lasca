@@ -13,7 +13,8 @@ export function ensureStackCountsLayer(svg: SVGSVGElement): SVGGElement {
   g.setAttribute("pointer-events", "none");
 
   // Ensure we're above everything (nodes/overlays/etc) by appending last.
-  svg.appendChild(g);
+  const view = svg.querySelector("#boardView") as SVGGElement | null;
+  (view ?? svg).appendChild(g);
   return g;
 }
 

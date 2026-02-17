@@ -26,6 +26,18 @@ export function nodeIdToA1(nodeId: string, boardSize: number = 7): string {
   return `${colLetter}${rowNumber}`;
 }
 
+/**
+ * Formats a node id as A1-style.
+ *
+ * `flipped` is accepted for callers that toggle board orientation, but the
+ * coordinate system remains the standard A1 mapping (A-file and 1-rank are
+ * defined in the *rules*, not by the viewer's seat).
+ */
+export function nodeIdToA1View(nodeId: string, boardSize: number = 7, flipped: boolean = false): string {
+  void flipped;
+  return nodeIdToA1(nodeId, boardSize);
+}
+
 export function formatNodeId(nodeId: string, format: CoordFormat, boardSize: number = 7): string {
   if (format === "a1") return nodeIdToA1(nodeId, boardSize);
   return nodeId;

@@ -15,12 +15,13 @@ import { nodeIdToA1 } from "../../src/game/coordFormat.ts";
 import { HistoryManager } from "../../src/game/historyManager.ts";
 import { checkCurrentPlayerLost } from "../../src/game/gameOver.ts";
 import { hashGameState } from "../../src/game/hashState.ts";
-import { wouldCreateThreefoldRepetition, wouldRepeatPreviousPosition } from "../../src/game/repetition.ts";
 import { adjudicateDamascaDeadPlay } from "../../src/game/damascaDeadPlay.ts";
 import type { Move } from "../../src/game/moveTypes.ts";
 import type { VariantId } from "../../src/variants/variantTypes.ts";
 
 import type {
+  ClaimDrawRequest,
+  ClaimDrawResponse,
   CreateRoomRequest,
   CreateRoomResponse,
   GetLobbyResponse,
@@ -1147,6 +1148,41 @@ export function createLascaApp(opts: ServerOpts = {}): {
     if (count < 3) return;
 
     room.state = adjudicateDamascaDeadPlay(room.state as any, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
+
+    // Ensure history's current entry reflects the adjudicated state.
+    const snap2 = room.history.exportSnapshots();
+    if (snap2.states.length > 0 && snap2.currentIndex >= 0 && snap2.currentIndex < snap2.states.length) {
+      snap2.states[snap2.currentIndex] = room.state as any;
+      room.history.replaceAll(snap2.states as any, snap2.notation, snap2.currentIndex);
+    }
+  }
+
+  function repetitionCountForCurrentPosition(room: Room): number {
+    const snap = room.history.exportSnapshots();
+    const end = snap.currentIndex;
+    if (end < 0 || end >= snap.states.length) return 0;
+    const current = snap.states[end];
+    const h = hashGameState(current as any);
+    let count = 0;
+    for (let i = 0; i <= end && i < snap.states.length; i++) {
+      if (hashGameState(snap.states[i] as any) === h) count++;
+    }
+    return count;
+  }
+
+  function maybeApplyFivefoldRepetition(room: Room): void {
+    if (isRoomOver(room)) return;
+    const count = repetitionCountForCurrentPosition(room);
+    if (count < 5) return;
+
+    room.state = {
+      ...(room.state as any),
+      forcedGameOver: {
+        winner: null,
+        reasonCode: "FIVEFOLD_REPETITION",
+        message: "Draw by fivefold repetition",
+      },
+    };
 
     // Ensure history's current entry reflects the adjudicated state.
     const snap2 = room.history.exportSnapshots();
@@ -2322,18 +2358,6 @@ export function createLascaApp(opts: ServerOpts = {}): {
         const prevToMove = (room.state as any).toMove as PlayerColor;
         const next = applyMove(room.state as any, move as any) as any;
 
-        // Columns Chess: prohibit the 3rd occurrence of the same position (no draw).
-        const rulesetId = (room.state as any)?.meta?.rulesetId ?? "lasca";
-        if (rulesetId === "columns_chess") {
-          const snap = room.history.exportSnapshots();
-          if (
-            wouldRepeatPreviousPosition({ history: snap as any, nextState: next as any }) ||
-            wouldCreateThreefoldRepetition({ history: snap as any, nextState: next as any })
-          ) {
-            throw new Error("Move prohibited by repetition");
-          }
-        }
-
         room.state = next;
 
         // Record history for every applied move so capture-chain steps are visible in the UI.
@@ -2346,6 +2370,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
 
         // Damasca: adjudicate and end on threefold repetition.
         maybeApplyDamascaThreefold(room);
+
+        // Fivefold repetition is an automatic draw.
+        maybeApplyFivefoldRepetition(room);
 
         const nextToMove = (room.state as any).toMove as PlayerColor;
         onTurnSwitch(room, prevToMove, nextToMove);
@@ -2490,6 +2517,9 @@ export function createLascaApp(opts: ServerOpts = {}): {
         // Damasca: adjudicate and end on threefold repetition.
         maybeApplyDamascaThreefold(room);
 
+        // Fivefold repetition is an automatic draw.
+        maybeApplyFivefoldRepetition(room);
+
         room.stateVersion += 1;
         await persistMoveApplied({ gamesDir, room, action: "END_TURN", snapshotEvery });
         await maybePersistGameOver(gamesDir, room);
@@ -2511,6 +2541,76 @@ export function createLascaApp(opts: ServerOpts = {}): {
       // eslint-disable-next-line no-console
       console.error("[lasca-server] endTurn error", msg);
       const response: EndTurnResponse = { error: msg };
+      res.status(400).json(response);
+    }
+  });
+
+  app.post("/api/claimDraw", async (req, res) => {
+    try {
+      const body = req.body as ClaimDrawRequest;
+      const room = await requireRoom(body.roomId);
+      const response = await queueRoomAction(room, async () => {
+        touchClock(room);
+        await maybeForceClockTimeout(room);
+
+        const expected = parseExpectedVersion((body as any).expectedStateVersion);
+        if (expected != null && expected !== room.stateVersion) {
+          throw new Error(`Stale request (expected v${expected}, current v${room.stateVersion})`);
+        }
+
+        const color = requirePlayer(room, body.playerId);
+        setPresence(room, body.playerId, { connected: true, lastSeenAt: nowIso() });
+
+        requireRoomReady(room);
+
+        // Freeze play while opponent is disconnected (until reconnect or disconnect-forfeit).
+        await requireOpponentConnected(room, body.playerId);
+
+        if (isRoomOver(room)) throw new Error("Game over");
+        if (room.state.toMove !== color) throw new Error(`Not your turn (toMove=${room.state.toMove}, you=${color})`);
+
+        const kind = (body as any).kind === "threefold" ? "threefold" : null;
+        if (!kind) throw new Error("Invalid draw claim");
+
+        const count = repetitionCountForCurrentPosition(room);
+        if (count < 3) throw new Error("Threefold repetition is not available");
+
+        room.state = {
+          ...(room.state as any),
+          forcedGameOver: {
+            winner: null,
+            reasonCode: "THREEFOLD_REPETITION",
+            message: "Draw by threefold repetition",
+          },
+        };
+
+        // Ensure history's current entry reflects the adjudicated state.
+        const snap2 = room.history.exportSnapshots();
+        if (snap2.states.length > 0 && snap2.currentIndex >= 0 && snap2.currentIndex < snap2.states.length) {
+          snap2.states[snap2.currentIndex] = room.state as any;
+          room.history.replaceAll(snap2.states as any, snap2.notation, snap2.currentIndex);
+        }
+
+        room.stateVersion += 1;
+        await maybePersistGameOver(gamesDir, room);
+
+        const resp: ClaimDrawResponse = {
+          snapshot: snapshotForRoom(room),
+          presence: presenceForRoom(room),
+          identity: publicIdentityForRoom(room),
+          timeControl: room.timeControl,
+          clock: room.clock ?? undefined,
+        };
+        broadcastRoomSnapshot(room);
+        return resp;
+      });
+
+      res.json(response);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Claim draw failed";
+      // eslint-disable-next-line no-console
+      console.error("[lasca-server] claimDraw error", msg);
+      const response: ClaimDrawResponse = { error: msg };
       res.status(400).json(response);
     }
   });

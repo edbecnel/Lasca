@@ -2,7 +2,9 @@ import type { Piece } from "../types";
 
 type RulesetIdLike = string | null | undefined;
 
-function ownerLabel(owner: Piece["owner"]): string {
+function ownerLabel(owner: Piece["owner"], rulesetId?: RulesetIdLike): string {
+  // Columns Chess uses chess nomenclature.
+  if (rulesetId === "columns_chess") return owner === "W" ? "White" : "Black";
   return owner === "W" ? "Light" : "Dark";
 }
 
@@ -21,7 +23,7 @@ function rankLabel(rank: Piece["rank"], rulesetId?: RulesetIdLike): string {
 }
 
 export function pieceTooltip(p: Piece, opts: { rulesetId?: RulesetIdLike } = {}): string {
-  const side = ownerLabel(p.owner);
+  const side = ownerLabel(p.owner, opts.rulesetId);
   const name = rankLabel(p.rank, opts.rulesetId);
   return `${side} ${name}`;
 }

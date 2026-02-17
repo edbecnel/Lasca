@@ -9,7 +9,6 @@ import { getWinner, checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
 import { applyMove } from "../game/applyMove.ts";
-import { wouldCreateThreefoldRepetition, wouldRepeatPreviousPosition } from "../game/repetition.ts";
 import { isKingInCheckColumnsChess } from "../game/movegenColumnsChess.ts";
 import {
   adjudicateDamascaDeadPlay,
@@ -18,7 +17,7 @@ import {
 } from "../game/damascaDeadPlay.ts";
 import { animateStack } from "../render/animateMove.ts";
 import { ensureStackCountsLayer } from "../render/stackCountsLayer.ts";
-import { nodeIdToA1 } from "../game/coordFormat.ts";
+import { nodeIdToA1, nodeIdToA1View } from "../game/coordFormat.ts";
 import { getDamaCaptureRemovalMode } from "../game/damaCaptureChain.ts";
 import { parseNodeId } from "../game/coords.ts";
 import { endTurn } from "../game/endTurn.ts";
@@ -34,6 +33,14 @@ import { LocalDriver } from "../driver/localDriver.ts";
 import { deserializeWireGameState } from "../shared/wireState.ts";
 import type { GetRoomWatchTokenResponse, PostRoomDebugReportResponse } from "../shared/onlineProtocol.ts";
 import type { SfxManager, SfxName } from "../ui/sfx.ts";
+import type { Stack } from "../types.ts";
+import { pieceToHref } from "../pieces/pieceToHref.ts";
+import { pieceTooltip } from "../pieces/pieceLabel.ts";
+import { makeUseWithTitle } from "../render/svgUse.ts";
+import { maybeVariantStonePieceHref } from "../render/stonePieceVariant.ts";
+import { maybeVariantWoodenPieceHref } from "../render/woodenPieceVariant.ts";
+import { drawMiniStackSpine } from "../render/miniSpine.ts";
+import { isBoardFlipped } from "../render/boardFlip.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -1190,6 +1197,12 @@ export class GameController {
     this.showToast(msg, 3200);
   }
 
+  private sideLabel(color: "W" | "B"): string {
+    // Chess nomenclature is White/Black; other variants use Light/Dark.
+    if (this.isColumnsChessRuleset()) return color === "W" ? "White" : "Black";
+    return color === "W" ? "Light" : "Dark";
+  }
+
   private maybeToastTurnChange(): void {
     if (this.isGameOver) return;
     if (this.driver.mode === "online") {
@@ -1213,7 +1226,7 @@ export class GameController {
         const isLocalTurn = toMove === localColor;
         if (isLocalTurn) {
           if (isColumnsChess) {
-            this.showToast(`${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`, 1500);
+            this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
           } else {
             this.showToast(hasCapture ? "Your turn — must capture" : "Your turn", 1500);
           }
@@ -1225,7 +1238,7 @@ export class GameController {
       // to explicit side-to-move messaging.
       this.showToast(
         isColumnsChess
-          ? `${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`
+          ? `${checkPrefix}${this.sideLabel(toMove)} to Play`
           : `${toMove === "B" ? "Dark" : "Light"} to ${hasCapture ? "capture" : "move"}`,
         1500
       );
@@ -1240,7 +1253,7 @@ export class GameController {
     if (shouldToast) {
       if (this.isColumnsChessRuleset()) {
         const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
-        this.showToast(`${checkPrefix}${toMove === "B" ? "Dark" : "Light"} to Play`, 1500);
+        this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
       } else {
         const legal = this.getLegalMovesForTurn();
         const hasCapture = legal.some((m) => m.kind === "capture");
@@ -1352,12 +1365,19 @@ export class GameController {
     // 2) previews (currently none; kept for move/stack preview rendering)
     // 3) keep preview layers on top (board coords / other layers might be appended later)
     const countsLayer = ensureStackCountsLayer(this.svg);
-    this.svg.appendChild(countsLayer);
-    this.svg.appendChild(this.previewLayer);
+    const view = this.svg.querySelector("#boardView") as SVGGElement | null;
+    const boardParent = view ?? this.svg;
+    boardParent.appendChild(countsLayer);
+    boardParent.appendChild(this.previewLayer);
     this.svg.appendChild(this.turnIndicatorLayer);
     this.svg.appendChild(this.opponentPresenceIndicatorLayer);
 
     this.refreshSelectableCursors();
+  }
+
+  public refreshView(): void {
+    this.renderAuthoritative();
+    this.updatePanel();
   }
 
   private maybeShowReportIssueStickyToast(): void {
@@ -1876,8 +1896,8 @@ export class GameController {
     // Game is not over, reset the flag
     this.isGameOver = false;
 
-    // Recompute repetition counts from current history (if any).
-    this.recomputeRepetitionCounts();
+    // Update repetition counts + draw rules from current history.
+    this.syncRepetitionRules();
     
     // Check if captures are available for the current player
     this.recomputeMandatoryCapture();
@@ -1910,8 +1930,8 @@ export class GameController {
 
     // Local: current player resigns, so the other player wins
     const winner = this.state.toMove === "B" ? "W" : "B";
-    const winnerName = winner === "B" ? "Dark" : "Light";
-    const loserName = this.state.toMove === "B" ? "Dark" : "Light";
+    const winnerName = this.sideLabel(winner);
+    const loserName = this.sideLabel(this.state.toMove);
 
     this.isGameOver = true;
     this.clearSelection();
@@ -2031,12 +2051,12 @@ export class GameController {
     if (elLoadGame) elLoadGame.disabled = isOnline;
     if (elLoadGameInput) elLoadGameInput.disabled = isOnline;
 
-    if (elTurn) elTurn.textContent = this.state.toMove === "B" ? "Dark" : "Light";
+    if (elTurn) elTurn.textContent = this.sideLabel(this.state.toMove);
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
     const isColumnsChess = this.isColumnsChessRuleset();
-    const toMoveLabel = this.state.toMove === "W" ? "Light" : "Dark";
+    const toMoveLabel = this.sideLabel(this.state.toMove);
     let turnTooltipText: string | undefined = `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
     if (this.driver.mode === "online") {
       const remote = this.driver as OnlineGameDriver;
@@ -2044,7 +2064,7 @@ export class GameController {
       const localColor = remote.getPlayerColor();
 
       if ((localColor === "W" || localColor === "B") && selfId && selfId !== "spectator") {
-        const youLabel = localColor === "W" ? "Light" : "Dark";
+        const youLabel = this.sideLabel(localColor);
         const yourTurnText =
           this.state.toMove === localColor ? "your turn" : `${toMoveLabel} to ${isColumnsChess ? "play" : "move"}`;
         turnTooltipText = `You are ${youLabel} — ${yourTurnText}`;
@@ -2054,6 +2074,8 @@ export class GameController {
     renderTurnIndicator(this.svg, this.turnIndicatorLayer, this.state.toMove, {
       hidden: this.isGameOver,
       tooltipText: turnTooltipText,
+      icon: isColumnsChess ? "pawn" : "stone",
+      labels: isColumnsChess ? { W: "White", B: "Black" } : { W: "Light", B: "Dark" },
     });
 
     // Board HUD: show opponent presence under the turn indicator.
@@ -2402,9 +2424,28 @@ export class GameController {
     for (const id of this.currentTargets) {
       const circle = document.getElementById(id) as SVGCircleElement | null;
       if (!circle) continue;
-      const cx = parseFloat(circle.getAttribute("cx") || "0");
-      const cy = parseFloat(circle.getAttribute("cy") || "0");
+      const cx0 = parseFloat(circle.getAttribute("cx") || "0");
+      const cy0 = parseFloat(circle.getAttribute("cy") || "0");
       const r = parseFloat(circle.getAttribute("r") || "0");
+
+      // If the board (or a parent group) is transformed (e.g., flipped), convert the
+      // node's local center into root SVG coordinates before distance testing.
+      let cx = cx0;
+      let cy = cy0;
+      try {
+        const m = circle.getCTM();
+        const pt = (this.svg as any).createSVGPoint ? (this.svg as any).createSVGPoint() : null;
+        if (m && pt) {
+          pt.x = cx0;
+          pt.y = cy0;
+          const p = pt.matrixTransform(m);
+          cx = p.x;
+          cy = p.y;
+        }
+      } catch {
+        // ignore and fall back to raw attrs
+      }
+
       const dx = x - cx;
       const dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -2422,11 +2463,6 @@ export class GameController {
 
   private recomputeRepetitionCounts(): void {
     this.repetitionCounts.clear();
-    const isDamasca =
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
-    if (!RULES.drawByThreefold && !isDamasca) return;
-
     const snap = this.driver.exportHistorySnapshots();
     const states = snap.states;
     const end = snap.currentIndex;
@@ -2436,24 +2472,160 @@ export class GameController {
     }
   }
 
-  private recordRepetitionForCurrentState(): boolean {
-    const isDamasca =
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
-    if (!RULES.drawByThreefold && !isDamasca) return false;
+  private repetitionCountForCurrentState(): number {
     const h = hashGameState(this.state);
-    const next = (this.repetitionCounts.get(h) || 0) + 1;
-    this.repetitionCounts.set(h, next);
-    return next >= 3;
+    return this.repetitionCounts.get(h) || 0;
+  }
+
+  private clearThreefoldClaimToast(): void {
+    this.clearStickyToast("threefold_claim");
   }
 
   private checkThreefoldRepetition(): boolean {
-    const isDamasca =
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca" ||
-      (this.state.meta?.rulesetId ?? "lasca") === "damasca_classic";
-    if (!RULES.drawByThreefold && !isDamasca) return false;
-    const h = hashGameState(this.state);
-    return (this.repetitionCounts.get(h) || 0) >= 3;
+    if (!RULES.drawByThreefold) return false;
+    this.recomputeRepetitionCounts();
+    return this.repetitionCountForCurrentState() >= 3;
+  }
+
+  private async claimThreefoldDraw(): Promise<void> {
+    if (this.isGameOver) return;
+    if (this.repetitionCountForCurrentState() < 3) return;
+
+    if (this.driver.mode === "online") {
+      try {
+        const next = await (this.driver as OnlineGameDriver).claimDrawRemote({ kind: "threefold" });
+        this.clearSelection();
+        this.setState(next);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Claim draw failed";
+        this.showToast(msg, 1600);
+      }
+      return;
+    }
+
+    // Local: immediately end the game in a draw.
+    this.state = {
+      ...(this.state as any),
+      forcedGameOver: {
+        winner: null,
+        reasonCode: "THREEFOLD_REPETITION",
+        message: "Draw by threefold repetition",
+      },
+    };
+    this.driver.setState(this.state);
+
+    // Ensure current history entry reflects the adjudication.
+    const snap = this.driver.exportHistorySnapshots();
+    if (snap.states.length > 0 && snap.currentIndex >= 0 && snap.currentIndex < snap.states.length) {
+      snap.states[snap.currentIndex] = this.state;
+      this.driver.replaceHistory(snap);
+    }
+
+    this.isGameOver = true;
+    this.clearSelection();
+    this.clearThreefoldClaimToast();
+    this.showBanner("Draw by threefold repetition", 0);
+    this.showGameOverToast("Draw by threefold repetition");
+    this.updatePanel();
+    this.fireHistoryChange("gameOver");
+  }
+
+  private nodeIdToA1ForView(nodeId: string, boardSize: number): string {
+    try {
+      // If the SVG board is flipped, show the viewer-oriented coordinates.
+      return nodeIdToA1View(nodeId, boardSize, isBoardFlipped(this.svg));
+    } catch {
+      return nodeIdToA1(nodeId, boardSize);
+    }
+  }
+
+  /**
+   * Updates repetition UI and enforces automatic fivefold draw (local only).
+   * Threefold is claimable via a sticky toast action.
+   */
+  private syncRepetitionRules(): void {
+    if (this.isGameOver) {
+      this.clearThreefoldClaimToast();
+      return;
+    }
+
+    if (!RULES.drawByThreefold) {
+      this.clearThreefoldClaimToast();
+      return;
+    }
+
+    // Damasca uses special dead-play adjudication on threefold repetition.
+    const rulesetId = this.state.meta?.rulesetId ?? "lasca";
+    const isDamasca = rulesetId === "damasca" || rulesetId === "damasca_classic";
+    if (isDamasca) {
+      this.clearThreefoldClaimToast();
+      this.recomputeRepetitionCounts();
+      const count = this.repetitionCountForCurrentState();
+      if (count >= 3 && this.driver.mode !== "online") {
+        this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
+
+        const snap2 = this.driver.exportHistorySnapshots();
+        if (snap2.states.length > 0 && snap2.currentIndex >= 0 && snap2.currentIndex < snap2.states.length) {
+          snap2.states[snap2.currentIndex] = this.state;
+          this.driver.replaceHistory(snap2);
+        }
+
+        this.isGameOver = true;
+        this.clearSelection();
+        const msg = (this.state as any).forcedGameOver?.message ?? "Game Over";
+        this.showBanner(msg, 0);
+        this.showGameOverToast(msg);
+        this.updatePanel();
+        this.fireHistoryChange("gameOver");
+      }
+      return;
+    }
+
+    this.recomputeRepetitionCounts();
+    const count = this.repetitionCountForCurrentState();
+
+    // Fivefold repetition is automatic.
+    if (count >= 5) {
+      this.clearThreefoldClaimToast();
+
+      // Online: server is authoritative.
+      if (this.driver.mode === "online") return;
+
+      this.state = {
+        ...(this.state as any),
+        forcedGameOver: {
+          winner: null,
+          reasonCode: "FIVEFOLD_REPETITION",
+          message: "Draw by fivefold repetition",
+        },
+      };
+      this.driver.setState(this.state);
+
+      const snap = this.driver.exportHistorySnapshots();
+      if (snap.states.length > 0 && snap.currentIndex >= 0 && snap.currentIndex < snap.states.length) {
+        snap.states[snap.currentIndex] = this.state;
+        this.driver.replaceHistory(snap);
+      }
+
+      this.isGameOver = true;
+      this.clearSelection();
+      this.showBanner("Draw by fivefold repetition", 0);
+      this.showGameOverToast("Draw by fivefold repetition");
+      this.updatePanel();
+      this.fireHistoryChange("gameOver");
+      return;
+    }
+
+    // Threefold repetition is claimable.
+    if (count >= 3) {
+      const key = "threefold_claim";
+      // Don't clobber online onboarding stickies.
+      if (this.stickyToastKey && this.stickyToastKey !== key && this.stickyToastKey.startsWith("online_")) return;
+      this.setStickyToastAction(key, () => void this.claimThreefoldDraw());
+      this.showStickyToast(key, "Threefold repetition available — tap to claim a draw", { force: true });
+    } else {
+      this.clearThreefoldClaimToast();
+    }
   }
 
   private showSelection(nodeId: string): void {
@@ -2465,22 +2637,6 @@ export class GameController {
         ? { forcedFrom: this.lockedCaptureFrom, excludedJumpSquares: this.jumpedSquares }
         : undefined
     );
-
-    // Columns Chess: hide moves that are repetition-prohibited.
-    if (this.isColumnsChessRuleset()) {
-      const snap = this.driver.exportHistorySnapshots();
-      allLegal = allLegal.filter((m) => {
-        try {
-          const predicted = applyMove(this.state as any, m as any) as GameState;
-          return !(
-            wouldRepeatPreviousPosition({ history: snap, nextState: predicted }) ||
-            wouldCreateThreefoldRepetition({ history: snap, nextState: predicted })
-          );
-        } catch {
-          return false;
-        }
-      });
-    }
     this.recomputeMandatoryCapture(undefined, allLegal);
     
     // If in a capture chain, only allow moves from the locked position
@@ -2557,24 +2713,59 @@ export class GameController {
     }, durationMs);
   }
 
-  private async applyChosenMove(move: Move): Promise<void> {
-    // Columns Chess: prohibit the 3rd occurrence of the same position (no draw).
-    if (this.isColumnsChessRuleset()) {
-      try {
-        const predicted = applyMove(this.state as any, move as any) as GameState;
-        const snap = this.driver.exportHistorySnapshots();
-        if (
-          wouldRepeatPreviousPosition({ history: snap, nextState: predicted }) ||
-          wouldCreateThreefoldRepetition({ history: snap, nextState: predicted })
-        ) {
-          this.playSfx("error");
-          this.showBanner("Move prohibited by repetition", 2500);
-          return;
-        }
-      } catch {
-        // If local prediction fails, fall through and let the authoritative driver/server validate.
-      }
+  private createGhostStackAtNode(nodeId: string, stack: Stack, opts?: { pieceSize?: number }): {
+    stackG: SVGGElement;
+    extras: SVGElement[];
+  } | null {
+    if (!stack || stack.length === 0) return null;
+    if (typeof document === "undefined") return null;
+
+    const node = document.getElementById(nodeId) as SVGCircleElement | null;
+    if (!node) return null;
+
+    const cx = parseFloat(node.getAttribute("cx") || "0");
+    const cy = parseFloat(node.getAttribute("cy") || "0");
+
+    const pieceSize = opts?.pieceSize ?? 86;
+    const half = pieceSize / 2;
+
+    const rulesetId = this.state.meta?.rulesetId;
+    const top = stack[stack.length - 1];
+
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    g.setAttribute("class", "stack ghost");
+    g.setAttribute("data-node", nodeId);
+
+    const baseHref = pieceToHref(top, { rulesetId });
+    const href = maybeVariantStonePieceHref(
+      this.svg,
+      maybeVariantWoodenPieceHref(this.svg, baseHref, `${nodeId}:ghost`),
+      `${nodeId}:ghost`
+    );
+    const use = makeUseWithTitle(href, cx - half, cy - half, pieceSize, pieceTooltip(top, { rulesetId }));
+    if (isBoardFlipped(this.svg)) {
+      use.setAttribute("transform", `rotate(180 ${cx} ${cy})`);
     }
+    g.appendChild(use);
+
+    // Include the mini spine so the animation reads as “a stack moving”.
+    const spineG = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    spineG.setAttribute("class", "miniSpine ghost");
+    spineG.setAttribute("data-node", nodeId);
+
+    drawMiniStackSpine(this.svg, spineG, cx, cy, stack, {
+      pieceSize,
+      miniSize: 18,
+      rulesetId,
+      seedKey: `${nodeId}:ghost`,
+    });
+
+    return { stackG: g, extras: [spineG] };
+  }
+
+  private async applyChosenMove(move: Move): Promise<void> {
+    // Note: repetition is handled as draw by the rules (3× claimable, 5× automatic),
+    // so we do not prohibit repeating moves client-side.
 
     // Track node path for notation
     if (this.currentTurnNodes.length === 0) {
@@ -2641,15 +2832,60 @@ export class GameController {
     this.playSfx(move.kind === "capture" ? "capture" : "move");
     if (next.didPromote) this.playSfx("promote");
 
+    const prevForAnim = this.state;
     this.state = next;
     
     // Animate the move before rendering (both quiet moves and captures)
     if (this.animationsEnabled) {
+      const animations: Array<Promise<void>> = [];
+
       const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${move.from}"]`) as SVGGElement | null;
       if (movingGroup) {
         const countsLayer = ensureStackCountsLayer(this.svg);
         const movingCount = countsLayer.querySelector(`g.stackCount[data-node="${move.from}"]`) as SVGGElement | null;
-        await animateStack(this.svg, this.overlayLayer, move.from, move.to, movingGroup, 300, movingCount ? [movingCount] : []);
+        animations.push(
+          animateStack(
+            this.svg,
+            this.overlayLayer,
+            move.from,
+            move.to,
+            movingGroup,
+            300,
+            movingCount ? [movingCount] : []
+          )
+        );
+      }
+
+      // Columns Chess capture: animate the remainder of the captured stack back to the mover's origin.
+      if (move.kind === "capture" && this.isColumnsChessRuleset()) {
+        try {
+          const capturedStack = prevForAnim.board.get(move.over);
+          if (capturedStack && capturedStack.length > 1) {
+            const remainder = capturedStack.slice(0, capturedStack.length - 1);
+            if (remainder.length > 0) {
+              const ghost = this.createGhostStackAtNode(move.over, remainder);
+              if (ghost) {
+                animations.push(
+                  animateStack(
+                    this.svg,
+                    this.overlayLayer,
+                    move.over,
+                    move.from,
+                    ghost.stackG,
+                    300,
+                    ghost.extras
+                  )
+                );
+              }
+            }
+          }
+        } catch {
+          // ignore animation-only errors
+        }
+      }
+
+      if (animations.length > 0) {
+        await Promise.all(animations);
       }
     }
     
@@ -2670,7 +2906,7 @@ export class GameController {
       if (this.driver.mode !== "online") {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
         this.driver.pushHistory(this.state, notation);
       }
       this.currentTurnNodes = [];
@@ -2697,13 +2933,16 @@ export class GameController {
         // Record state in history at turn boundary (like quiet moves).
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 8;
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
         if (this.driver.mode !== "online") {
           this.driver.pushHistory(this.state, notation);
         }
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
         this.fireHistoryChange("move");
+
+        this.syncRepetitionRules();
+        if (this.isGameOver) return;
 
         // No mandatory capture for chess.
         this.mandatoryCapture = false;
@@ -2790,7 +3029,7 @@ export class GameController {
         if (this.driver.mode === "online") {
           const separator = this.currentTurnHasCapture ? " × " : " → ";
           const boardSize = this.state.meta?.boardSize ?? 7;
-          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+          const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
           try {
             this.state = await (this.driver as OnlineGameDriver).endTurnRemote(notation);
           } catch (err) {
@@ -2819,46 +3058,15 @@ export class GameController {
         if (this.driver.mode !== "online") {
           const separator = this.currentTurnHasCapture ? " × " : " → ";
           const boardSize = this.state.meta?.boardSize ?? 7;
-          const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+          const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
           this.driver.pushHistory(this.state, notation);
         }
         this.currentTurnNodes = [];
         this.currentTurnHasCapture = false;
         this.fireHistoryChange("move");
-        
-        // Check for threefold repetition draw
-        if (this.recordRepetitionForCurrentState()) {
-          const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
-          if (rulesetId2 === "damasca" || rulesetId2 === "damasca_classic") {
-            this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
 
-            // Update the last history entry so export/undo sees the adjudication.
-            if (this.driver.mode !== "online") {
-              const snap2 = this.driver.exportHistorySnapshots();
-              if (snap2.states.length > 0 && snap2.currentIndex >= 0) {
-                snap2.states[snap2.currentIndex] = this.state;
-                this.driver.replaceHistory(snap2);
-              }
-            }
-
-            this.isGameOver = true;
-            this.clearSelection();
-            {
-              const msg = (this.state as any).forcedGameOver?.message ?? "Game Over";
-              this.showBanner(msg, 0);
-              this.showGameOverToast(msg);
-            }
-            this.fireHistoryChange("gameOver");
-            return;
-          }
-
-          this.isGameOver = true;
-          this.clearSelection();
-          this.showBanner("Draw by threefold repetition", 0);
-          this.showGameOverToast("Draw by threefold repetition");
-          this.fireHistoryChange("gameOver");
-          return;
-        }
+        this.syncRepetitionRules();
+        if (this.isGameOver) return;
         
         // Update mandatory capture for new turn
         this.recomputeMandatoryCapture();
@@ -2932,7 +3140,7 @@ export class GameController {
       if (this.driver.mode === "online") {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
         try {
           this.state = await (this.driver as OnlineGameDriver).endTurnRemote(notation);
         } catch (err) {
@@ -2962,45 +3170,15 @@ export class GameController {
       if (this.driver.mode !== "online") {
         const separator = this.currentTurnHasCapture ? " × " : " → ";
         const boardSize = this.state.meta?.boardSize ?? 7;
-        const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+        const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
         this.driver.pushHistory(this.state, notation);
       }
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");
-      
-      // Check for threefold repetition draw
-      if (this.recordRepetitionForCurrentState()) {
-        const rulesetId2 = this.state.meta?.rulesetId ?? "lasca";
-        if (rulesetId2 === "damasca" || rulesetId2 === "damasca_classic") {
-          this.state = adjudicateDamascaDeadPlay(this.state, "DAMASCA_THREEFOLD_REPETITION", "threefold repetition");
 
-          if (this.driver.mode !== "online") {
-            const snap2 = this.driver.exportHistorySnapshots();
-            if (snap2.states.length > 0 && snap2.currentIndex >= 0) {
-              snap2.states[snap2.currentIndex] = this.state;
-              this.driver.replaceHistory(snap2);
-            }
-          }
-
-          this.isGameOver = true;
-          this.clearSelection();
-          {
-            const msg = (this.state as any).forcedGameOver?.message ?? "Game Over";
-            this.showBanner(msg, 0);
-            this.showGameOverToast(msg);
-          }
-          this.fireHistoryChange("gameOver");
-          return;
-        }
-
-        this.isGameOver = true;
-        this.clearSelection();
-        this.showBanner("Draw by threefold repetition", 0);
-        this.showGameOverToast("Draw by threefold repetition");
-        this.fireHistoryChange("gameOver");
-        return;
-      }
+      this.syncRepetitionRules();
+      if (this.isGameOver) return;
       
       // Update mandatory capture for new turn
       this.recomputeMandatoryCapture();
@@ -3029,23 +3207,16 @@ export class GameController {
       // Record state in history at turn boundary
       const separator = this.currentTurnHasCapture ? " × " : " → ";
       const boardSize = this.state.meta?.boardSize ?? 7;
-      const notation = this.currentTurnNodes.map((id) => nodeIdToA1(id, boardSize)).join(separator);
+      const notation = this.currentTurnNodes.map((id) => this.nodeIdToA1ForView(id, boardSize)).join(separator);
       if (this.driver.mode !== "online") {
         this.driver.pushHistory(this.state, notation);
       }
       this.currentTurnNodes = [];
       this.currentTurnHasCapture = false;
       this.fireHistoryChange("move");
-      
-      // Check for threefold repetition draw
-      if (!this.isColumnsChessRuleset() && this.recordRepetitionForCurrentState()) {
-        this.isGameOver = true;
-        this.clearSelection();
-        this.showBanner("Draw by threefold repetition", 0);
-        this.showGameOverToast("Draw by threefold repetition");
-        this.fireHistoryChange("gameOver");
-        return;
-      }
+
+      this.syncRepetitionRules();
+      if (this.isGameOver) return;
       
       // Update mandatory capture for new turn
       this.recomputeMandatoryCapture();

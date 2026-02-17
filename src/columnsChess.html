@@ -361,11 +361,27 @@
         display: block;
       }
 
-      /* Mobile: stack panels vertically and disable gutters */
-      @media (max-width: 980px) {
+      /* Mobile & tablets (touch): stack panels vertically and disable gutters.
+         Use capability-based queries to avoid narrow desktop windows triggering this layout. */
+      @media (max-width: 1024px) and (orientation: landscape) and (any-pointer: coarse) {
         #appRoot {
           flex-direction: column;
+          height: 100dvh;
         }
+
+        /* Match other games: Left panel, then Info, then Board. */
+        #leftSidebar {
+          order: 1;
+        }
+
+        #rightSidebar {
+          order: 2;
+        }
+
+        #centerArea {
+          order: 3;
+        }
+
         .gutter {
           display: none;
         }
@@ -377,6 +393,41 @@
         #centerArea {
           min-width: 0;
           height: auto;
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+      }
+
+      @media (max-width: 1024px) and (orientation: portrait) and (any-pointer: coarse) {
+        #appRoot {
+          flex-direction: column;
+          height: 100dvh;
+        }
+
+        /* Match other games: Left panel, then Info, then Board. */
+        #leftSidebar {
+          order: 1;
+        }
+
+        #rightSidebar {
+          order: 2;
+        }
+
+        #centerArea {
+          order: 3;
+        }
+
+        .gutter {
+          display: none;
+        }
+        #leftSidebar,
+        #rightSidebar {
+          width: 100% !important;
+          height: auto;
+        }
+        #centerArea {
+          min-width: 0;
+          height: auto;
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
         }
       }
     </style>
@@ -442,7 +493,7 @@
             <div class="sectionContent">
               <div class="kv">
                 <div class="k">Turn</div>
-                <div id="statusTurn">Light</div>
+                <div id="statusTurn">White</div>
                 <div class="k">Rules/Board</div>
                 <div id="statusRulesBoard">—</div>
                 <div class="k">Phase</div>
@@ -529,20 +580,13 @@
               >
                 <input
                   type="checkbox"
-                  id="threefoldToggle"
-                  checked
+                  id="flipBoardToggle"
                   style="width: 16px; height: 16px; cursor: pointer"
-                  disabled
                 />
                 <label
-                  for="threefoldToggle"
-                  style="
-                    font-size: 13px;
-                    cursor: pointer;
-                    user-select: none;
-                    opacity: 0.75;
-                  "
-                  >Threefold repetition draw</label
+                  for="flipBoardToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                  >Flip Board</label
                 >
               </div>
               <div
@@ -553,7 +597,7 @@
                   margin-left: 24px;
                 "
               >
-                Not used in Columns Chess
+                Black on bottom (reverses displayed coordinates)
               </div>
 
               <div
@@ -661,27 +705,6 @@
                 style="display: none"
               />
 
-              <div style="display: flex; gap: 8px; margin-top: 16px">
-                <button
-                  id="copyPositionBtn"
-                  class="panelBtn"
-                  type="button"
-                  style="flex: 1; padding: 6px 12px; font-size: 12px"
-                  title="Copy position JSON"
-                >
-                  Copy position
-                </button>
-                <button
-                  id="reproPinnedQueenBtn"
-                  class="panelBtn"
-                  type="button"
-                  style="flex: 1; padding: 6px 12px; font-size: 12px"
-                  title="Load a reproduction position"
-                >
-                  Repro
-                </button>
-              </div>
-
               <div style="margin-top: 16px">
                 <button
                   id="resignBtn"
@@ -766,6 +789,55 @@
         </div>
 
         <div class="sidebarBody">
+          <div class="panelSection" data-section="theme">
+            <div class="sectionHeader" data-toggle="theme">
+              <h3>Theme</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  margin-top: 8px;
+                "
+              >
+                <label
+                  for="columnsThemeSelect"
+                  style="font-size: 13px; user-select: none; min-width: 52px"
+                  >Theme</label
+                >
+                <select
+                  id="columnsThemeSelect"
+                  style="
+                    flex: 1;
+                    padding: 6px 10px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    background: rgba(0, 0, 0, 0.25);
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 13px;
+                    outline: none;
+                  "
+                >
+                  <option value="discs">Discs</option>
+                  <option value="3d">3D</option>
+                </select>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 62px;
+                "
+              >
+                Discs = classic glyphs • 3D = raster pieces
+              </div>
+            </div>
+          </div>
+
           <div class="panelSection" data-section="inspector">
             <div class="sectionHeader" data-toggle="inspector">
               <h3 id="zoomTitle">Stack Inspector</h3>

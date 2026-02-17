@@ -49,12 +49,19 @@ function clearLayer(layer: SVGGElement): void {
   while (layer.firstChild) layer.removeChild(layer.firstChild);
 }
 
-export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSize: 7 | 8 = 7): void {
+export function renderBoardCoords(
+  svg: SVGSVGElement,
+  enabled: boolean,
+  boardSize: 7 | 8 = 7,
+  opts?: { flipped?: boolean }
+): void {
   const layer = ensureBoardCoordsLayer(svg);
   if (!enabled) {
     clearLayer(layer);
     return;
   }
+
+  const flipped = Boolean(opts?.flipped);
 
   // Derive a reasonable step from the node grid.
   // Not all boards include a node at r0c0 (e.g. 8×8 playable parity).
@@ -80,17 +87,26 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSiz
   }
 
   const minX = findAnyColX(svg, boardSize, 0) ?? 140;
+  const maxX = findAnyColX(svg, boardSize, boardSize - 1) ?? (minX + step * (boardSize - 1));
+  const minY = findAnyRowY(svg, boardSize, 0) ?? 140;
   const maxY = findAnyRowY(svg, boardSize, boardSize - 1) ?? 860;
 
   const fontSize = step * 0.42;
 
-  // Place column labels below the bottom-row node circles.
-  // Keep text fully inside the 1000×1000 viewBox; on some mobile browsers,
-  // positioning the baseline too close to the bottom edge causes visible clipping.
+  // Label placement is computed in the unflipped coordinate system.
+  // When `flipped` is true, the entire board view is rotated 180°; we place
+  // coords on the opposite edges so they end up bottom/left in the final view.
   const viewBoxMax = 1000;
   const safeBottomY = viewBoxMax - fontSize * 0.65;
-  const colLabelY = Math.min(safeBottomY, maxY + step * 0.75);
-  const rowLabelX = minX - step * 0.65; // left of column A, in the board's margin
+  const safeTopY = fontSize * 0.95;
+
+  const colLabelY = flipped
+    ? Math.max(safeTopY, minY - step * 0.75)
+    : Math.min(safeBottomY, maxY + step * 0.75);
+
+  const rowLabelX = flipped
+    ? maxX + step * 0.65
+    : minX - step * 0.65; // left of column A, in the board's margin
 
   clearLayer(layer);
 
@@ -111,6 +127,10 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSiz
     // Uses an existing board SVG color family (connectors default to #404040).
     t.setAttribute("fill", "#404040");
     t.setAttribute("opacity", "0.75");
+
+    // If the board is flipped (rotated 180°), counter-rotate the text around
+    // its anchor point so it stays upright.
+    if (flipped) t.setAttribute("transform", `rotate(180 ${x} ${colLabelY})`);
     layer.appendChild(t);
   }
 
@@ -129,6 +149,8 @@ export function renderBoardCoords(svg: SVGSVGElement, enabled: boolean, boardSiz
     t.setAttribute("font-weight", "650");
     t.setAttribute("fill", "#404040");
     t.setAttribute("opacity", "0.75");
+
+    if (flipped) t.setAttribute("transform", `rotate(180 ${rowLabelX} ${y})`);
     layer.appendChild(t);
   }
 }

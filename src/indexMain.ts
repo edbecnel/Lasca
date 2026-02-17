@@ -8,6 +8,7 @@ import type { AuthMeResponse, AuthOkResponse, AuthErrorResponse } from "./shared
 
 const LS_KEYS = {
   theme: "lasca.theme",
+  columnsChessTheme: "lasca.columnsChess.theme",
   glassBg: "lasca.theme.glassBg",
   glassPalette: "lasca.theme.glassPalette",
   aiWhite: "lasca.ai.white",
@@ -361,7 +362,6 @@ window.addEventListener("DOMContentLoaded", () => {
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
   const elBoard8x8Checkered = byId<HTMLInputElement>("launchBoard8x8Checkered");
-  const elThreefold = byId<HTMLInputElement>("launchThreefold");
   const elToasts = byId<HTMLInputElement>("launchToasts");
   const elSfx = byId<HTMLInputElement>("launchSfx");
 
@@ -733,16 +733,24 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   const persistStartPageLaunchPrefs = (): void => {
-    localStorage.setItem(LS_KEYS.theme, elTheme.value);
+    const vId = (isVariantId(elGame.value) ? elGame.value : DEFAULT_VARIANT_ID) as VariantId;
+    const isColumnsChess = vId === "columns_chess";
 
-    if (elTheme.value === "glass" && elGlassColors) {
+    if (isColumnsChess) {
+      const next = (elTheme.value === "raster3d") ? "raster3d" : "columns_classic";
+      localStorage.setItem(LS_KEYS.columnsChessTheme, next);
+    } else {
+      localStorage.setItem(LS_KEYS.theme, elTheme.value);
+    }
+
+    if (!isColumnsChess && elTheme.value === "glass" && elGlassColors) {
       const raw = elGlassColors.value;
       const next: GlassPaletteId = isGlassPaletteId(raw) ? raw : "yellow_blue";
       localStorage.setItem(LS_KEYS.glassPalette, next);
       elGlassColors.value = next;
     }
 
-    if (elTheme.value === "glass" && elGlassBg) {
+    if (!isColumnsChess && elTheme.value === "glass" && elGlassBg) {
       const v = (elGlassBg.value === "felt" || elGlassBg.value === "walnut") ? elGlassBg.value : "original";
       localStorage.setItem(LS_KEYS.glassBg, v);
     }
@@ -752,7 +760,8 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optAnimations, true);
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
-    writeBool(LS_KEYS.optThreefold, elThreefold.checked);
+    // Repetition rules are always enforced; not user-configurable.
+    writeBool(LS_KEYS.optThreefold, true);
     writeBool(LS_KEYS.optToasts, elToasts.checked);
     writeBool(LS_KEYS.optSfx, elSfx.checked);
 
@@ -1106,6 +1115,21 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const populateColumnsChessThemeSelect = (): void => {
+    // Columns Chess intentionally exposes only two themes.
+    elTheme.textContent = "";
+
+    const optDiscs = document.createElement("option");
+    optDiscs.value = "columns_classic";
+    optDiscs.textContent = "Discs";
+    elTheme.appendChild(optDiscs);
+
+    const opt3d = document.createElement("option");
+    opt3d.value = "raster3d";
+    opt3d.textContent = "3D";
+    elTheme.appendChild(opt3d);
+  };
+
   const visibleThemeIds = (): string[] => THEMES.filter((t) => !t.hidden).map((t) => t.id);
 
   populateThemeSelect(visibleThemeIds());
@@ -1119,6 +1143,13 @@ window.addEventListener("DOMContentLoaded", () => {
   let themeSelectMode: ThemeSelectMode = "all";
   let savedThemeBeforeColumnsChess: string = initialTheme;
 
+  const normalizeColumnsChessTheme = (raw: string | null | undefined): "columns_classic" | "raster3d" => {
+    const v = String(raw ?? "").trim().toLowerCase();
+    if (v === "raster3d" || v === "3d") return "raster3d";
+    if (v === "columns_classic" || v === "classic" || v === "discs" || v === "disc") return "columns_classic";
+    return "columns_classic";
+  };
+
   const syncThemeConstraintsForVariant = (variantId: VariantId): void => {
     const isColumnsChess = variantId === "columns_chess";
 
@@ -1126,10 +1157,11 @@ window.addEventListener("DOMContentLoaded", () => {
       if (themeSelectMode !== "columns_chess_only") {
         if (elTheme.value && elTheme.value !== "columns_classic") savedThemeBeforeColumnsChess = elTheme.value;
         themeSelectMode = "columns_chess_only";
-        populateThemeSelect(["columns_classic"]);
+        populateColumnsChessThemeSelect();
       }
-      elTheme.value = "columns_classic";
-      elTheme.disabled = true;
+      const savedColumnsTheme = localStorage.getItem(LS_KEYS.columnsChessTheme);
+      elTheme.value = normalizeColumnsChessTheme(savedColumnsTheme);
+      elTheme.disabled = false;
       syncGlassThemeOptions();
     } else {
       if (themeSelectMode !== "all") {
@@ -1164,7 +1196,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elTheme.addEventListener("change", () => {
     syncGlassThemeOptions();
-    if (themeSelectMode === "all") savedThemeBeforeColumnsChess = elTheme.value;
+
+    if (themeSelectMode === "columns_chess_only") {
+      const next = (elTheme.value === "raster3d") ? "raster3d" : "columns_classic";
+      elTheme.value = next;
+      localStorage.setItem(LS_KEYS.columnsChessTheme, next);
+      return;
+    }
+
+    savedThemeBeforeColumnsChess = elTheme.value;
   });
 
   elGlassColors?.addEventListener("change", () => {
@@ -1210,7 +1250,6 @@ window.addEventListener("DOMContentLoaded", () => {
   elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
   elBoard8x8Checkered.checked = readBool(LS_KEYS.optBoard8x8Checkered, false);
-  elThreefold.checked = readBool(LS_KEYS.optThreefold, true);
   elToasts.checked = readBool(LS_KEYS.optToasts, true);
   elSfx.checked = readBool(LS_KEYS.optSfx, false);
 
@@ -1269,6 +1308,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const playMode = (elPlayMode.value === "online" ? "online" : "local") as PlayMode;
     const serverUrl = normalizeServerUrl(elOnlineServerUrl.value);
+
+    if (elAccountSection) {
+      // Account is only meaningful for online play (MP4C auth testing).
+      elAccountSection.style.display = playMode === "online" ? "" : "none";
+    }
 
     let ok = baseOk;
     let warning: string | null = null;

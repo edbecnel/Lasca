@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => ({
   // Only use /Lasca/ base in production, use / for local development
   base: mode === "production" ? "/Lasca/" : "/",
   root: "src",
+  // Static assets live at repo-root /public, but Vite's `root` is `src`,
+  // so we must point `publicDir` at the correct folder.
+  publicDir: "../public",
   server: {
     port: 8080,
     // When running the multiplayer dev stack (server+client), the client dev server may

@@ -13,16 +13,17 @@ import { HistoryManager } from "./game/historyManager";
 import { createDriverAsync } from "./driver/createDriver";
 import { GameController } from "./controller/gameController";
 import { renderBoardCoords } from "./render/boardCoords";
-import { serializeSaveData } from "./game/saveLoad";
+import { setBoardFlipped } from "./render/boardFlip";
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad";
-import { createColumnsChessReproPinnedQueen } from "./game/reproColumnsChess";
 import { createSfxManager } from "./ui/sfx";
+import type { Stack } from "./types";
 
 const ACTIVE_VARIANT_ID: VariantId = "columns_chess";
 
 const LS_OPT_KEYS = {
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
+  flipBoard: "lasca.opt.columnsChess.flipBoard",
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
 } as const;
@@ -56,17 +57,66 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const svg = await loadSvgFileInto(boardWrap, columnsChessBoardSvgUrl);
 
+  const flipBoardToggle = document.getElementById("flipBoardToggle") as HTMLInputElement | null;
+  const savedFlip = readOptionalBoolPref(LS_OPT_KEYS.flipBoard);
+  if (flipBoardToggle && savedFlip !== null) {
+    flipBoardToggle.checked = savedFlip;
+  }
+  const isFlipped = () => Boolean(flipBoardToggle?.checked);
+
+  // Apply flip early so any subsequently-created layers end up in the rotated view.
+  setBoardFlipped(svg, isFlipped());
+
   const boardCoordsToggle = document.getElementById("boardCoordsToggle") as HTMLInputElement | null;
   const savedBoardCoords = readOptionalBoolPref(LS_OPT_KEYS.boardCoords);
   if (boardCoordsToggle && savedBoardCoords !== null) {
     boardCoordsToggle.checked = savedBoardCoords;
   }
   const applyBoardCoords = () =>
-    renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked), variant.boardSize);
+    renderBoardCoords(svg, Boolean(boardCoordsToggle?.checked), variant.boardSize, { flipped: isFlipped() });
   applyBoardCoords();
 
   const themeManager = createThemeManager(svg);
-  await themeManager.setTheme("columns_classic");
+  const THEME_KEY = "lasca.columnsChess.theme";
+  const themeFromQueryRaw = new URLSearchParams(window.location.search).get("theme")?.trim();
+  const themeFromQuery = themeFromQueryRaw && themeFromQueryRaw.length > 0 ? themeFromQueryRaw : null;
+
+  const normalizeColumnsTheme = (raw: string | null | undefined): "columns_classic" | "raster3d" => {
+    const v = (raw ?? "").toLowerCase().trim();
+    if (v === "raster3d" || v === "3d") return "raster3d";
+    if (v === "columns_classic" || v === "classic" || v === "discs" || v === "disc") return "columns_classic";
+    return "columns_classic";
+  };
+
+  const savedTheme = (() => {
+    try {
+      return localStorage.getItem(THEME_KEY);
+    } catch {
+      return null;
+    }
+  })();
+
+  const initialThemeId = normalizeColumnsTheme(themeFromQuery ?? savedTheme);
+  await themeManager.setTheme(initialThemeId);
+
+  const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
+  const setSelectValueForThemeId = (themeId: "columns_classic" | "raster3d") => {
+    if (!themeSelect) return;
+    themeSelect.value = themeId === "raster3d" ? "3d" : "discs";
+  };
+  setSelectValueForThemeId(initialThemeId);
+
+  if (themeSelect) {
+    themeSelect.addEventListener("change", async () => {
+      const picked = themeSelect.value === "3d" ? "raster3d" : "columns_classic";
+      await themeManager.setTheme(picked);
+      try {
+        localStorage.setItem(THEME_KEY, picked);
+      } catch {
+        // ignore
+      }
+    });
+  }
 
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
@@ -86,11 +136,18 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const inspector = createStackInspector(zoomTitle, zoomHint, zoomSvg);
 
+  // Wrap the inspector so it can display coords matching the current board orientation.
+  const orientedInspector = {
+    ...inspector,
+    show: (nodeId: string, stack: Stack, opts: { rulesetId?: string; boardSize?: number } = {}) =>
+      inspector.show(nodeId, stack, { ...opts, flipCoords: isFlipped() }),
+  };
+
   const state = createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
   const history = new HistoryManager();
   history.push(state);
 
-  renderGameState(svg, piecesLayer, inspector, state);
+  renderGameState(svg, piecesLayer, orientedInspector as any, state);
 
   ensureOverlayLayer(svg);
   const driver = await createDriverAsync({
@@ -101,7 +158,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     envServerUrl: import.meta.env.VITE_SERVER_URL,
   });
 
-  const controller = new GameController(svg, piecesLayer, inspector, state, history, driver);
+  const controller = new GameController(svg, piecesLayer, orientedInspector as any, state, history, driver);
   controller.bind();
 
   // Left panel status (rules/board is static per variant)
@@ -138,6 +195,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     boardCoordsToggle.addEventListener("change", () => {
       applyBoardCoords();
       writeBoolPref(LS_OPT_KEYS.boardCoords, boardCoordsToggle.checked);
+    });
+  }
+
+  // Options: flip board
+  if (flipBoardToggle) {
+    flipBoardToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.flipBoard, flipBoardToggle.checked);
+      setBoardFlipped(svg, flipBoardToggle.checked);
+      applyBoardCoords();
+      controller.refreshView();
     });
   }
 
@@ -240,58 +307,6 @@ window.addEventListener("DOMContentLoaded", async () => {
         alert(`Failed to load game: ${msg}`);
       }
       loadGameInput.value = "";
-    });
-  }
-
-  const copyBtn = document.getElementById("copyPositionBtn") as HTMLButtonElement | null;
-  if (copyBtn) {
-    const defaultLabel = copyBtn.textContent || "⧉";
-    copyBtn.addEventListener("click", async () => {
-      const payload = serializeSaveData(controller.getStateForDebug(), history);
-      const text = JSON.stringify(payload, null, 2);
-
-      let ok = false;
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(text);
-          ok = true;
-        }
-      } catch {
-        ok = false;
-      }
-
-      if (!ok) {
-        try {
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.style.position = "fixed";
-          ta.style.left = "-9999px";
-          ta.style.top = "0";
-          document.body.appendChild(ta);
-          ta.focus();
-          ta.select();
-          ok = document.execCommand("copy");
-          document.body.removeChild(ta);
-        } catch {
-          ok = false;
-        }
-      }
-
-      copyBtn.textContent = ok ? "Copied" : "Copy failed";
-      window.setTimeout(() => {
-        copyBtn.textContent = defaultLabel;
-      }, 1100);
-    });
-  }
-
-  const reproBtn = document.getElementById("reproPinnedQueenBtn") as HTMLButtonElement | null;
-  if (reproBtn) {
-    reproBtn.addEventListener("click", () => {
-      const confirmed = confirm(
-        "Load the reproduction position? This will replace the current game (you can Save first)."
-      );
-      if (!confirmed) return;
-      controller.newGame(createColumnsChessReproPinnedQueen());
     });
   }
 

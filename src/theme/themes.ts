@@ -28,6 +28,14 @@ export const THEMES: ThemeDef[] = [
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
   },
   {
+    id: "raster3d",
+    label: "Raster 3D (Custom)",
+    piecesDefs: new URL("../assets/themes/raster3d/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/classic/theme.css", import.meta.url),
+    hidden: true,
+  },
+  {
     id: "wooden",
     label: "Wooden",
     piecesDefs: new URL("../assets/themes/wooden/pieces_defs.svg", import.meta.url),

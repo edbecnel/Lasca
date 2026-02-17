@@ -5,6 +5,7 @@ import { maybeVariantStonePieceHref } from "./stonePieceVariant";
 import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
 import { pieceTooltip } from "../pieces/pieceLabel";
+import { isBoardFlipped } from "./boardFlip";
 
 type Inspector = {
   cancelHide: () => void;
@@ -43,7 +44,11 @@ export function renderStackAtNode(
 
   const baseHref = pieceToHref(top, { rulesetId });
   const href = maybeVariantStonePieceHref(svgRoot, maybeVariantWoodenPieceHref(svgRoot, baseHref, nodeId), nodeId);
-  g.appendChild(makeUseWithTitle(href, cx - half, cy - half, pieceSize, pieceTooltip(top, { rulesetId })));
+  const use = makeUseWithTitle(href, cx - half, cy - half, pieceSize, pieceTooltip(top, { rulesetId }));
+  if (isBoardFlipped(svgRoot)) {
+    use.setAttribute("transform", `rotate(180 ${cx} ${cy})`);
+  }
+  g.appendChild(use);
 
   const bindInspectorHover = (el: SVGGElement): void => {
     if (!inspector || stack.length <= 1) return;

@@ -5,6 +5,7 @@ import { pieceTooltip } from "../pieces/pieceLabel";
 import { maybeVariantStonePieceHref } from "./stonePieceVariant";
 import { maybeVariantWoodenPieceHref } from "./woodenPieceVariant";
 import type { Stack } from "../types";
+import { isBoardFlipped } from "./boardFlip";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -40,7 +41,7 @@ export function drawMiniStackSpine(
     keepBottom = MINI_SPINE_KEEP_BOTTOM,
     miniSize = 18,
     miniGap = 3,
-    spineGap = 10,
+    spineGap = 6,
     spinePad = 6,
     crackGap = 12,
     rulesetId,
@@ -78,7 +79,7 @@ export function drawMiniStackSpine(
   bg.setAttribute("width", String(spineW));
   bg.setAttribute("height", String(spineH));
   bg.setAttribute("rx", "10");
-  bg.setAttribute("fill", "rgba(0,0,0,0.28)");
+  bg.setAttribute("fill", "rgba(56,56,56,0.55)");
   bg.setAttribute("stroke", "rgba(255,255,255,0.35)");
   bg.setAttribute("stroke-width", "1.4");
   bg.setAttribute("pointer-events", "none");
@@ -111,6 +112,8 @@ export function drawMiniStackSpine(
 
   const crackAfterIndex = keepBottom - 1;
 
+  const flipped = isBoardFlipped(svgRoot);
+
   for (let i = 0; i < countShown; i++) {
     const p = shown[i];
     const baseHref = pieceToHref(p, { rulesetId });
@@ -130,7 +133,13 @@ export function drawMiniStackSpine(
     const miniY = innerBottom - miniSize - yOffset;
     const miniX = innerLeft;
 
-    minis.appendChild(makeUseWithTitle(href, miniX, miniY, miniSize, pieceTooltip(p, { rulesetId })));
+    const u = makeUseWithTitle(href, miniX, miniY, miniSize, pieceTooltip(p, { rulesetId }));
+    if (flipped) {
+      const ux = miniX + miniSize / 2;
+      const uy = miniY + miniSize / 2;
+      u.setAttribute("transform", `rotate(180 ${ux} ${uy})`);
+    }
+    minis.appendChild(u);
   }
 
   g.appendChild(minis);
@@ -202,10 +211,15 @@ export function drawMiniStackSpine(
     countGroup.setAttribute("class", "stackCount");
     countGroup.setAttribute("data-node", String(g.getAttribute("data-node") || ""));
     countGroup.setAttribute("pointer-events", "none");
+    if (flipped) countGroup.setAttribute("transform", `rotate(180 ${bubbleCx} ${bubbleCy})`);
     countGroup.appendChild(bubble);
     countGroup.appendChild(t);
     targetLayer.appendChild(countGroup);
   } else {
+    if (flipped) {
+      // Bubble is symmetric, but the number text must remain upright.
+      t.setAttribute("transform", `rotate(180 ${bubbleCx} ${bubbleCy})`);
+    }
     g.appendChild(bubble);
     g.appendChild(t);
   }
