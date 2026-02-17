@@ -5,6 +5,7 @@ import type { GetLobbyResponse, GetRoomMetaResponse, LobbyRoomSummary, RoomVisib
 import { getGuestDisplayName, setGuestDisplayName } from "./shared/guestIdentity.ts";
 import { createSfxManager } from "./ui/sfx";
 import type { AuthMeResponse, AuthOkResponse, AuthErrorResponse } from "./shared/authProtocol.ts";
+import { normalizeCheckerboardThemeId } from "./render/checkerboardTheme";
 
 const LS_KEYS = {
   theme: "lasca.theme",
@@ -23,6 +24,7 @@ const LS_KEYS = {
   optShowResizeIcon: "lasca.opt.showResizeIcon",
   optBoardCoords: "lasca.opt.boardCoords",
   optBoard8x8Checkered: "lasca.opt.board8x8Checkered",
+  optCheckerboardTheme: "lasca.opt.checkerboardTheme",
   optThreefold: "lasca.opt.threefold",
   optToasts: "lasca.opt.toasts",
   optSfx: "lasca.opt.sfx",
@@ -311,6 +313,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const elGame = byId<HTMLSelectElement>("launchGame");
   const elGameNote = byId<HTMLElement>("launchGameNote");
   const elTheme = byId<HTMLSelectElement>("launchTheme");
+
+  const elColumnsChessBoardThemeRow = (document.getElementById("launchColumnsChessBoardThemeRow") as HTMLElement | null) ?? null;
+  const elColumnsChessBoardTheme = (document.getElementById("launchColumnsChessBoardTheme") as HTMLSelectElement | null) ?? null;
 
   const elGlassColorsRow = (document.getElementById("launchGlassColorsRow") as HTMLElement | null) ?? null;
   const elGlassColors = (document.getElementById("launchGlassColorsSelect") as HTMLSelectElement | null) ?? null;
@@ -760,6 +765,12 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optAnimations, true);
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
+    if (isColumnsChess && elColumnsChessBoardTheme) {
+      const next = normalizeCheckerboardThemeId(elColumnsChessBoardTheme.value);
+      localStorage.setItem(LS_KEYS.optCheckerboardTheme, next);
+      // Keep the control sanitized in case the DOM was modified.
+      elColumnsChessBoardTheme.value = next;
+    }
     // Repetition rules are always enforced; not user-configurable.
     writeBool(LS_KEYS.optThreefold, true);
     writeBool(LS_KEYS.optToasts, elToasts.checked);
@@ -1153,6 +1164,14 @@ window.addEventListener("DOMContentLoaded", () => {
   const syncThemeConstraintsForVariant = (variantId: VariantId): void => {
     const isColumnsChess = variantId === "columns_chess";
 
+    if (elColumnsChessBoardThemeRow) elColumnsChessBoardThemeRow.style.display = isColumnsChess ? "" : "none";
+    if (elColumnsChessBoardTheme) {
+      elColumnsChessBoardTheme.disabled = !isColumnsChess;
+      if (isColumnsChess) {
+        elColumnsChessBoardTheme.value = normalizeCheckerboardThemeId(localStorage.getItem(LS_KEYS.optCheckerboardTheme));
+      }
+    }
+
     if (isColumnsChess) {
       if (themeSelectMode !== "columns_chess_only") {
         if (elTheme.value && elTheme.value !== "columns_classic") savedThemeBeforeColumnsChess = elTheme.value;
@@ -1252,6 +1271,10 @@ window.addEventListener("DOMContentLoaded", () => {
   elBoard8x8Checkered.checked = readBool(LS_KEYS.optBoard8x8Checkered, false);
   elToasts.checked = readBool(LS_KEYS.optToasts, true);
   elSfx.checked = readBool(LS_KEYS.optSfx, false);
+
+  if (elColumnsChessBoardTheme) {
+    elColumnsChessBoardTheme.value = normalizeCheckerboardThemeId(localStorage.getItem(LS_KEYS.optCheckerboardTheme));
+  }
 
   const sfx = createSfxManager();
   sfx.setEnabled(elSfx.checked);
@@ -1397,6 +1420,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elShowResizeIcon.addEventListener("change", () => {
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
+  });
+
+  elColumnsChessBoardTheme?.addEventListener("change", () => {
+    const next = normalizeCheckerboardThemeId(elColumnsChessBoardTheme.value);
+    localStorage.setItem(LS_KEYS.optCheckerboardTheme, next);
+    elColumnsChessBoardTheme.value = next;
+    syncAvailability();
   });
 
   elBoard8x8Checkered.addEventListener("change", () => {

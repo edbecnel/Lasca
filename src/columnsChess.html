@@ -24,6 +24,13 @@
         --panel-text: rgba(255, 255, 255, 0.9);
         --panel-subtext: rgba(255, 255, 255, 0.7);
 
+        /* Theme dropdown popup colors (match other games) */
+        --themeMenuBg: rgba(0, 0, 0, 0.88);
+        --themeMenuBorder: rgba(255, 255, 255, 0.18);
+        --themeMenuText: rgba(255, 255, 255, 0.92);
+        --themeMenuHoverBg: rgba(255, 255, 255, 0.1);
+        --themeMenuSelectedBg: rgba(255, 255, 255, 0.16);
+
         --gutter-w: 8px;
         --tab-w: 22px;
         --panel-radius: 12px;
@@ -118,6 +125,31 @@
 
       .panelBtn:disabled:hover {
         background: rgba(0, 0, 0, 0.18);
+      }
+
+      .panelSelect {
+        width: 100%;
+        min-width: 0;
+        color-scheme: dark;
+        border: 1px solid var(--themeMenuBorder);
+        background: rgba(0, 0, 0, 0.18);
+        color: var(--themeMenuText);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 13px;
+        line-height: 1.2;
+        outline: none;
+      }
+
+      .panelSelect:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .panelSelect option,
+      .panelSelect optgroup {
+        background: var(--themeMenuBg);
+        color: var(--themeMenuText);
+        white-space: normal;
       }
 
       a.panelBtn {
@@ -804,22 +836,47 @@
                 "
               >
                 <label
+                  for="checkerboardThemeSelect"
+                  style="font-size: 13px; user-select: none; min-width: 52px"
+                  >Board</label
+                >
+                <select
+                  id="checkerboardThemeSelect"
+                  class="panelSelect"
+                  style="flex: 1; outline: none"
+                >
+                  <option value="classic">Classic</option>
+                  <option value="green">Green</option>
+                </select>
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 62px;
+                "
+              >
+                Checkerboard background colors
+              </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  margin-top: 8px;
+                "
+              >
+                <label
                   for="columnsThemeSelect"
                   style="font-size: 13px; user-select: none; min-width: 52px"
                   >Theme</label
                 >
                 <select
                   id="columnsThemeSelect"
-                  style="
-                    flex: 1;
-                    padding: 6px 10px;
-                    border-radius: 10px;
-                    border: 1px solid rgba(255, 255, 255, 0.18);
-                    background: rgba(0, 0, 0, 0.25);
-                    color: rgba(255, 255, 255, 0.92);
-                    font-size: 13px;
-                    outline: none;
-                  "
+                  class="panelSelect"
+                  style="flex: 1; outline: none"
                 >
                   <option value="discs">Discs</option>
                   <option value="3d">3D</option>

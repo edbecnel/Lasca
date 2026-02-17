@@ -70,7 +70,22 @@ export function drawMiniStackSpine(
   const spineW = miniSize + spinePad * 2;
   const spineH = stackH + spinePad * 2;
 
-  const x = cx + pieceSize / 2 + spineGap;
+  const flipped = isBoardFlipped(svgRoot);
+
+  // If we're on a checkered board, prefer placing the spine inside the square,
+  // pinned to the viewer-right edge. When the whole board is rotated 180°,
+  // we must mirror the placement in board coordinates so it still appears on
+  // the right side of the screen.
+  const squaresRect = svgRoot.querySelector("#squares rect") as SVGRectElement | null;
+  const tileWRaw = squaresRect?.getAttribute("width") ?? null;
+  const tileW = tileWRaw ? Number.parseFloat(tileWRaw) : NaN;
+  const tileHalf = Number.isFinite(tileW) && tileW > 0 ? tileW / 2 : NaN;
+  const inset = 3;
+
+  const x = Number.isFinite(tileHalf)
+    ? (flipped ? (cx - tileHalf + inset) : (cx + tileHalf - spineW - inset))
+    : (flipped ? (cx - pieceSize / 2 - spineGap - spineW) : (cx + pieceSize / 2 + spineGap));
+
   const y = cy - spineH / 2;
 
   const bg = document.createElementNS(SVG_NS, "rect");
@@ -111,8 +126,6 @@ export function drawMiniStackSpine(
   const innerBottom = y + spineH - spinePad;
 
   const crackAfterIndex = keepBottom - 1;
-
-  const flipped = isBoardFlipped(svgRoot);
 
   for (let i = 0; i < countShown; i++) {
     const p = shown[i];

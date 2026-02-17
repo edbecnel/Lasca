@@ -14,6 +14,11 @@ import { createDriverAsync } from "./driver/createDriver";
 import { GameController } from "./controller/gameController";
 import { renderBoardCoords } from "./render/boardCoords";
 import { setBoardFlipped } from "./render/boardFlip";
+import {
+  applyCheckerboardTheme,
+  normalizeCheckerboardThemeId,
+  type CheckerboardThemeId,
+} from "./render/checkerboardTheme";
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad";
 import { createSfxManager } from "./ui/sfx";
 import type { Stack } from "./types";
@@ -26,6 +31,7 @@ const LS_OPT_KEYS = {
   flipBoard: "lasca.opt.columnsChess.flipBoard",
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
+  checkerboardTheme: "lasca.opt.checkerboardTheme",
 } as const;
 
 function readOptionalBoolPref(key: string): boolean | null {
@@ -38,6 +44,17 @@ function readOptionalBoolPref(key: string): boolean | null {
 
 function writeBoolPref(key: string, value: boolean): void {
   localStorage.setItem(key, value ? "1" : "0");
+}
+
+function readOptionalStringPref(key: string): string | null {
+  const raw = localStorage.getItem(key);
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  return s.length > 0 ? s : null;
+}
+
+function writeStringPref(key: string, value: string): void {
+  localStorage.setItem(key, value);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -56,6 +73,29 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
 
   const svg = await loadSvgFileInto(boardWrap, columnsChessBoardSvgUrl);
+
+  // Checkerboard background theme (Classic/Green)
+  const checkerboardThemeSelect = document.getElementById(
+    "checkerboardThemeSelect",
+  ) as HTMLSelectElement | null;
+
+  const readCheckerboardTheme = (): CheckerboardThemeId =>
+    normalizeCheckerboardThemeId(readOptionalStringPref(LS_OPT_KEYS.checkerboardTheme));
+
+  const applyCheckerboard = (id: CheckerboardThemeId) => {
+    applyCheckerboardTheme(svg, id);
+  };
+
+  if (checkerboardThemeSelect) {
+    checkerboardThemeSelect.value = readCheckerboardTheme();
+    checkerboardThemeSelect.addEventListener("change", () => {
+      const picked = normalizeCheckerboardThemeId(checkerboardThemeSelect.value);
+      writeStringPref(LS_OPT_KEYS.checkerboardTheme, picked);
+      applyCheckerboard(picked);
+    });
+  }
+
+  applyCheckerboard(readCheckerboardTheme());
 
   const flipBoardToggle = document.getElementById("flipBoardToggle") as HTMLInputElement | null;
   const savedFlip = readOptionalBoolPref(LS_OPT_KEYS.flipBoard);
