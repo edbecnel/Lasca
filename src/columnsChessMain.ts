@@ -122,9 +122,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   const themeFromQueryRaw = new URLSearchParams(window.location.search).get("theme")?.trim();
   const themeFromQuery = themeFromQueryRaw && themeFromQueryRaw.length > 0 ? themeFromQueryRaw : null;
 
-  const normalizeColumnsTheme = (raw: string | null | undefined): "columns_classic" | "raster3d" => {
+  const normalizeColumnsTheme = (raw: string | null | undefined): "columns_classic" | "raster2d" | "raster3d" => {
     const v = (raw ?? "").toLowerCase().trim();
     if (v === "raster3d" || v === "3d") return "raster3d";
+    if (v === "raster2d" || v === "2d") return "raster2d";
     if (v === "columns_classic" || v === "classic" || v === "discs" || v === "disc") return "columns_classic";
     return "columns_classic";
   };
@@ -141,15 +142,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   await themeManager.setTheme(initialThemeId);
 
   const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
-  const setSelectValueForThemeId = (themeId: "columns_classic" | "raster3d") => {
+  const setSelectValueForThemeId = (themeId: "columns_classic" | "raster2d" | "raster3d") => {
     if (!themeSelect) return;
-    themeSelect.value = themeId === "raster3d" ? "3d" : "discs";
+    themeSelect.value = themeId === "raster3d" ? "3d" : themeId === "raster2d" ? "2d" : "discs";
   };
   setSelectValueForThemeId(initialThemeId);
 
   if (themeSelect) {
     themeSelect.addEventListener("change", async () => {
-      const picked = themeSelect.value === "3d" ? "raster3d" : "columns_classic";
+      const picked = themeSelect.value === "3d" ? "raster3d" : themeSelect.value === "2d" ? "raster2d" : "columns_classic";
       await themeManager.setTheme(picked);
       try {
         localStorage.setItem(THEME_KEY, picked);

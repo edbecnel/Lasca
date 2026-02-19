@@ -118,12 +118,40 @@ window.addEventListener("DOMContentLoaded", async () => {
   applyBoardCoords();
 
   const themeManager = createThemeManager(svg);
-  // Classic Chess: always use 3D pieces (no discs).
-  await themeManager.setTheme("raster3d");
+
+  // Classic Chess: allow 2D or 3D raster themes (no discs).
+  const THEME_KEY = "lasca.theme";
+  const themeFromQueryRaw = new URLSearchParams(window.location.search).get("theme")?.trim();
+  const themeFromQuery = themeFromQueryRaw && themeFromQueryRaw.length > 0 ? themeFromQueryRaw : null;
+  const normalizeChessTheme = (raw: string | null | undefined): "raster2d" | "raster3d" => {
+    const v = String(raw ?? "").trim().toLowerCase();
+    if (v === "raster2d" || v === "2d") return "raster2d";
+    if (v === "raster3d" || v === "3d") return "raster3d";
+    return "raster3d";
+  };
+  const savedTheme = (() => {
+    try {
+      return localStorage.getItem(THEME_KEY);
+    } catch {
+      return null;
+    }
+  })();
+  const initialThemeId = normalizeChessTheme(themeFromQuery ?? savedTheme);
+  await themeManager.setTheme(initialThemeId);
+
   const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
   if (themeSelect) {
-    themeSelect.value = "3d";
-    themeSelect.disabled = true;
+    themeSelect.value = initialThemeId === "raster2d" ? "2d" : "3d";
+    themeSelect.disabled = false;
+    themeSelect.addEventListener("change", async () => {
+      const picked = themeSelect.value === "2d" ? "raster2d" : "raster3d";
+      await themeManager.setTheme(picked);
+      try {
+        localStorage.setItem(THEME_KEY, picked);
+      } catch {
+        // ignore
+      }
+    });
   }
 
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
