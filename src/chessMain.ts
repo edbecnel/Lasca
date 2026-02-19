@@ -22,6 +22,7 @@ import {
 import { saveGameToFile, loadGameFromFile } from "./game/saveLoad";
 import { createSfxManager } from "./ui/sfx";
 import type { Stack } from "./types";
+import { bindPlaybackControls } from "./ui/playbackControls.ts";
 
 const ACTIVE_VARIANT_ID: VariantId = "chess_classic";
 
@@ -476,6 +477,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   controller.addHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI();
+
+  bindPlaybackControls(controller);
 
   if (import.meta.hot) {
     import.meta.hot.accept(() => {

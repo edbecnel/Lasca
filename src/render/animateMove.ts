@@ -29,7 +29,8 @@ export function animateStack(
   toNodeId: string,
   movingGroupEl: SVGGElement,
   durationMs: number = 300,
-  extraEls: SVGElement[] = []
+  extraEls: SVGElement[] = [],
+  opts: { easing?: string; keepCloneAfter?: boolean } = {}
 ): Promise<void> {
   return new Promise((resolve) => {
     const fromPos = getNodeCenter(svg, fromNodeId);
@@ -82,12 +83,15 @@ export function animateStack(
     const dy = toPos.y - fromPos.y;
     
     const cleanupAndResolve = () => {
-      // Remove clones if still present
-      for (const c of clones) {
-        try {
-          c.remove();
-        } catch {
-          // ignore
+      // Remove clones if still present (unless caller wants the clone to remain
+      // visible at the destination until a subsequent authoritative render).
+      if (!opts.keepCloneAfter) {
+        for (const c of clones) {
+          try {
+            c.remove();
+          } catch {
+            // ignore
+          }
         }
       }
 
@@ -103,50 +107,68 @@ export function animateStack(
       resolve();
     };
 
-    // Animate using Web Animations API
-    // Start at 0,0 (current position) and move by dx,dy
-    const anyClone = cloneMain as any;
-    if (typeof anyClone.animate !== "function") {
+    const easing = (opts.easing ?? "ease-in-out").toLowerCase();
+
+    const easeT = (t: number): number => {
+      // t in [0,1]
+      if (easing === "linear") return t;
+      // ease-in-out (quad)
+      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    };
+
+    const baseTransforms = clones.map((c) => c.getAttribute("transform") ?? "");
+    const applyTransform = (tx: number, ty: number) => {
+      for (let i = 0; i < clones.length; i++) {
+        const base = baseTransforms[i];
+        const translate = `translate(${tx} ${ty})`;
+        const next = base ? `${base} ${translate}` : translate;
+        try {
+          clones[i].setAttribute("transform", next);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const ms = Math.max(0, Math.trunc(durationMs));
+    if (ms === 0) {
+      applyTransform(dx, dy);
       cleanupAndResolve();
       return;
     }
 
-    const animation: Animation = anyClone.animate(
-      [
-        { transform: `translate(0px, 0px)` },
-        { transform: `translate(${dx}px, ${dy}px)` },
-      ],
-      {
-        duration: durationMs,
-        easing: "ease-in-out",
-        fill: "forwards",
+    let raf: number | null = null;
+    const start = performance.now();
+
+    const step = () => {
+      const now = performance.now();
+      const raw = (now - start) / ms;
+      const t = Math.max(0, Math.min(1, raw));
+      const e = easeT(t);
+      applyTransform(dx * e, dy * e);
+
+      if (t >= 1) {
+        if (raf !== null) cancelAnimationFrame(raf);
+        cleanupAndResolve();
+        return;
       }
-    );
 
-    // Keep extra clones in lockstep
-    for (let i = 1; i < clones.length; i++) {
-      try {
-        (clones[i] as any).animate(
-          [
-            { transform: `translate(0px, 0px)` },
-            { transform: `translate(${dx}px, ${dy}px)` },
-          ],
-          {
-            duration: durationMs,
-            easing: "ease-in-out",
-            fill: "forwards",
-          }
-        );
-      } catch {
-        // ignore
+      raf = requestAnimationFrame(step);
+    };
+
+    raf = requestAnimationFrame(step);
+
+    // Absolute safety: resolve even if rAF never fires (background tab, etc.).
+    window.setTimeout(() => {
+      if (raf !== null) {
+        try {
+          cancelAnimationFrame(raf);
+        } catch {
+          // ignore
+        }
+        raf = null;
       }
-    }
-
-    // Some browsers won't fire onfinish if the animation is cancelled (e.g., element removed).
-    animation.onfinish = cleanupAndResolve;
-    (animation as any).oncancel = cleanupAndResolve;
-
-    // Absolute safety: resolve even if finish/cancel never fires.
-    window.setTimeout(cleanupAndResolve, Math.max(0, durationMs) + 50);
+      cleanupAndResolve();
+    }, ms + 150);
   });
 }

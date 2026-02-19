@@ -182,14 +182,32 @@
         min-width: 0;
       }
 
+      /* Playback speed row (same layout constraints as AI speed). */
+      label[for="playbackDelay"] + div {
+        width: 100%;
+        min-width: 0;
+      }
+
       #aiDelay {
         flex: 1 1 0 !important;
         width: auto !important;
         min-width: 0;
       }
 
+      #playbackDelay {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        min-width: 0;
+        accent-color: rgba(255, 255, 255, 0.75);
+      }
+
       #aiDelayReset,
       #aiDelayLabel {
+        flex: 0 0 auto;
+      }
+
+      #playbackDelayReset,
+      #playbackDelayLabel {
         flex: 0 0 auto;
       }
 
@@ -1787,6 +1805,103 @@
               </div>
               <div id="zoomBody">
                 <!-- Zoom SVG is created dynamically by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="playback">
+            <div class="sectionHeader" data-toggle="playback">
+              <h3>Playback</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 52px minmax(0, 1fr);
+                  gap: 8px 2px;
+                  align-items: center;
+                  justify-items: start;
+                  font-size: 12px;
+                "
+              >
+                <div style="display: flex; gap: 6px; align-items: center">
+                  <button
+                    id="playbackBtn"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Play move history"
+                    aria-label="Play move history"
+                    aria-pressed="false"
+                  >
+                    ▶
+                  </button>
+                </div>
+                <div
+                  id="playbackHint"
+                  style="
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.6);
+                    line-height: 1.2;
+                  "
+                >
+                  Plays forward from the current position
+                </div>
+
+                <label for="playbackDelay">Speed</label>
+                <div
+                  style="
+                    display: flex;
+                    gap: 6px;
+                    align-items: center;
+                    width: 100%;
+                    min-width: 0;
+                  "
+                >
+                  <input
+                    id="playbackDelay"
+                    type="range"
+                    min="0"
+                    max="3000"
+                    step="100"
+                    value="500"
+                    style="flex: 0 1 105px; width: 105px"
+                  />
+                  <button
+                    id="playbackDelayReset"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Reset to default speed"
+                    aria-label="Reset playback speed to default"
+                  >
+                    ↺
+                  </button>
+                  <input
+                    id="playbackDelayInput"
+                    class="panelSelect"
+                    type="number"
+                    min="0"
+                    step="50"
+                    value="500"
+                    aria-label="Playback speed in milliseconds"
+                    style="
+                      width: 78px;
+                      padding: 6px 9px;
+                      font-variant-numeric: tabular-nums;
+                    "
+                  />
+                  <div
+                    id="playbackDelayLabel"
+                    style="
+                      min-width: 52px;
+                      text-align: left;
+                      font-variant-numeric: tabular-nums;
+                      white-space: nowrap;
+                    "
+                  >
+                    500 ms
+                  </div>
+                </div>
               </div>
             </div>
           </div>

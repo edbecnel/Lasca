@@ -18,6 +18,7 @@ import { RULES } from "./game/ruleset.ts";
 import { renderBoardCoords } from "./render/boardCoords";
 import { AIManager } from "./ai/aiManager.ts";
 import { bindEvaluationPanel } from "./ui/evaluationPanel";
+import { bindPlaybackControls } from "./ui/playbackControls.ts";
 import { installHoldDrag } from "./ui/holdDrag";
 import { getVariantById, rulesBoardLine } from "./variants/variantRegistry";
 import type { VariantId } from "./variants/variantTypes";
@@ -547,6 +548,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   controller.addHistoryChangeCallback(updateHistoryUI);
   updateHistoryUI(); // Initial update
+
+  bindPlaybackControls(controller);
 
   // If the SVG is hot-reloaded in dev, re-render coordinate labels.
   if (import.meta.hot) {

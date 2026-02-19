@@ -1861,6 +1861,332 @@ export class GameController {
     this.fireHistoryChange("jump");
   }
 
+  private inferHistoryTransition(
+    prev: GameState,
+    next: GameState
+  ): { from: string; to: string } | null {
+    const mover = prev.toMove;
+
+    // Columns Chess needs a stronger inference than “top owner changed”.
+    // In a capture that *liberates* a mixed-owner stack, the remainder that returns
+    // to the mover’s origin can still have the mover on top, so top-owner heuristics
+    // fail and playback looks like a snap (no inferred from/to).
+    const rulesetId = prev.meta?.rulesetId ?? next.meta?.rulesetId;
+    if (rulesetId === "columns_chess") {
+      const pieceKey = (p: any): string => {
+        const owner = String(p?.owner ?? "?");
+        const rank = typeof p?.rank === "string" ? p.rank : "";
+        return `${owner}:${rank}`;
+      };
+
+      const stacksEqual = (a: Stack | undefined, b: Stack | undefined): boolean => {
+        const aa = a ?? [];
+        const bb = b ?? [];
+        if (aa.length !== bb.length) return false;
+        for (let i = 0; i < aa.length; i++) {
+          if (pieceKey(aa[i]) !== pieceKey(bb[i])) return false;
+        }
+        return true;
+      };
+
+      const topOwner = (s: Stack | undefined): "W" | "B" | null => {
+        if (!s || s.length === 0) return null;
+        return s[s.length - 1]?.owner ?? null;
+      };
+
+      let best: { from: string; to: string; score: number } | null = null;
+      const prevEntries = Array.from(prev.board.entries());
+      const nextEntries = Array.from(next.board.entries());
+
+      for (const [fromId, fromStack] of prevEntries) {
+        if (!fromStack || fromStack.length === 0) continue;
+        if (topOwner(fromStack) !== mover) continue;
+
+        // If the exact same stack is still on `from`, it didn’t move.
+        if (stacksEqual(next.board.get(fromId), fromStack)) continue;
+
+        for (const [toId, toStack] of nextEntries) {
+          if (toId === fromId) continue;
+          if (!toStack || toStack.length === 0) continue;
+          if (topOwner(toStack) !== mover) continue;
+
+          // Also require that `to` changed (otherwise identical-piece ambiguity explodes).
+          if (stacksEqual(prev.board.get(toId), toStack)) continue;
+
+          let score = -Infinity;
+
+          // Quiet move: moved stack appears unchanged at destination.
+          if (stacksEqual(toStack, fromStack)) {
+            score = 10_000 + toStack.length;
+          }
+
+          // Capture: captured top piece gets stacked under mover (unshift), so
+          // destination stack equals [captured, ...fromStack].
+          if (toStack.length === fromStack.length + 1 && stacksEqual(toStack.slice(1) as unknown as Stack, fromStack)) {
+            score = 20_000 + toStack.length;
+          }
+
+          if (score > -Infinity) {
+            const prevToTop = topOwner(prev.board.get(toId));
+            if (prevToTop === null) score += 200; // landing on empty squares is common for quiet moves
+            else if (prevToTop !== mover) score += 120; // captures land on opponent squares
+            else score -= 500; // avoid “moved onto own stack” ambiguity
+
+            if (!best || score > best.score) best = { from: fromId, to: toId, score };
+          }
+        }
+      }
+
+      if (best) return { from: best.from, to: best.to };
+      // Fall through to generic heuristics.
+    }
+
+    const topOwner = (s: Stack | undefined): "W" | "B" | null => {
+      if (!s || s.length === 0) return null;
+      return s[s.length - 1]?.owner ?? null;
+    };
+
+    const all = new Set<string>();
+    for (const k of prev.board.keys()) all.add(k);
+    for (const k of next.board.keys()) all.add(k);
+
+    let bestFrom: string | null = null;
+    let bestTo: string | null = null;
+    let bestFromScore = -Infinity;
+    let bestToScore = -Infinity;
+
+    // Primary heuristic: ownership transition of the *top* piece.
+    // - from: mover was on top in prev, but not in next
+    // - to: mover was not on top in prev, but is on top in next
+    for (const id of all) {
+      const a = prev.board.get(id);
+      const b = next.board.get(id);
+
+      const aTop = topOwner(a);
+      const bTop = topOwner(b);
+
+      if (aTop === mover && bTop !== mover) {
+        const score = (a?.length ?? 0);
+        if (score > bestFromScore) {
+          bestFromScore = score;
+          bestFrom = id;
+        }
+      }
+
+      if (aTop !== mover && bTop === mover) {
+        const score = (b?.length ?? 0);
+        if (score > bestToScore) {
+          bestToScore = score;
+          bestTo = id;
+        }
+      }
+    }
+
+    if (bestFrom && bestTo && bestFrom !== bestTo) return { from: bestFrom, to: bestTo };
+
+    // Fallback: biggest length delta.
+    let f: string | null = null;
+    let t: string | null = null;
+    let minDelta = 0;
+    let maxDelta = 0;
+    for (const id of all) {
+      const aLen = (prev.board.get(id) ?? []).length;
+      const bLen = (next.board.get(id) ?? []).length;
+      const d = bLen - aLen;
+      if (d < minDelta) {
+        minDelta = d;
+        f = id;
+      }
+      if (d > maxDelta) {
+        maxDelta = d;
+        t = id;
+      }
+    }
+
+    if (f && t && f !== t) return { from: f, to: t };
+    return null;
+  }
+
+  async jumpToHistoryAnimated(index: number, animMs: number = 450): Promise<void> {
+    const prev = this.state;
+    const target = this.driver.jumpToHistory(index);
+    if (!target) return;
+
+    // Allow jumping out of terminal states.
+    this.isGameOver = false;
+
+    // Cancel any transient UI timers.
+    if (this.bannerTimer) {
+      window.clearTimeout(this.bannerTimer);
+      this.bannerTimer = null;
+    }
+    if (this.remainderTimer) {
+      window.clearTimeout(this.remainderTimer);
+      this.remainderTimer = null;
+    }
+
+    // Clear interactive overlays before animating.
+    this.lockedCaptureFrom = null;
+    this.lockedCaptureDir = null;
+    this.jumpedSquares.clear();
+    this.currentTurnNodes = [];
+    this.currentTurnHasCapture = false;
+    this.clearSelection();
+
+    // Animate using an inferred from/to (works for capture chains and multi-piece moves),
+    // falling back to the target snapshot's last-move hint when available.
+    if (this.animationsEnabled) {
+      try {
+        const inferred = this.inferHistoryTransition(prev, target);
+        const lm = target.ui?.lastMove;
+        const from = inferred?.from ?? lm?.from ?? null;
+        const to = inferred?.to ?? lm?.to ?? null;
+
+        if (from && to && from !== to) {
+          const animations: Array<Promise<void>> = [];
+
+          const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${from}"]`) as SVGGElement | null;
+          if (movingGroup) {
+            const countsLayer = ensureStackCountsLayer(this.svg);
+            const movingCount = countsLayer.querySelector(`g.stackCount[data-node="${from}"]`) as SVGGElement | null;
+            animations.push(
+              animateStack(
+                this.svg,
+                this.overlayLayer,
+                from,
+                to,
+                movingGroup,
+                animMs,
+                movingCount ? [movingCount] : [],
+                { easing: "linear" }
+              )
+            );
+          }
+
+          // Columns Chess: if a capture returned a remainder stack, animate it too.
+          if (this.isColumnsChessRuleset()) {
+            try {
+              const mover = prev.toMove;
+              const pieceKey = (p: any): string => {
+                const owner = String(p?.owner ?? "?");
+                const rank = typeof p?.rank === "string" ? p.rank : "";
+                return `${owner}:${rank}`;
+              };
+
+              const stacksEqual = (a: Stack | undefined, b: Stack | undefined): boolean => {
+                const aa = a ?? [];
+                const bb = b ?? [];
+                if (aa.length !== bb.length) return false;
+                for (let i = 0; i < aa.length; i++) {
+                  if (pieceKey(aa[i]) !== pieceKey(bb[i])) return false;
+                }
+                return true;
+              };
+
+              const topOwner = (s: Stack | undefined): "W" | "B" | null => {
+                if (!s || s.length === 0) return null;
+                return s[s.length - 1]?.owner ?? null;
+              };
+
+              // Detect a Columns Chess capture by the “captured piece stacked under mover” shape.
+              const prevFromStack = prev.board.get(from) ?? [];
+              const targetToStack = target.board.get(to) ?? [];
+              const looksLikeCapture =
+                prevFromStack.length > 0 &&
+                targetToStack.length === prevFromStack.length + 1 &&
+                topOwner(prevFromStack) === mover &&
+                topOwner(targetToStack) === mover;
+
+              // The remainder stack (if any) ends up on the mover's origin (`from`).
+              const remainderAtFrom = target.board.get(from);
+              if (looksLikeCapture && remainderAtFrom && remainderAtFrom.length > 0) {
+                // Infer which square was captured (`over`) by matching:
+                // prev[over].slice(0,-1) === target[from] (i.e., remainder moved back).
+                let over: string | null = null;
+
+                const prevToStack = prev.board.get(to);
+                if (
+                  prevToStack &&
+                  prevToStack.length > 1 &&
+                  topOwner(prevToStack) !== mover &&
+                  stacksEqual(prevToStack.slice(0, prevToStack.length - 1) as unknown as Stack, remainderAtFrom)
+                ) {
+                  // Normal capture: land on the captured square.
+                  over = to;
+                } else {
+                  // En passant or other rare capture forms: search for the matching captured stack.
+                  for (const [id, a] of prev.board.entries()) {
+                    if (id === from) continue;
+                    if (!a || a.length <= 1) continue;
+                    if (topOwner(a) === mover) continue;
+                    if (stacksEqual(a.slice(0, a.length - 1) as unknown as Stack, remainderAtFrom)) {
+                      over = id;
+                      break;
+                    }
+                  }
+                }
+
+                if (over) {
+                  const ghost = this.createGhostStackAtNode(over, remainderAtFrom);
+                  if (ghost) {
+                    // Double speed for the liberated stack so it doesn't dominate playback.
+                    const remainderMs = Math.max(120, Math.round(animMs / 2));
+                    animations.push(
+                      animateStack(
+                        this.svg,
+                        this.overlayLayer,
+                        over,
+                        from,
+                        ghost.stackG,
+                        remainderMs,
+                        ghost.extras,
+                        // Keep the clone visible after it arrives so it doesn't vanish
+                        // while the main stack is still animating.
+                        { easing: "linear", keepCloneAfter: true }
+                      )
+                    );
+                  }
+                }
+              }
+            } catch {
+              // ignore animation-only errors
+            }
+          }
+
+          if (animations.length > 0) {
+            await Promise.all(animations);
+          }
+
+          // Remove any kept animation clones before rendering the next snapshot.
+          // (Only the remainder animation uses keepCloneAfter currently.)
+          try {
+            const kept = this.overlayLayer.querySelectorAll('[data-animating="true"]');
+            for (const el of Array.from(kept)) {
+              try {
+                el.remove();
+              } catch {
+                // ignore
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore animation-only errors
+      }
+    }
+
+    this.state = target;
+    this.renderAuthoritative();
+    this.recomputeMandatoryCapture();
+    this.updatePanel();
+    this.recomputeRepetitionCounts();
+    this.checkAndHandleCurrentPlayerLost();
+    this.maybeToastTurnChange();
+    this.fireHistoryChange("jump");
+  }
+
   canUndo(): boolean {
     return this.driver.canUndo();
   }
