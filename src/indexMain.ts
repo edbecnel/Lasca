@@ -25,6 +25,7 @@ const LS_KEYS = {
   optBoardCoords: "lasca.opt.boardCoords",
   optBoard8x8Checkered: "lasca.opt.board8x8Checkered",
   optCheckerboardTheme: "lasca.opt.checkerboardTheme",
+  optLastMoveHighlights: "lasca.opt.lastMoveHighlights",
   optThreefold: "lasca.opt.threefold",
   optToasts: "lasca.opt.toasts",
   optSfx: "lasca.opt.sfx",
@@ -366,6 +367,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const elShowResizeIcon = byId<HTMLInputElement>("launchShowResizeIcon");
   const elBoardCoords = byId<HTMLInputElement>("launchBoardCoords");
+  const elLastMoveHighlights = byId<HTMLInputElement>("launchLastMoveHighlights");
   const elBoard8x8Checkered = byId<HTMLInputElement>("launchBoard8x8Checkered");
   const elBoard8x8CheckeredRow = (elBoard8x8Checkered.closest(".checkRow") as HTMLElement | null) ?? null;
   const elBoard8x8CheckeredHint = (elBoard8x8CheckeredRow?.nextElementSibling as HTMLElement | null) ?? null;
@@ -767,6 +769,7 @@ window.addEventListener("DOMContentLoaded", () => {
     writeBool(LS_KEYS.optAnimations, true);
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
     writeBool(LS_KEYS.optBoardCoords, elBoardCoords.checked);
+    writeBool(LS_KEYS.optLastMoveHighlights, elLastMoveHighlights.checked);
     if (isColumnsChess && elColumnsChessBoardTheme) {
       const next = normalizeCheckerboardThemeId(elColumnsChessBoardTheme.value);
       localStorage.setItem(LS_KEYS.optCheckerboardTheme, next);
@@ -1288,6 +1291,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elShowResizeIcon.checked = readBool(LS_KEYS.optShowResizeIcon, false);
   elBoardCoords.checked = readBool(LS_KEYS.optBoardCoords, false);
+  elLastMoveHighlights.checked = readBool(LS_KEYS.optLastMoveHighlights, true);
   elBoard8x8Checkered.checked = readBool(LS_KEYS.optBoard8x8Checkered, false);
   elToasts.checked = readBool(LS_KEYS.optToasts, true);
   elSfx.checked = readBool(LS_KEYS.optSfx, false);
@@ -1451,6 +1455,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   elShowResizeIcon.addEventListener("change", () => {
     writeBool(LS_KEYS.optShowResizeIcon, elShowResizeIcon.checked);
+  });
+
+  elLastMoveHighlights.addEventListener("change", () => {
+    writeBool(LS_KEYS.optLastMoveHighlights, elLastMoveHighlights.checked);
   });
 
   elColumnsChessBoardTheme?.addEventListener("change", () => {

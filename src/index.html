@@ -425,6 +425,7 @@
             <select id="launchColumnsChessBoardTheme" class="panelSelect">
               <option value="classic">Classic</option>
               <option value="green">Green</option>
+              <option value="blue">Blue</option>
             </select>
           </div>
 
@@ -466,6 +467,16 @@
             <label for="launchBoardCoords">Show board coordinates</label>
           </div>
           <div class="hint">Column letters and row numbers</div>
+
+          <div class="checkRow">
+            <input type="checkbox" id="launchLastMoveHighlights" />
+            <label for="launchLastMoveHighlights"
+              >Highlight last move (origin → destination)</label
+            >
+          </div>
+          <div class="hint">
+            Shows translucent squares on the board after each move
+          </div>
 
           <div class="checkRow">
             <input type="checkbox" id="launchBoard8x8Checkered" />

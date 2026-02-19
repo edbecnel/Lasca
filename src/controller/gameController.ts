@@ -49,6 +49,7 @@ import { maybeVariantStonePieceHref } from "../render/stonePieceVariant.ts";
 import { maybeVariantWoodenPieceHref } from "../render/woodenPieceVariant.ts";
 import { drawMiniStackSpine } from "../render/miniSpine.ts";
 import { isBoardFlipped } from "../render/boardFlip.ts";
+import { getVariantById } from "../variants/variantRegistry.ts";
 
 export type HistoryChangeReason = "move" | "undo" | "redo" | "jump" | "newGame" | "loadGame" | "gameOver";
 
@@ -61,6 +62,8 @@ export class GameController {
   private turnIndicatorLayer: SVGGElement;
   private opponentPresenceIndicatorLayer: SVGGElement;
   private lastOpponentDisconnectedBlockToastAt: number = 0;
+
+  private lastMoveHighlightsEnabled: boolean = true;
 
   private didBindOpponentStatusClicks: boolean = false;
   private state: GameState;
@@ -1377,9 +1380,13 @@ export class GameController {
 
     // Persistent UI hint: last move origin/destination squares.
     try {
-      const lm = this.state.ui?.lastMove;
-      if (lm?.from && lm?.to) drawLastMoveSquares(this.overlayLayer, lm.from, lm.to);
-      else clearLastMoveSquares(this.overlayLayer);
+      if (!this.lastMoveHighlightsEnabled) {
+        clearLastMoveSquares(this.overlayLayer);
+      } else {
+        const lm = this.state.ui?.lastMove;
+        if (lm?.from && lm?.to) drawLastMoveSquares(this.overlayLayer, lm.from, lm.to);
+        else clearLastMoveSquares(this.overlayLayer);
+      }
     } catch {
       // ignore
     }
@@ -1400,6 +1407,11 @@ export class GameController {
   public refreshView(): void {
     this.renderAuthoritative();
     this.updatePanel();
+  }
+
+  public setLastMoveHighlightsEnabled(enabled: boolean): void {
+    this.lastMoveHighlightsEnabled = enabled;
+    this.refreshView();
   }
 
   private maybeShowReportIssueStickyToast(): void {
@@ -1863,13 +1875,16 @@ export class GameController {
 
   exportMoveHistory(): string {
     const historyData = this.driver.getHistory();
+    const rulesetId = this.state.meta?.rulesetId;
+    const isChessLike = rulesetId === "columns_chess" || rulesetId === "chess";
     const moves = historyData
       .filter((entry, idx) => idx > 0 && entry.notation) // Skip "Start" and entries without notation
       .map((entry, idx) => {
-        const playerWhoMoved = entry.toMove === "B" ? "Light" : "Dark";
-        const moveNum = playerWhoMoved === "Dark"
-          ? Math.ceil((idx + 1) / 2) 
-          : Math.floor((idx + 2) / 2);
+        const whoMoved = entry.toMove === "B" ? "W" : "B";
+        const playerWhoMoved = isChessLike
+          ? (whoMoved === "W" ? "white" : "black")
+          : (whoMoved === "W" ? "Light" : "Dark");
+        const moveNum = whoMoved === "B" ? Math.ceil((idx + 1) / 2) : Math.floor((idx + 2) / 2);
         return {
           moveNumber: moveNum,
           player: playerWhoMoved,
@@ -1877,11 +1892,30 @@ export class GameController {
         };
       });
 
-    return JSON.stringify({
-      game: "Lasca",
-      date: new Date().toISOString(),
-      moves: moves,
-    }, null, 2);
+    const variantId = this.state.meta?.variantId;
+
+    let gameName = "Unknown";
+    try {
+      if (variantId) {
+        gameName = getVariantById(variantId).displayName;
+      } else if (rulesetId) {
+        gameName = String(rulesetId);
+      }
+    } catch {
+      // ignore and keep fallback
+    }
+
+    return JSON.stringify(
+      {
+        game: gameName,
+        variantId,
+        rulesetId,
+        date: new Date().toISOString(),
+        moves: moves,
+      },
+      null,
+      2,
+    );
   }
 
   setState(next: GameState): void {
@@ -3267,15 +3301,17 @@ export class GameController {
   private async onClick(ev: MouseEvent): Promise<void> {
     // Any click on the board clears the last-move square highlights.
     // (They will re-appear after the next completed move.)
-    try {
-      if (this.state.ui?.lastMove) {
-        // Keep `ui` but remove just the hint.
-        this.state.ui = { ...(this.state.ui ?? {}) };
-        delete this.state.ui.lastMove;
+    if (this.lastMoveHighlightsEnabled) {
+      try {
+        if (this.state.ui?.lastMove) {
+          // Keep `ui` but remove just the hint.
+          this.state.ui = { ...(this.state.ui ?? {}) };
+          delete this.state.ui.lastMove;
+        }
+        clearLastMoveSquares(this.overlayLayer);
+      } catch {
+        // ignore
       }
-      clearLastMoveSquares(this.overlayLayer);
-    } catch {
-      // ignore
     }
 
     // Ignore clicks if game is over

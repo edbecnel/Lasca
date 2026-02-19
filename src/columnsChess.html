@@ -692,6 +692,37 @@
               >
                 Plays subtle sounds for moves/captures
               </div>
+
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-top: 12px;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="lastMoveHighlightsToggle"
+                  checked
+                  style="width: 16px; height: 16px; cursor: pointer"
+                />
+                <label
+                  for="lastMoveHighlightsToggle"
+                  style="font-size: 13px; cursor: pointer; user-select: none"
+                  >Highlight last move (origin → destination)</label
+                >
+              </div>
+              <div
+                style="
+                  font-size: 11px;
+                  color: rgba(255, 255, 255, 0.6);
+                  margin-top: 6px;
+                  margin-left: 24px;
+                "
+              >
+                Shows previous/current square overlays after each move
+              </div>
             </div>
           </div>
 
@@ -769,14 +800,15 @@
                 </button>
               </div>
 
-              <div
-                style="
-                  font-size: 11px;
-                  color: rgba(255, 255, 255, 0.6);
-                  margin-top: 10px;
-                "
-              >
-                Export Move History coming soon.
+              <div style="margin-top: 10px">
+                <button
+                  id="exportHistoryBtn"
+                  class="panelBtn"
+                  type="button"
+                  style="width: 100%; padding: 6px 12px; font-size: 12px"
+                >
+                  Export Move History
+                </button>
               </div>
             </div>
           </div>
@@ -928,6 +960,27 @@
                 top).
               </div>
               <div id="zoomBody"></div>
+            </div>
+          </div>
+
+          <div class="panelSection" data-section="moveHistory">
+            <div class="sectionHeader" data-toggle="moveHistory">
+              <h3>Move History</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                id="moveHistory"
+                style="
+                  font-size: 12px;
+                  color: rgba(255, 255, 255, 0.7);
+                  line-height: 1.5;
+                  max-height: 320px;
+                  overflow: auto;
+                "
+              >
+                No moves yet
+              </div>
             </div>
           </div>
 

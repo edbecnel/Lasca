@@ -32,6 +32,7 @@ const LS_OPT_KEYS = {
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
   checkerboardTheme: "lasca.opt.checkerboardTheme",
+  lastMoveHighlights: "lasca.opt.lastMoveHighlights",
 } as const;
 
 function readOptionalBoolPref(key: string): boolean | null {
@@ -230,6 +231,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Options: last move highlight
+  const lastMoveHighlightsToggle = document.getElementById("lastMoveHighlightsToggle") as HTMLInputElement | null;
+  const savedLastMoveHighlights = readOptionalBoolPref(LS_OPT_KEYS.lastMoveHighlights);
+  const initialLastMoveHighlights = savedLastMoveHighlights ?? true;
+  if (lastMoveHighlightsToggle) lastMoveHighlightsToggle.checked = initialLastMoveHighlights;
+  controller.setLastMoveHighlightsEnabled(lastMoveHighlightsToggle?.checked ?? initialLastMoveHighlights);
+  if (lastMoveHighlightsToggle) {
+    lastMoveHighlightsToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.lastMoveHighlights, lastMoveHighlightsToggle.checked);
+      controller.setLastMoveHighlightsEnabled(lastMoveHighlightsToggle.checked);
+    });
+  }
+
   // Options: board coords
   if (boardCoordsToggle) {
     boardCoordsToggle.addEventListener("change", () => {
@@ -350,14 +364,94 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // Export Move History
+  const exportHistoryBtn = document.getElementById("exportHistoryBtn") as HTMLButtonElement | null;
+  if (exportHistoryBtn) {
+    exportHistoryBtn.addEventListener("click", () => {
+      const historyJson = controller.exportMoveHistory();
+      const timestamp = new Date().toISOString().replace(/:/g, "-").split(".")[0];
+      const blob = new Blob([historyJson], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${ACTIVE_VARIANT_ID}-history-${timestamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
   // Undo / Redo
   const undoBtn = document.getElementById("undoBtn") as HTMLButtonElement | null;
   const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
+  const moveHistoryEl = document.getElementById("moveHistory") as HTMLElement | null;
 
-  const updateHistoryUI = () => {
+  const updateHistoryUI = (reason?: import("./controller/gameController.ts").HistoryChangeReason) => {
     if (undoBtn) undoBtn.disabled = !controller.canUndo();
     if (redoBtn) redoBtn.disabled = !controller.canRedo();
+
+    if (moveHistoryEl) {
+      const historyData = controller.getHistory();
+      if (historyData.length === 0) {
+        moveHistoryEl.textContent = "No moves yet";
+      } else {
+        moveHistoryEl.innerHTML = historyData
+          .map((entry, idx) => {
+            if (idx === 0) {
+              const baseStyle = entry.isCurrent
+                ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
+                : "";
+              const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
+              const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+              return `<div data-history-index=\"${entry.index}\"${currentAttr} style=\"${style}\">Start</div>`;
+            }
+
+            // For moves: toMove indicates who's about to move, so invert to get who just moved.
+            const playerWhoMoved = entry.toMove === "B" ? "Light" : "Dark";
+            const playerIcon = playerWhoMoved === "Dark" ? "⚫" : "⚪";
+
+            const moveNum =
+              playerWhoMoved === "Dark"
+                ? Math.ceil(idx / 2)
+                : Math.floor((idx + 1) / 2);
+
+            let label = `${moveNum}. ${playerIcon}`;
+            if (entry.notation) {
+              label += ` ${entry.notation}`;
+            }
+
+            const baseStyle = entry.isCurrent
+              ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
+              : "";
+            const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
+            const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+            return `<div data-history-index=\"${entry.index}\"${currentAttr} style=\"${style}\">${label}</div>`;
+          })
+          .join("");
+      }
+
+      // Keep the latest move visible.
+      // Use rAF so layout reflects the updated HTML before scrolling.
+      requestAnimationFrame(() => {
+        if (reason === "jump" || reason === "undo" || reason === "redo") {
+          const currentEl = moveHistoryEl.querySelector('[data-is-current="1"]') as HTMLElement | null;
+          if (currentEl) currentEl.scrollIntoView({ block: "nearest" });
+          return;
+        }
+        moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
+      });
+    }
   };
+
+  if (moveHistoryEl) {
+    moveHistoryEl.addEventListener("click", (ev) => {
+      const target = ev.target as HTMLElement;
+      const entryEl = target.closest("[data-history-index]") as HTMLElement | null;
+      if (!entryEl) return;
+      const index = Number(entryEl.dataset.historyIndex);
+      if (!Number.isFinite(index)) return;
+      controller.jumpToHistory(index);
+    });
+  }
 
   if (undoBtn) {
     undoBtn.addEventListener("click", () => {

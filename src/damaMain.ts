@@ -41,6 +41,7 @@ const ACTIVE_VARIANT_ID: VariantId = getActiveDamaVariantId();
 const LS_OPT_KEYS = {
   moveHints: "lasca.opt.moveHints",
   animations: "lasca.opt.animations",
+  lastMoveHighlights: "lasca.opt.lastMoveHighlights",
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
   board8x8Checkered: "lasca.opt.board8x8Checkered",
@@ -214,6 +215,19 @@ window.addEventListener("DOMContentLoaded", async () => {
       writeBoolPref(LS_OPT_KEYS.sfx, soundToggle.checked);
       sfx.setEnabled(soundToggle.checked);
       sfx.play(soundToggle.checked ? "uiOn" : "uiOff");
+    });
+  }
+
+  // Options: last move highlight
+  const lastMoveHighlightsToggle = document.getElementById("lastMoveHighlightsToggle") as HTMLInputElement | null;
+  const savedLastMoveHighlights = readOptionalBoolPref(LS_OPT_KEYS.lastMoveHighlights);
+  const initialLastMoveHighlights = savedLastMoveHighlights ?? true;
+  if (lastMoveHighlightsToggle) lastMoveHighlightsToggle.checked = initialLastMoveHighlights;
+  controller.setLastMoveHighlightsEnabled(lastMoveHighlightsToggle?.checked ?? initialLastMoveHighlights);
+  if (lastMoveHighlightsToggle) {
+    lastMoveHighlightsToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.lastMoveHighlights, lastMoveHighlightsToggle.checked);
+      controller.setLastMoveHighlightsEnabled(lastMoveHighlightsToggle.checked);
     });
   }
 
