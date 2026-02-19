@@ -2704,7 +2704,9 @@ export class GameController {
     
     this.currentMoves = movesForNode;
     this.currentTargets = this.currentMoves.map(m => m.to);
-    drawTargets(this.overlayLayer, this.currentTargets);
+    if (this.moveHintsEnabled) {
+      drawTargets(this.overlayLayer, this.currentTargets);
+    }
 
     // Dama International (end-of-sequence capture removal): visually mark already-captured pieces
     // that are pending removal so the player understands they cannot be jumped again.

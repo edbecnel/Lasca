@@ -45,10 +45,11 @@ export function createStackInspector(
 
     while (zoomSvg.firstChild) zoomSvg.removeChild(zoomSvg.firstChild);
 
-    const miniSize = 22;
-    const gap = 4;
-    const padTop = 26;
-    const padBottom = 24;
+    const scale = 1.44;
+    const miniSize = 22 * scale;
+    const gap = 4 * scale;
+    const padTop = 26 * scale;
+    const padBottom = 24 * scale;
     const W = 120;
 
     const columnH = n * miniSize + (n - 1) * gap;
@@ -69,7 +70,7 @@ export function createStackInspector(
     bg.setAttribute("width", String(miniSize + 16));
     bg.setAttribute("height", String(columnH + 20));
     bg.setAttribute("rx", "12");
-    bg.setAttribute("fill", "rgba(56,56,56,0.55)");
+    bg.setAttribute("fill", "rgba(74,74,74,0.55)");
     bg.setAttribute("stroke", "rgba(255,255,255,0.18)");
     bg.setAttribute("stroke-width", "1.4");
     zoomSvg.appendChild(bg);

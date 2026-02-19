@@ -33,6 +33,7 @@ const LS_OPT_KEYS = {
   sfx: "lasca.opt.sfx",
   checkerboardTheme: "lasca.opt.checkerboardTheme",
   lastMoveHighlights: "lasca.opt.lastMoveHighlights",
+  moveHints: "lasca.opt.moveHints",
 } as const;
 
 function readOptionalBoolPref(key: string): boolean | null {
@@ -242,6 +243,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     lastMoveHighlightsToggle.addEventListener("change", () => {
       writeBoolPref(LS_OPT_KEYS.lastMoveHighlights, lastMoveHighlightsToggle.checked);
       controller.setLastMoveHighlightsEnabled(lastMoveHighlightsToggle.checked);
+    });
+  }
+
+  // Options: move preview hints
+  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
+  const savedMoveHints = readOptionalBoolPref(LS_OPT_KEYS.moveHints);
+  const initialMoveHints = savedMoveHints ?? true;
+  if (moveHintsToggle) moveHintsToggle.checked = initialMoveHints;
+  controller.setMoveHints(moveHintsToggle?.checked ?? initialMoveHints);
+  if (moveHintsToggle) {
+    moveHintsToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.moveHints, moveHintsToggle.checked);
+      controller.setMoveHints(moveHintsToggle.checked);
     });
   }
 

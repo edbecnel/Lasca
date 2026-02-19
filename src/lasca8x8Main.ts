@@ -240,9 +240,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   const startupMsg = consumeStartupMessage();
   if (startupMsg) controller.showStartupMessage(startupMsg);
 
+  // Options: move preview hints
+  const moveHintsToggle = document.getElementById("moveHintsToggle") as HTMLInputElement | null;
+  const savedMoveHints = readOptionalBoolPref(LS_OPT_KEYS.moveHints);
+  const initialMoveHints = savedMoveHints ?? true;
+  if (moveHintsToggle) moveHintsToggle.checked = initialMoveHints;
+  controller.setMoveHints(moveHintsToggle?.checked ?? initialMoveHints);
+  if (moveHintsToggle) {
+    moveHintsToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.moveHints, moveHintsToggle.checked);
+      controller.setMoveHints(moveHintsToggle.checked);
+    });
+  }
+
   // Force these display prefs.
-  controller.setMoveHints(false);
-  writeBoolPref(LS_OPT_KEYS.moveHints, false);
   controller.setAnimations(true);
   writeBoolPref(LS_OPT_KEYS.animations, true);
 
