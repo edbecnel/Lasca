@@ -3138,14 +3138,20 @@ export class GameController {
     spineG.setAttribute("class", "miniSpine ghost");
     spineG.setAttribute("data-node", nodeId);
 
+    // Use an off-DOM scratch layer for stack-count bubbles so the ghost can animate
+    // with a correctly-positioned count without touching the real board's counts layer.
+    const scratchCounts = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+
     drawMiniStackSpine(this.svg, spineG, cx, cy, stack, {
       pieceSize,
       miniSize: 18,
       rulesetId,
       seedKey: `${nodeId}:ghost`,
+      countLayer: scratchCounts,
     });
 
-    return { stackG: g, extras: [spineG] };
+    const ghostCount = scratchCounts.querySelector("g.stackCount") as SVGGElement | null;
+    return { stackG: g, extras: ghostCount ? [spineG, ghostCount] : [spineG] };
   }
 
   private async applyChosenMove(move: Move): Promise<void> {

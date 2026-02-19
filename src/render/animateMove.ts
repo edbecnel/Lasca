@@ -11,6 +11,38 @@ export function getNodeCenter(svg: SVGSVGElement, nodeId: string): { x: number; 
   return { x: cx, y: cy };
 }
 
+function getNodeCenterInLayer(
+  svg: SVGSVGElement,
+  layer: SVGGElement,
+  nodeId: string
+): { x: number; y: number } | null {
+  const circle = svg.querySelector(`#${nodeId}`) as SVGCircleElement | null;
+  if (!circle) return null;
+
+  // Prefer actual rendered (screen-space) center so we correctly handle board flips,
+  // where #boardView is rotated but node cx/cy attributes remain unchanged.
+  try {
+    const rect = circle.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+
+    const ctm = layer.getScreenCTM();
+    if (!ctm) return getNodeCenter(svg, nodeId);
+
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const local = pt.matrixTransform(ctm.inverse());
+    if (Number.isFinite(local.x) && Number.isFinite(local.y)) {
+      return { x: local.x, y: local.y };
+    }
+  } catch {
+    // Fall back to attribute-based coordinates.
+  }
+
+  return getNodeCenter(svg, nodeId);
+}
+
 /**
  * Animate a stack moving from one node to another using a ghost clone in the overlay layer.
  * Returns a promise that resolves when the animation completes.
@@ -33,8 +65,8 @@ export function animateStack(
   opts: { easing?: string; keepCloneAfter?: boolean } = {}
 ): Promise<void> {
   return new Promise((resolve) => {
-    const fromPos = getNodeCenter(svg, fromNodeId);
-    const toPos = getNodeCenter(svg, toNodeId);
+    const fromPos = getNodeCenterInLayer(svg, overlayLayer, fromNodeId);
+    const toPos = getNodeCenterInLayer(svg, overlayLayer, toNodeId);
     
     if (!fromPos || !toPos) {
       // Can't animate without positions, resolve immediately
@@ -42,25 +74,27 @@ export function animateStack(
       return;
     }
     
-    // Clone the moving group (+ any extra elements that should move with it)
+    // Clone the moving group (+ any extra elements that should move with it).
+    // IMPORTANT: when the board is flipped, some elements (notably stack-count bubbles)
+    // have a base rotate(180 ...) transform. Appending translate(...) onto that transform
+    // can invert the translation direction due to transform composition.
+    // To avoid that, keep each clone's own transform untouched and translate a wrapper <g>.
+    const wrapper = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    wrapper.setAttribute("data-animating", "true");
+
     const clones: SVGElement[] = [];
 
     const cloneMain = movingGroupEl.cloneNode(true) as SVGGElement;
-    cloneMain.setAttribute("data-animating", "true");
     clones.push(cloneMain);
 
     for (const el of extraEls) {
       try {
         const c = el.cloneNode(true) as SVGElement;
-        c.setAttribute("data-animating", "true");
         clones.push(c);
       } catch {
         // ignore
       }
     }
-    
-    // Don't set transform on clone - it already has correctly positioned children
-    // The children have absolute x,y coordinates, so we'll animate using transform
     
     // Hide originals during animation
     const originals: SVGElement[] = [movingGroupEl, ...extraEls];
@@ -73,10 +107,11 @@ export function animateStack(
       }
     }
     
-    // Append clones to overlay layer
+    // Append clones under wrapper, then wrapper to overlay layer.
     for (const c of clones) {
-      overlayLayer.appendChild(c);
+      wrapper.appendChild(c);
     }
+    overlayLayer.appendChild(wrapper);
     
     // Calculate translation distance
     const dx = toPos.x - fromPos.x;
@@ -86,12 +121,10 @@ export function animateStack(
       // Remove clones if still present (unless caller wants the clone to remain
       // visible at the destination until a subsequent authoritative render).
       if (!opts.keepCloneAfter) {
-        for (const c of clones) {
-          try {
-            c.remove();
-          } catch {
-            // ignore
-          }
+        try {
+          wrapper.remove();
+        } catch {
+          // ignore
         }
       }
 
@@ -116,17 +149,12 @@ export function animateStack(
       return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     };
 
-    const baseTransforms = clones.map((c) => c.getAttribute("transform") ?? "");
     const applyTransform = (tx: number, ty: number) => {
-      for (let i = 0; i < clones.length; i++) {
-        const base = baseTransforms[i];
-        const translate = `translate(${tx} ${ty})`;
-        const next = base ? `${base} ${translate}` : translate;
-        try {
-          clones[i].setAttribute("transform", next);
-        } catch {
-          // ignore
-        }
+      const translate = `translate(${tx} ${ty})`;
+      try {
+        wrapper.setAttribute("transform", translate);
+      } catch {
+        // ignore
       }
     };
 
