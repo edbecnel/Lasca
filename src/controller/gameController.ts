@@ -1,7 +1,15 @@
 import type { GameState } from "../game/state.ts";
 import type { Move } from "../game/moveTypes.ts";
 import type { createStackInspector } from "../ui/stackInspector";
-import { ensureOverlayLayer, clearOverlays, drawSelection, drawTargets, drawHighlightRing } from "../render/overlays.ts";
+import {
+  ensureOverlayLayer,
+  clearOverlays,
+  drawSelection,
+  drawTargets,
+  drawHighlightRing,
+  drawLastMoveSquares,
+  clearLastMoveSquares,
+} from "../render/overlays.ts";
 import { generateLegalMoves } from "../game/movegen.ts";
 import { renderGameState } from "../render/renderGameState.ts";
 import { RULES } from "../game/ruleset.ts";
@@ -1366,6 +1374,15 @@ export class GameController {
   private renderAuthoritative(): void {
     // 1) board/pieces
     renderGameState(this.svg, this.piecesLayer, this.inspector, this.state);
+
+    // Persistent UI hint: last move origin/destination squares.
+    try {
+      const lm = this.state.ui?.lastMove;
+      if (lm?.from && lm?.to) drawLastMoveSquares(this.overlayLayer, lm.from, lm.to);
+      else clearLastMoveSquares(this.overlayLayer);
+    } catch {
+      // ignore
+    }
 
     // 2) previews (currently none; kept for move/stack preview rendering)
     // 3) keep preview layers on top (board coords / other layers might be appended later)
@@ -3248,6 +3265,19 @@ export class GameController {
   }
 
   private async onClick(ev: MouseEvent): Promise<void> {
+    // Any click on the board clears the last-move square highlights.
+    // (They will re-appear after the next completed move.)
+    try {
+      if (this.state.ui?.lastMove) {
+        // Keep `ui` but remove just the hint.
+        this.state.ui = { ...(this.state.ui ?? {}) };
+        delete this.state.ui.lastMove;
+      }
+      clearLastMoveSquares(this.overlayLayer);
+    } catch {
+      // ignore
+    }
+
     // Ignore clicks if game is over
     if (this.isGameOver) {
       return;

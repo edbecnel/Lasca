@@ -1,5 +1,12 @@
 /* Semi-Precious Stones Theme */
 
+:root {
+  --lastMoveFromFill: rgba(102, 204, 255, 0.22);
+  --lastMoveToFill: rgba(102, 204, 255, 0.36);
+  --lastMoveStroke: rgba(102, 204, 255, 0.72);
+  --lastMoveStrokeWidth: 3;
+}
+
 body {
   background:
     radial-gradient(circle at 18% 12%, rgba(128, 90, 200, 0.22), transparent 46%),

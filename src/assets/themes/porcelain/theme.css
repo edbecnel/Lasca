@@ -1,10 +1,15 @@
 /* src/assets/themes/porcelain/theme.css */
 :root{
-  --page-bg: #1b1b1b;
+  --page-bg: #0f172a;
   --panel-bg: rgba(255,255,255,0.06);
   --panel-border: rgba(255,255,255,0.10);
   --panel-text: rgba(255,255,255,0.90);
   --panel-subtext: rgba(255,255,255,0.70);
+  
+  --lastMoveFromFill: rgba(102, 204, 255, 0.22);
+  --lastMoveToFill: rgba(102, 204, 255, 0.36);
+  --lastMoveStroke: rgba(102, 204, 255, 0.72);
+  --lastMoveStrokeWidth: 3;
 }
 
 /* Keep board connectors/nodes aligned with Classic */

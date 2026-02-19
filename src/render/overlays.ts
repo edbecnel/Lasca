@@ -4,6 +4,48 @@ const SELECTION_STROKE_W = 5;
 const TARGET_STROKE_W = 5;
 const MIN_HIGHLIGHT_STROKE_W = 6;
 
+const DEFAULT_LAST_MOVE_FROM_FILL = "rgba(102, 204, 255, 0.22)";
+const DEFAULT_LAST_MOVE_TO_FILL = "rgba(102, 204, 255, 0.36)";
+const DEFAULT_LAST_MOVE_STROKE = "rgba(102, 204, 255, 0.72)";
+const DEFAULT_LAST_MOVE_STROKE_W = 3;
+
+type SquareRect = { x: number; y: number; w: number; h: number };
+
+function resolveOverlayRoot(layer: SVGGElement): SVGGElement {
+  if (layer.id === "overlays") return layer;
+  const root = layer.closest?.("#overlays") as SVGGElement | null;
+  return root ?? layer;
+}
+
+function ensureOverlaySubLayer(root: SVGGElement, id: string): SVGGElement {
+  const existing = root.querySelector(`#${id}`) as SVGGElement | null;
+  if (existing) return existing;
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  g.id = id;
+  g.setAttribute("pointer-events", "none");
+  root.appendChild(g);
+  return g;
+}
+
+function fxLayerFromAny(layer: SVGGElement): SVGGElement {
+  const root = resolveOverlayRoot(layer);
+  // Ensure ordering: last-move squares below FX halos.
+  ensureOverlaySubLayer(root, "overlaysLastMove");
+  const fx = ensureOverlaySubLayer(root, "overlaysFx");
+  return fx;
+}
+
+function lastMoveLayerFromAny(layer: SVGGElement): SVGGElement {
+  const root = resolveOverlayRoot(layer);
+  const last = ensureOverlaySubLayer(root, "overlaysLastMove");
+  // Ensure FX exists and is on top.
+  ensureOverlaySubLayer(root, "overlaysFx");
+  // If both exist, enforce order by appending FX last.
+  const fx = root.querySelector("#overlaysFx") as SVGGElement | null;
+  if (fx) root.appendChild(fx);
+  return last;
+}
+
 function makeHalo(layer: SVGGElement, args: { cx: number; cy: number; r: number; kind: "selection" | "target" | "highlight" }): SVGGElement {
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.setAttribute("class", `halo halo--${args.kind}`);
@@ -55,7 +97,15 @@ function applyStrokeDefaults(el: SVGElement): void {
 
 export function ensureOverlayLayer(svg: SVGSVGElement): SVGGElement {
   const existing = svg.querySelector("#overlays") as SVGGElement | null;
-  if (existing) return existing;
+  if (existing) {
+    // Ensure sublayers exist even if created by older builds.
+    ensureOverlaySubLayer(existing, "overlaysLastMove");
+    ensureOverlaySubLayer(existing, "overlaysFx");
+    // Keep FX on top.
+    const fx = existing.querySelector("#overlaysFx") as SVGGElement | null;
+    if (fx) existing.appendChild(fx);
+    return existing;
+  }
   const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
   g.id = "overlays";
   // Make overlays purely visual; clicks pass through to underlying nodes
@@ -71,11 +121,19 @@ export function ensureOverlayLayer(svg: SVGSVGElement): SVGGElement {
   } else {
     svg.appendChild(g);
   }
+
+  // Sublayers: persistent (last move) + transient FX (selection/targets).
+  ensureOverlaySubLayer(g, "overlaysLastMove");
+  ensureOverlaySubLayer(g, "overlaysFx");
+
   return g;
 }
 
 export function clearOverlays(layer: SVGGElement): void {
-  while (layer.firstChild) layer.removeChild(layer.firstChild);
+  // Clear only interactive FX overlays (selection/targets/highlight rings).
+  // Keep the last-move squares persistent across clicks.
+  const fx = fxLayerFromAny(layer);
+  while (fx.firstChild) fx.removeChild(fx.firstChild);
 }
 
 function circleForNode(id: string): SVGCircleElement | null {
@@ -83,6 +141,7 @@ function circleForNode(id: string): SVGCircleElement | null {
 }
 
 export function drawSelection(layer: SVGGElement, nodeId: string): void {
+  layer = fxLayerFromAny(layer);
   const node = circleForNode(nodeId);
   if (!node) return;
   const cx = parseFloat(node.getAttribute("cx") || "0");
@@ -93,6 +152,7 @@ export function drawSelection(layer: SVGGElement, nodeId: string): void {
 }
 
 export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
+  layer = fxLayerFromAny(layer);
   for (const id of nodeIds) {
     const node = circleForNode(id);
     if (!node) continue;
@@ -105,6 +165,7 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
 }
 
 export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#ff9f40", width = 4): void {
+  layer = fxLayerFromAny(layer);
   const node = circleForNode(nodeId);
   if (!node) return;
   const cx = parseFloat(node.getAttribute("cx") || "0");
@@ -122,4 +183,97 @@ export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#
   } catch {
     // ignore
   }
+}
+
+function parseNodeIdFast(id: string): { r: number; c: number } | null {
+  const m = /^r(\d+)c(\d+)$/.exec(id);
+  if (!m) return null;
+  const r = Number.parseInt(m[1], 10);
+  const c = Number.parseInt(m[2], 10);
+  if (!Number.isFinite(r) || !Number.isFinite(c)) return null;
+  return { r, c };
+}
+
+function computeSquareRect(svg: SVGSVGElement, nodeId: string): SquareRect | null {
+  const rc = parseNodeIdFast(nodeId);
+  if (!rc) return null;
+
+  // Preferred: derive grid geometry from #squares <rect> tiles.
+  const squares = svg.querySelector("#squares") as SVGGElement | null;
+  if (squares) {
+    const rects = Array.from(squares.querySelectorAll("rect")) as SVGRectElement[];
+    if (rects.length > 0) {
+      const first = rects[0];
+      const w = Number.parseFloat(first.getAttribute("width") ?? "0");
+      const h = Number.parseFloat(first.getAttribute("height") ?? "0");
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        let minX = Infinity;
+        let minY = Infinity;
+        for (const r of rects) {
+          const x = Number.parseFloat(r.getAttribute("x") ?? "NaN");
+          const y = Number.parseFloat(r.getAttribute("y") ?? "NaN");
+          if (Number.isFinite(x)) minX = Math.min(minX, x);
+          if (Number.isFinite(y)) minY = Math.min(minY, y);
+        }
+        if (Number.isFinite(minX) && Number.isFinite(minY)) {
+          return { x: minX + rc.c * w, y: minY + rc.r * h, w, h };
+        }
+      }
+    }
+  }
+
+  // Fallback: infer square from the node circle center (assumes 100px tiles in 0..1000 boards).
+  const node = circleForNode(nodeId);
+  if (!node) return null;
+  const cx = Number.parseFloat(node.getAttribute("cx") ?? "NaN");
+  const cy = Number.parseFloat(node.getAttribute("cy") ?? "NaN");
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  return { x: cx - 50, y: cy - 50, w: 100, h: 100 };
+}
+
+function applyRectDefaults(el: SVGRectElement): void {
+  el.setAttribute("vector-effect", "non-scaling-stroke");
+  el.setAttribute("shape-rendering", "crispEdges");
+}
+
+export function clearLastMoveSquares(layer: SVGGElement): void {
+  const last = lastMoveLayerFromAny(layer);
+  while (last.firstChild) last.removeChild(last.firstChild);
+}
+
+export function drawLastMoveSquares(layer: SVGGElement, fromNodeId: string, toNodeId: string): void {
+  const root = resolveOverlayRoot(layer);
+  const svg = (root.ownerSVGElement ?? root.closest?.("svg")) as SVGSVGElement | null;
+  if (!svg) return;
+
+  const last = lastMoveLayerFromAny(root);
+  while (last.firstChild) last.removeChild(last.firstChild);
+
+  const fromRect = computeSquareRect(svg, fromNodeId);
+  const toRect = computeSquareRect(svg, toNodeId);
+  if (!fromRect || !toRect) return;
+
+  const fromEl = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  fromEl.setAttribute("class", "last-move-square last-move-square--from");
+  fromEl.setAttribute("x", String(fromRect.x));
+  fromEl.setAttribute("y", String(fromRect.y));
+  fromEl.setAttribute("width", String(fromRect.w));
+  fromEl.setAttribute("height", String(fromRect.h));
+  fromEl.setAttribute("fill", `var(--lastMoveFromFill, ${DEFAULT_LAST_MOVE_FROM_FILL})`);
+  fromEl.setAttribute("stroke", `var(--lastMoveStroke, ${DEFAULT_LAST_MOVE_STROKE})`);
+  fromEl.setAttribute("stroke-width", `var(--lastMoveStrokeWidth, ${DEFAULT_LAST_MOVE_STROKE_W})`);
+  applyRectDefaults(fromEl);
+  last.appendChild(fromEl);
+
+  const toEl = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  toEl.setAttribute("class", "last-move-square last-move-square--to");
+  toEl.setAttribute("x", String(toRect.x));
+  toEl.setAttribute("y", String(toRect.y));
+  toEl.setAttribute("width", String(toRect.w));
+  toEl.setAttribute("height", String(toRect.h));
+  toEl.setAttribute("fill", `var(--lastMoveToFill, ${DEFAULT_LAST_MOVE_TO_FILL})`);
+  toEl.setAttribute("stroke", `var(--lastMoveStroke, ${DEFAULT_LAST_MOVE_STROKE})`);
+  toEl.setAttribute("stroke-width", `var(--lastMoveStrokeWidth, ${DEFAULT_LAST_MOVE_STROKE_W})`);
+  applyRectDefaults(toEl);
+  last.appendChild(toEl);
 }

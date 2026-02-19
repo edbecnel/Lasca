@@ -118,6 +118,10 @@ body {
 :root {
   --halo-selection: #4a9eff;
   --halo-target: #00e676;
+  --lastMoveFromFill: rgba(102, 204, 255, 0.22);
+  --lastMoveToFill: rgba(102, 204, 255, 0.36);
+  --lastMoveStroke: rgba(102, 204, 255, 0.72);
+  --lastMoveStrokeWidth: 3;
 }
 
 .selection-ring {

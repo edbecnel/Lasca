@@ -15,9 +15,18 @@ export function applyMove(
   move: Move
 ): GameState & { didPromote?: boolean } {
   const rulesetId = getRulesetId(state);
-  if (rulesetId === "columns_chess") return applyMoveColumnsChess(state, move);
-  if (rulesetId === "chess") return applyMoveChess(state, move);
-  if (rulesetId === "dama") return applyMoveDama(state, move);
-  if (rulesetId === "damasca" || rulesetId === "damasca_classic") return applyMoveDamasca(state, move);
-  return applyMoveLasca(state, move);
+
+  let next: (GameState & { didPromote?: boolean }) | null = null;
+  if (rulesetId === "columns_chess") next = applyMoveColumnsChess(state, move);
+  else if (rulesetId === "chess") next = applyMoveChess(state, move);
+  else if (rulesetId === "dama") next = applyMoveDama(state, move);
+  else if (rulesetId === "damasca" || rulesetId === "damasca_classic") next = applyMoveDamasca(state, move);
+  else next = applyMoveLasca(state, move);
+
+  // Ephemeral UI hint: highlight the origin/destination squares of the last move.
+  next.ui = {
+    ...(next.ui ?? {}),
+    lastMove: { from: move.from, to: move.to },
+  };
+  return next;
 }

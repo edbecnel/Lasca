@@ -1,4 +1,4 @@
-export type CheckerboardThemeId = "classic" | "green";
+export type CheckerboardThemeId = "classic" | "green" | "blue";
 
 export type CheckerboardThemeDef = {
   id: CheckerboardThemeId;
@@ -27,9 +27,18 @@ export const CHECKERBOARD_THEMES: readonly CheckerboardThemeDef[] = [
     dark: "#6d8a3e",
     bg: "#dfe6c2",
   },
+  {
+    id: "blue",
+    label: "Blue",
+    // Cool blue board (matches the blue/white screenshot vibe)
+    light: "#eef3ff",
+    dark: "#6b84b3",
+    bg: "#dde6f7",
+  },
 ] as const;
 
 export function normalizeCheckerboardThemeId(raw: string | null | undefined): CheckerboardThemeId {
+  if (raw === "blue") return "blue";
   if (raw === "green") return "green";
   return "classic";
 }

@@ -14,6 +14,14 @@ export interface GameState {
   phase: "idle" | "select" | "anim";
   meta?: GameMeta;
 
+  /**
+   * Ephemeral UI state (not serialized over the wire).
+   * Used for client-only visual hints like last-move highlights.
+   */
+  ui?: {
+    lastMove?: { from: NodeId; to: NodeId };
+  };
+
   /** Columns Chess / chess-like ruleset state (serialized). */
   chess?: {
     castling: {

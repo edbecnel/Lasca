@@ -160,6 +160,7 @@ export class HistoryManager {
       toMove: state.toMove,
       phase: state.phase,
       meta: state.meta ? { ...state.meta } : undefined,
+      ui: state.ui ? { ...state.ui, lastMove: state.ui.lastMove ? { ...state.ui.lastMove } : undefined } : undefined,
       chess: state.chess
         ? {
             castling: {

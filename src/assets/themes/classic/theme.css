@@ -5,6 +5,11 @@
   --panel-border: rgba(255,255,255,0.10);
   --panel-text: rgba(255,255,255,0.90);
   --panel-subtext: rgba(255,255,255,0.70);
+
+  --lastMoveFromFill: rgba(102, 204, 255, 0.22);
+  --lastMoveToFill: rgba(102, 204, 255, 0.36);
+  --lastMoveStroke: rgba(102, 204, 255, 0.72);
+  --lastMoveStrokeWidth: 3;
 }
 
 /* Slightly warm board connectors/nodes */
