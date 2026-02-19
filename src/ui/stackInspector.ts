@@ -7,6 +7,16 @@ import type { Stack } from "../types";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+function shouldShowChessPieceCodes(rulesetId: string | null | undefined): boolean {
+  return rulesetId === "chess" || rulesetId === "columns_chess";
+}
+
+function chessPieceCode(p: { owner: string; rank: string }): string {
+  // For chess, rank is one of P/N/B/R/Q/K.
+  // Keep it simple and always show two capital letters, e.g. BK / WN.
+  return `${String(p.owner).toUpperCase().slice(0, 1)}${String(p.rank).toUpperCase().slice(0, 1)}`;
+}
+
 export function createStackInspector(
   zoomTitle: HTMLElement,
   zoomHint: HTMLElement,
@@ -49,9 +59,12 @@ export function createStackInspector(
 
     const columnX = W / 2 - miniSize / 2;
     const columnY = padTop;
+    const bgLeftX = columnX - 8;
+    const bgRightX = columnX + miniSize + 8;
+    const codeLabelX = bgRightX + 4;
 
     const bg = document.createElementNS(SVG_NS, "rect");
-    bg.setAttribute("x", String(columnX - 8));
+    bg.setAttribute("x", String(bgLeftX));
     bg.setAttribute("y", String(columnY - 10));
     bg.setAttribute("width", String(miniSize + 16));
     bg.setAttribute("height", String(columnH + 20));
@@ -86,6 +99,22 @@ export function createStackInspector(
       const href = pieceToHref(p, { rulesetId: opts.rulesetId });
       const y = columnY + (n - 1 - i) * (miniSize + gap);
       zoomSvg.appendChild(makeUseWithTitle(href, columnX, y, miniSize, pieceTooltip(p, { rulesetId: opts.rulesetId })));
+
+      if (shouldShowChessPieceCodes(opts.rulesetId)) {
+        const code = chessPieceCode(p);
+        const lbl = document.createElementNS(SVG_NS, "text");
+        lbl.setAttribute("x", String(codeLabelX));
+        lbl.setAttribute("y", String(y + miniSize / 2));
+        lbl.setAttribute("text-anchor", "start");
+        lbl.setAttribute("dominant-baseline", "middle");
+        lbl.setAttribute("fill", "rgba(255,255,255,0.92)");
+        lbl.setAttribute("font-size", "11");
+        lbl.setAttribute("font-weight", "700");
+        lbl.setAttribute("font-family", "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace");
+        lbl.setAttribute("letter-spacing", "0.4");
+        lbl.textContent = code;
+        zoomSvg.appendChild(lbl);
+      }
     }
 
     if (n > MINI_SPINE_MAX_SHOWN) {
