@@ -2584,10 +2584,20 @@ export class GameController {
     // (This matters for both live play and when replaying/stepping through history.)
     if (elMsg && this.isGameOver) {
       const forcedMsg = (this.state as any)?.forcedGameOver?.message;
-      const msg = typeof forcedMsg === "string" && forcedMsg.trim()
-        ? forcedMsg.trim()
-        : (getWinner(this.state).reason || "Game Over");
-      elMsg.textContent = msg;
+      const terminal = checkCurrentPlayerLost(this.state);
+      const fallback = getWinner(this.state);
+      const baseMsg =
+        typeof forcedMsg === "string" && forcedMsg.trim()
+          ? forcedMsg.trim()
+          : (terminal.reason || fallback.reason || "Game Over");
+
+      // For chess variants, make checkmate crystal clear and always include the winner.
+      if (this.isCheckmateMessage(baseMsg)) {
+        const w = terminal.winner ?? fallback.winner;
+        elMsg.textContent = w ? `Checkmate - ${this.sideLabel(w)} wins!` : "Checkmate";
+      } else {
+        elMsg.textContent = baseMsg;
+      }
     }
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
