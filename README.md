@@ -242,6 +242,10 @@ npm install
 - `npm run preview` - Preview production build
 - `npm run deploy` - Deploy to GitHub Pages
 
+### Debug scripts
+
+- `node scripts/debug-check-save.mjs <path-to-save.json>` - Developer helper to inspect a save file and report whether `current` matches `history.states[history.currentIndex]` (and show a small diff / closest snapshot when it doesn’t).
+
 ### Project Structure
 
 ```
