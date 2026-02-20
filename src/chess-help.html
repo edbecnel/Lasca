@@ -248,10 +248,23 @@
         <b>Game Panel → Bot</b> and set <b>White</b> and/or <b>Black</b> to a
         tier (Beginner / Intermediate / Strong).
       </p>
+      <ul>
+        <li>
+          <b>Speed</b> uses a slider (milliseconds). The current value is shown
+          as an <b>ms readout</b>.
+        </li>
+        <li>Use the <b>↺</b> button to <b>reset</b> speed to the default.</li>
+      </ul>
       <div class="highlight">
         <b>Warmup note:</b> The first time Stockfish loads, it may take a while
         (WASM compile/download). The UI will show a warmup message while it
         initializes.
+      </div>
+      <div class="highlight">
+        <b>Pause/resume:</b> When the bot is paused on its turn, an on-screen
+        toast appears (for example:
+        <i>“White’s turn. Tap here to resume bot”</i>). Tap the toast itself to
+        resume.
       </div>
       <div class="warning">
         <b>Local engine option:</b> If in-browser Stockfish doesn’t work well on

@@ -18,6 +18,7 @@ import { HistoryManager } from "../game/historyManager.ts";
 import { hashGameState } from "../game/hashState.ts";
 import { applyMove } from "../game/applyMove.ts";
 import { isKingInCheckColumnsChess } from "../game/movegenColumnsChess.ts";
+import { isKingInCheckChess } from "../game/movegenChess.ts";
 import {
   adjudicateDamascaDeadPlay,
   DAMASCA_NO_PROGRESS_LIMIT_PLIES,
@@ -1136,8 +1137,8 @@ export class GameController {
     return wrap;
   }
 
-  private showToast(text: string, durationMs: number = 1400): void {
-    if (!this.readToastPref()) return;
+  private showToast(text: string, durationMs: number = 1400, opts?: { force?: boolean }): void {
+    if (!opts?.force && !this.readToastPref()) return;
     const el = this.ensureToastEl();
     if (!el) return;
     const inner = el.firstElementChild as HTMLElement | null;
@@ -1162,6 +1163,12 @@ export class GameController {
 
       el.classList.remove("isVisible");
     }, Math.max(0, durationMs));
+  }
+
+  private isCheckmateMessage(message: string): boolean {
+    const msg = typeof message === "string" ? message.trim() : "";
+    if (!msg) return false;
+    return /\bcheckmate\b/i.test(msg);
   }
 
   public showStickyToast(key: string, text: string, opts?: { force?: boolean }): void {
@@ -1210,7 +1217,14 @@ export class GameController {
     if (msg === this.lastGameOverToast) return;
     this.lastGameOverToast = msg;
     this.playSfx("gameOver");
-    this.showToast(msg, 3200);
+    // Always show Checkmate, even when toast notifications are disabled.
+    this.showToast(msg, 3200, { force: this.isCheckmateMessage(msg) });
+  }
+
+  private resetGameOverToastDedupe(): void {
+    // Allow terminal toasts (e.g. Checkmate/Stalemate) to re-appear when the
+    // user navigates history (playback/undo/redo/jump) out of a game-over state.
+    this.lastGameOverToast = null;
   }
 
   private sideLabel(color: "W" | "B"): string {
@@ -1232,8 +1246,7 @@ export class GameController {
       if (!shouldToast) return;
 
       const isChessLike = this.isChessLikeRuleset();
-      const checkPrefix =
-        isChessLike && isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
+      const checkPrefix = isChessLike && isKingInCheckColumnsChess(this.state, toMove) ? "Check! " : "";
       const legal = isChessLike ? [] : this.getLegalMovesForTurn();
       const hasCapture = isChessLike ? false : legal.some((m) => m.kind === "capture");
 
@@ -1268,7 +1281,7 @@ export class GameController {
 
     if (shouldToast) {
       if (this.isChessLikeRuleset()) {
-        const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check!  " : "";
+        const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check! " : "";
         this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
       } else {
         const legal = this.getLegalMovesForTurn();
@@ -1766,6 +1779,7 @@ export class GameController {
       this.playSfx("undo");
       // Allow undoing out of terminal states.
       this.isGameOver = false;
+      this.resetGameOverToastDedupe();
 
       // Cancel any transient UI timers from the previous position.
       if (this.bannerTimer) {
@@ -1800,6 +1814,7 @@ export class GameController {
       this.playSfx("redo");
       // Allow redoing out of terminal states.
       this.isGameOver = false;
+      this.resetGameOverToastDedupe();
 
       // Cancel any transient UI timers from the previous position.
       if (this.bannerTimer) {
@@ -1834,6 +1849,7 @@ export class GameController {
 
     // Allow jumping out of terminal states.
     this.isGameOver = false;
+    this.resetGameOverToastDedupe();
 
     // Cancel any transient UI timers.
     if (this.bannerTimer) {
@@ -2014,6 +2030,7 @@ export class GameController {
 
     // Allow jumping out of terminal states.
     this.isGameOver = false;
+    this.resetGameOverToastDedupe();
 
     // Cancel any transient UI timers.
     if (this.bannerTimer) {
@@ -2277,6 +2294,7 @@ export class GameController {
     
     // Game is not over, reset the flag
     this.isGameOver = false;
+    this.resetGameOverToastDedupe();
 
     // Update repetition counts + draw rules from current history.
     this.syncRepetitionRules();
@@ -2343,6 +2361,7 @@ export class GameController {
     this.state = initialState;
     this.driver.setState(initialState);
     this.isGameOver = false;
+    this.resetGameOverToastDedupe();
     this.clearSelection();
 
     this.recomputeRepetitionCounts();
@@ -2378,6 +2397,7 @@ export class GameController {
     const currentFromHistory = this.driver.getHistoryCurrent();
     const baseState = currentFromHistory ?? loadedState;
     this.isGameOver = false;
+    this.resetGameOverToastDedupe();
     this.state = { ...baseState, phase: "idle" };
     this.driver.setState(this.state);
     
@@ -2692,7 +2712,17 @@ export class GameController {
         if (this.mandatoryCapture) {
           elMsg.textContent = "Capture available — you must capture";
         } else {
-          elMsg.textContent = "—";
+          // Chess(-like): when in check, show a prominent status message.
+          // (Toasts also fire on turn change, but the status row should reflect check.)
+          if (isChessLike) {
+            const toMove = this.state.toMove;
+            const inCheck = isColumnsChess
+              ? isKingInCheckColumnsChess(this.state, toMove)
+              : isKingInCheckChess(this.state, toMove);
+            elMsg.textContent = inCheck ? `Check! ${this.sideLabel(toMove)} to Play` : "—";
+          } else {
+            elMsg.textContent = "—";
+          }
         }
       }
     }

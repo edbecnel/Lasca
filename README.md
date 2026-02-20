@@ -39,7 +39,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 🎯 Move hints showing capture targets and landing positions
 - ⏮️ Full undo/redo with move history tracking
 - 💾 Save and load games (JSON format)
-  - Multiple themes (Classic, Wooden, and others)
+  - Piece themes (Classic, Wooden, Glass, and others)
+  - Optional 8×8 checkerboard board colors (Classic/Green/Blue) when “Use checkered board (8×8)” is enabled
 - 🌈 Bright animated halos for selection/targets/highlights (theme-colored)
 - 🔊 Sound effects toggle (Start Page + in-game)
 - 📊 Stack inspector showing piece composition
@@ -75,6 +76,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 
 - If you choose the **Glass** theme, you can also choose **Glass bg** (**Original** / **Felt** / **Walnut**).
 - If you choose the **Glass** theme, you can also choose **Glass colors** (piece color-pair presets).
+- For 8×8 variants, enabling **Use checkered board (8×8)** (Start Page or in-game Options) switches to a chess-style square grid. When enabled, the in-game **Theme** panel shows a **Board** selector (Classic/Green/Blue) for checkerboard colors.
 
 #### Online multiplayer (Create / Join)
 

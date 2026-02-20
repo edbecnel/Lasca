@@ -26,6 +26,11 @@ import { createDriverAsync, consumeStartupMessage } from "./driver/createDriver.
 import type { OnlineGameDriver } from "./driver/gameDriver.ts";
 import { createSfxManager } from "./ui/sfx";
 import { createPrng } from "./shared/prng.ts";
+import {
+  applyCheckerboardTheme,
+  normalizeCheckerboardThemeId,
+  type CheckerboardThemeId,
+} from "./render/checkerboardTheme";
 
 const ACTIVE_VARIANT_ID: VariantId = "lasca_8_dama_board";
 
@@ -36,6 +41,7 @@ const LS_OPT_KEYS = {
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
   board8x8Checkered: "lasca.opt.board8x8Checkered",
+  checkerboardTheme: "lasca.opt.checkerboardTheme",
   threefold: "lasca.opt.threefold",
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
@@ -51,6 +57,17 @@ function readOptionalBoolPref(key: string): boolean | null {
 
 function writeBoolPref(key: string, value: boolean): void {
   localStorage.setItem(key, value ? "1" : "0");
+}
+
+function readOptionalStringPref(key: string): string | null {
+  const raw = localStorage.getItem(key);
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  return s.length > 0 ? s : null;
+}
+
+function writeStringPref(key: string, value: string): void {
+  localStorage.setItem(key, value);
 }
 
 function updatePlayerColorBadge(driver: unknown): void {
@@ -84,6 +101,35 @@ window.addEventListener("DOMContentLoaded", async () => {
       ? chessBoardSvgUrl
       : (activeVariant.svgAsset ?? graphBoard8x8SvgUrl);
   const svg = await loadSvgFileInto(boardWrap, svgAsset);
+
+  // Checkerboard theme (only relevant when using the chess-style 8x8 board)
+  const checkerboardThemeRow = document.getElementById("checkerboardThemeRow") as HTMLElement | null;
+  const checkerboardThemeHelp = document.getElementById("checkerboardThemeHelp") as HTMLElement | null;
+  const checkerboardThemeSelect = document.getElementById("checkerboardThemeSelect") as HTMLSelectElement | null;
+
+  const canUseCheckerboardTheme = activeVariant.boardSize === 8 && useCheckered8x8;
+  if (checkerboardThemeRow) checkerboardThemeRow.style.display = canUseCheckerboardTheme ? "flex" : "none";
+  if (checkerboardThemeHelp) checkerboardThemeHelp.style.display = canUseCheckerboardTheme ? "block" : "none";
+  if (checkerboardThemeSelect) checkerboardThemeSelect.disabled = !canUseCheckerboardTheme;
+
+  const readCheckerboardTheme = (): CheckerboardThemeId =>
+    normalizeCheckerboardThemeId(readOptionalStringPref(LS_OPT_KEYS.checkerboardTheme));
+  const applyCheckerboard = (id: CheckerboardThemeId) => {
+    applyCheckerboardTheme(svg, id);
+  };
+
+  if (canUseCheckerboardTheme) {
+    if (checkerboardThemeSelect) {
+      checkerboardThemeSelect.value = readCheckerboardTheme();
+      checkerboardThemeSelect.addEventListener("change", () => {
+        const picked = normalizeCheckerboardThemeId(checkerboardThemeSelect.value);
+        writeStringPref(LS_OPT_KEYS.checkerboardTheme, picked);
+        applyCheckerboard(picked);
+      });
+    }
+
+    applyCheckerboard(readCheckerboardTheme());
+  }
 
   const board8x8CheckeredToggle = document.getElementById("board8x8CheckeredToggle") as HTMLInputElement | null;
   if (board8x8CheckeredToggle) {

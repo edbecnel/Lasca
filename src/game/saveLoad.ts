@@ -218,6 +218,11 @@ export function deserializeSaveData(
     return JSON.stringify({ toMove: s.toMove, board: entries });
   };
 
+  const clampIndex = (idx: number, len: number): number => {
+    if (!Number.isInteger(idx)) return len - 1;
+    return Math.max(0, Math.min(idx, len - 1));
+  };
+
   const expectedMeta = expected ? normalizeMetaFromVariantId(coerceMeta(expected) ?? defaultMeta()) : null;
 
   // v3: metadata wrapper (preferred)
@@ -270,22 +275,40 @@ export function deserializeSaveData(
 
     const states = (v3.history.states || []).map((s: SerializedGameState) => ({ ...deserializeGameState(s), meta }));
     const notation = Array.isArray(v3.history.notation) ? v3.history.notation : [];
-    const currentIndex = Number.isInteger(v3.history.currentIndex) ? v3.history.currentIndex : states.length - 1;
 
-    const historyCurrent = currentIndex >= 0 && currentIndex < states.length ? states[currentIndex] : null;
-    if (!historyCurrent) {
+    if (states.length === 0) {
       // History is missing/invalid; fall back to the current position.
       return { state };
     }
 
-    // Some saves may contain a partial/incorrect history (e.g., only the initial position).
-    // In that case, prefer the explicitly saved current state so load restores the expected board.
-    if (stableBoardForCompare(historyCurrent) !== stableBoardForCompare(state)) {
-      return { state };
+    // Prefer loading the explicitly saved `current` state, while still restoring history.
+    // If the provided `currentIndex` is wrong or the history is partial, locate the
+    // matching snapshot; otherwise append `current` as a final history entry.
+    const targetSig = stableBoardForCompare(state);
+
+    let currentIndex = clampIndex(
+      Number.isInteger(v3.history.currentIndex) ? v3.history.currentIndex : states.length - 1,
+      states.length,
+    );
+
+    let matchedIndex = -1;
+    for (let i = 0; i < states.length; i++) {
+      if (stableBoardForCompare(states[i]) === targetSig) {
+        matchedIndex = i;
+        break;
+      }
+    }
+
+    if (matchedIndex >= 0) {
+      currentIndex = matchedIndex;
+    } else {
+      states.push(state);
+      notation.push("");
+      currentIndex = states.length - 1;
     }
 
     return {
-      state: historyCurrent,
+      state: states[currentIndex],
       history: { states, notation, currentIndex },
     };
   }

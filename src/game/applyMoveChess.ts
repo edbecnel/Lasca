@@ -3,8 +3,8 @@ import type { Move } from "./moveTypes.ts";
 import type { Piece, Player, Stack } from "../types.ts";
 import { parseNodeId, makeNodeId } from "./coords.ts";
 
-function cloneStack(s: Stack): Stack {
-  return s.slice();
+function cloneStackDeep(s: Stack): Stack {
+  return s.map((p) => ({ ...p }));
 }
 
 function getTop(stack: Stack | undefined): Piece | null {
@@ -75,7 +75,9 @@ export function applyMoveChess(state: GameState, move: Move): GameState & { didP
   if (!moving0 || moving0.length === 0) throw new Error(`applyMoveChess: no piece at ${move.from}`);
   if (moving0.length !== 1) throw new Error("applyMoveChess: invalid stack in classic chess");
 
-  const moving = cloneStack(moving0);
+  // IMPORTANT: deep-clone the moving stack so promotion (rank mutation)
+  // cannot mutate the input state's piece objects.
+  const moving = cloneStackDeep(moving0);
   const movedTop = getTop(moving);
   if (!movedTop) throw new Error(`applyMoveChess: no piece at ${move.from}`);
   if (movedTop.owner !== state.toMove) throw new Error("applyMoveChess: not your piece");
@@ -103,7 +105,7 @@ export function applyMoveChess(state: GameState, move: Move): GameState & { didP
     const rookStack0 = nextBoard.get(rookFrom);
     if (!rookStack0 || rookStack0.length !== 1) throw new Error("applyMoveChess: missing rook for castling");
 
-    const rookStack = cloneStack(rookStack0);
+    const rookStack = cloneStackDeep(rookStack0);
     const rookTop = getTop(rookStack);
     if (!rookTop || rookTop.owner !== movedTop.owner || rookTop.rank !== "R") throw new Error("applyMoveChess: invalid rook for castling");
 
@@ -174,7 +176,7 @@ export function applyMoveChess(state: GameState, move: Move): GameState & { didP
   const targetStack0 = nextBoard.get(captureSquare);
   if (!targetStack0 || targetStack0.length !== 1) throw new Error(`applyMoveChess: no capture target at ${captureSquare}`);
 
-  const targetStack = cloneStack(targetStack0);
+  const targetStack = cloneStackDeep(targetStack0);
   const capturedTop = getTop(targetStack);
   if (!capturedTop) throw new Error("applyMoveChess: invalid capture target");
   if (capturedTop.owner === movedTop.owner) throw new Error("applyMoveChess: cannot capture own piece");

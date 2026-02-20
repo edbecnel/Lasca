@@ -1,7 +1,7 @@
 import type { GameController, HistoryChangeReason } from "../controller/gameController.ts";
 
 const DEFAULT_DELAY_MS = 500;
-const MAX_DELAY_MS = 60_000;
+const MAX_DELAY_MS = 3000;
 
 function clampInt(n: number, min: number, max: number): number {
   if (!Number.isFinite(n)) return min;
@@ -27,10 +27,9 @@ export function bindPlaybackControls(controller: GameController): void {
   const elDelay = document.getElementById("playbackDelay") as HTMLInputElement | null;
   const elDelayReset = document.getElementById("playbackDelayReset") as HTMLButtonElement | null;
   const elDelayLabel = document.getElementById("playbackDelayLabel") as HTMLElement | null;
-  const elDelayInput = document.getElementById("playbackDelayInput") as HTMLInputElement | null;
   const elHint = document.getElementById("playbackHint") as HTMLElement | null;
 
-  if (!elBtn || !elDelay || !elDelayReset || !elDelayInput || !elDelayLabel) return;
+  if (!elBtn || !elDelay || !elDelayReset || !elDelayLabel) return;
 
   const rangeMin = parseDelayMs(elDelay.min || "0", 0);
   const rangeMax = parseDelayMs(elDelay.max || "3000", 3000);
@@ -71,8 +70,6 @@ export function bindPlaybackControls(controller: GameController): void {
     // Keep slider within its configured range.
     const sliderValue = clampInt(clamped, rangeMin, rangeMax);
     elDelay.value = String(sliderValue);
-
-    elDelayInput.value = String(clamped);
 
     elDelayLabel.textContent = `${clamped} ms`;
   };
@@ -161,20 +158,6 @@ export function bindPlaybackControls(controller: GameController): void {
   elDelay.addEventListener("input", () => {
     delayMs = parseDelayMs(elDelay.value || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
     updateSpeedUI();
-  });
-
-  const onDelayInputCommit = () => {
-    delayMs = parseDelayMs(elDelayInput.value || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
-    updateSpeedUI();
-  };
-
-  // Keep typing responsive, but avoid fighting with partial values.
-  elDelayInput.addEventListener("change", onDelayInputCommit);
-  elDelayInput.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      onDelayInputCommit();
-      elDelayInput.blur();
-    }
   });
 
   elDelayReset.addEventListener("click", () => {

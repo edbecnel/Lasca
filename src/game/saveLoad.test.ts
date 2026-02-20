@@ -221,7 +221,9 @@ describe("saveLoad", () => {
     const loaded = deserializeSaveData(save);
     expect(Array.from(loaded.state.board.entries())).toEqual([["r0c0", [{ owner: "B", rank: "S" }]]]);
     expect(loaded.state.toMove).toBe("B");
-    // Mismatched history should be dropped to avoid loading the wrong position.
-    expect(loaded.history).toBeUndefined();
+    // History should still be restored; the current state is appended/selected.
+    expect(loaded.history).toBeDefined();
+    expect(loaded.history!.states.length).toBe(2);
+    expect(loaded.history!.currentIndex).toBe(1);
   });
 });

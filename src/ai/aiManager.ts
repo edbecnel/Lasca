@@ -78,7 +78,7 @@ export class AIManager {
     this.controller = controller;
     this.settings = this.loadSettings();
 
-    // Clicking the sticky "Tap anywhere to resume AI" toast should resume AI.
+    // Clicking the sticky "Tap here to resume bot" toast should resume bot play.
     this.controller.setStickyToastAction(AIManager.TAP_RESUME_TOAST_KEY, () => {
       if (this.shouldOfferTapToResume()) this.resumeAI();
     });
@@ -87,6 +87,18 @@ export class AIManager {
 
     // Subscribe to turn boundaries (history changes).
     this.controller.addHistoryChangeCallback((reason) => this.onHistoryChanged(reason));
+  }
+
+  private isViewingPastInHistory(): boolean {
+    try {
+      const h = this.controller.getHistory ? this.controller.getHistory() : null;
+      if (!Array.isArray(h) || h.length <= 1) return false;
+      const cur = h.find((e) => (e as any)?.isCurrent) as any;
+      const idx = typeof cur?.index === "number" ? cur.index : h.length - 1;
+      return idx < h.length - 1;
+    } catch {
+      return false;
+    }
   }
 
   private isBothAI(): boolean {
@@ -126,6 +138,10 @@ export class AIManager {
   }
 
   private syncPausedTurnToastNow(): void {
+    if (this.isViewingPastInHistory()) {
+      this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
+      return;
+    }
     if (this.controller.isOver()) {
       this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
       return;
@@ -145,7 +161,7 @@ export class AIManager {
     if (this.settings.paused && isAiTurn) {
       this.controller.showStickyToast(
         AIManager.TAP_RESUME_TOAST_KEY,
-        `${sideLabel(toMove)}'s turn. Tap anywhere to resume AI`,
+        `${sideLabel(toMove)}'s turn. Tap here to resume bot`,
         { force: true }
       );
     } else {
@@ -172,7 +188,7 @@ export class AIManager {
     this.kick();
   }
 
-  private bindBoardTapToResume(): void {
+  private bindBoardTapToPauseAiVsAi(): void {
     if (typeof document === "undefined") return;
     const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
     const boardSvg = boardWrap?.querySelector("svg") as SVGSVGElement | null;
@@ -187,14 +203,8 @@ export class AIManager {
         return;
       }
 
-      // Prefer resuming when paused and it's an AI turn.
-      if (this.shouldOfferTapToResume()) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.lastBoardTapAtMs = now;
-        this.resumeAI();
-        return;
-      }
+      // While paused on an AI turn, require clicking the sticky toast to resume.
+      if (this.shouldOfferTapToResume()) return;
 
       // In AI-vs-AI, allow tapping the board to pause AI.
       // Useful for spectators who want to stop the game and inspect.
@@ -322,8 +332,8 @@ export class AIManager {
     // User must explicitly click Resume to start AI play.
     this.forcePausedUI();
 
-    // Make it easy for mobile/newcomers: tapping the board resumes AI when it's AI's turn.
-    this.bindBoardTapToResume();
+    // In AI-vs-AI, allow tapping the board to pause.
+    this.bindBoardTapToPauseAiVsAi();
 
     // If we're paused on an AI turn in human-vs-AI, show a persistent hint.
     this.schedulePausedTurnToastSync();
@@ -383,7 +393,7 @@ export class AIManager {
     if (this.elDelayReset) this.elDelayReset.title = `Reset to default speed (${DEFAULT_DELAY_MS} ms)`;
 
     if (this.elPause) {
-      this.elPause.textContent = this.settings.paused ? "Resume AI" : "Pause AI";
+      this.elPause.textContent = this.settings.paused ? "Resume bot" : "Pause bot";
     }
 
     // Input lock: if it's an AI turn and we are not paused, lock input.
@@ -398,7 +408,7 @@ export class AIManager {
       const w = this.settings.white;
       const b = this.settings.black;
       const bothAI = w !== "human" && b !== "human";
-      const note = bothAI ? "Both sides are AI — use Pause/Step." : "";
+      const note = bothAI ? "Both sides are bots — use Pause/Step." : "";
       this.elInfo.textContent = note;
     }
 

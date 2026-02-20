@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { GameController } from "./gameController";
 import { HistoryManager } from "../game/historyManager";
 import type { GameState } from "../game/state";
@@ -252,6 +252,68 @@ describe("GameController turn toast indicates capture", () => {
 
     vi.runAllTimers();
     vi.useRealTimers();
+  });
+});
+
+describe("GameController forced game-over toasts", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+  });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem("lasca.opt.toasts");
+    } catch {
+      // ignore
+    }
+  });
+
+  it("shows checkmate toast even when toast notifications are disabled", () => {
+    localStorage.setItem("lasca.opt.toasts", "0");
+
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map(),
+      toMove: "W",
+      phase: "idle",
+    };
+    history.push(s);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+    (controller as any).playSfx = vi.fn();
+
+    (controller as any).showGameOverToast("Checkmate! White Wins");
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Checkmate! White Wins");
+  });
+
+  it("does not show non-checkmate game-over toast when toast notifications are disabled", () => {
+    localStorage.setItem("lasca.opt.toasts", "0");
+
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map(),
+      toMove: "W",
+      phase: "idle",
+    };
+    history.push(s);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+    (controller as any).playSfx = vi.fn();
+
+    (controller as any).showGameOverToast("Stalemate — draw");
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast).toBe(null);
   });
 });
 

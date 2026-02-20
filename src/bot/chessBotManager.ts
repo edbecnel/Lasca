@@ -17,15 +17,29 @@ export type BotSideSetting = "human" | BotTier;
 type BotSettings = {
   white: BotSideSetting;
   black: BotSideSetting;
+  delayMs: number;
   paused: boolean;
 };
 
 const LS_KEYS = {
   white: "lasca.chessbot.white",
   black: "lasca.chessbot.black",
+  delay: "lasca.chessbot.delayMs",
   paused: "lasca.chessbot.paused",
   adaptPrefix: "lasca.chessbot.adapt.",
 } as const;
+
+const DEFAULT_DELAY_MS = 500;
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function parseDelayMs(raw: string, fallback: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return clamp(Math.round(n), 0, 3000);
+}
 
 function parseSideSetting(v: string | null): BotSideSetting {
   if (v === "beginner" || v === "intermediate" || v === "strong" || v === "human") return v;
@@ -77,6 +91,9 @@ export class ChessBotManager {
 
   private elWhite: HTMLSelectElement | null = null;
   private elBlack: HTMLSelectElement | null = null;
+  private elDelay: HTMLInputElement | null = null;
+  private elDelayReset: HTMLButtonElement | null = null;
+  private elDelayLabel: HTMLElement | null = null;
   private elPause: HTMLButtonElement | null = null;
   private elReset: HTMLButtonElement | null = null;
   private elStatus: HTMLElement | null = null;
@@ -102,9 +119,7 @@ export class ChessBotManager {
 
   private static readonly PAUSED_TURN_TOAST_KEY = "chessbot_paused_turn";
   private static readonly WARMUP_TOAST_KEY = "chessbot_warmup";
-  private tapToResumeInstalled = false;
   private toastSyncTimer: number | null = null;
-  private lastTapToResumeAtMs = 0;
 
   constructor(controller: GameController, opts?: { engineFactory?: () => UciEngine }) {
     this.controller = controller;
@@ -126,6 +141,9 @@ export class ChessBotManager {
   bind(): void {
     this.elWhite = document.getElementById("botWhiteSelect") as HTMLSelectElement | null;
     this.elBlack = document.getElementById("botBlackSelect") as HTMLSelectElement | null;
+    this.elDelay = document.getElementById("botDelay") as HTMLInputElement | null;
+    this.elDelayReset = document.getElementById("botDelayReset") as HTMLButtonElement | null;
+    this.elDelayLabel = document.getElementById("botDelayLabel");
     this.elPause = document.getElementById("botPauseBtn") as HTMLButtonElement | null;
     this.elReset = document.getElementById("botResetLearningBtn") as HTMLButtonElement | null;
     this.elStatus = document.getElementById("botStatus");
@@ -145,7 +163,7 @@ export class ChessBotManager {
       this.prewarmEngine();
     }
 
-    this.installTapAnywhereToResume();
+    this.installBoardClickToPauseBotVsBot();
 
     if (this.elWhite) {
       this.elWhite.value = this.settings.white;
@@ -170,6 +188,32 @@ export class ChessBotManager {
         }
         this.refreshUI();
         this.kick();
+      });
+    }
+
+    if (this.elDelay) {
+      this.elDelay.value = String(this.settings.delayMs);
+      this.elDelay.addEventListener("input", () => {
+        const v = parseDelayMs(this.elDelay!.value || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
+        this.settings.delayMs = v;
+        try {
+          localStorage.setItem(LS_KEYS.delay, String(this.settings.delayMs));
+        } catch {
+          // ignore
+        }
+        this.refreshUI();
+      });
+    }
+
+    if (this.elDelayReset) {
+      this.elDelayReset.addEventListener("click", () => {
+        this.settings.delayMs = DEFAULT_DELAY_MS;
+        try {
+          localStorage.setItem(LS_KEYS.delay, String(this.settings.delayMs));
+        } catch {
+          // ignore
+        }
+        this.refreshUI();
       });
     }
 
@@ -358,9 +402,10 @@ export class ChessBotManager {
       const white = parseSideSetting(localStorage.getItem(LS_KEYS.white));
       const black = parseSideSetting(localStorage.getItem(LS_KEYS.black));
       const paused = safeBool(localStorage.getItem(LS_KEYS.paused), false);
-      return { white, black, paused };
+      const delayMs = parseDelayMs(localStorage.getItem(LS_KEYS.delay) || String(DEFAULT_DELAY_MS), DEFAULT_DELAY_MS);
+      return { white, black, delayMs, paused };
     } catch {
-      return { white: "human", black: "human", paused: false };
+      return { white: "human", black: "human", delayMs: DEFAULT_DELAY_MS, paused: false };
     }
   }
 
@@ -378,6 +423,9 @@ export class ChessBotManager {
   private refreshUI(): void {
     if (this.elWhite) this.elWhite.value = this.settings.white;
     if (this.elBlack) this.elBlack.value = this.settings.black;
+    if (this.elDelay) this.elDelay.value = String(this.settings.delayMs);
+    if (this.elDelayLabel) this.elDelayLabel.textContent = `${this.settings.delayMs} ms`;
+    if (this.elDelayReset) this.elDelayReset.title = `Reset to default speed (${DEFAULT_DELAY_MS} ms)`;
     const anyBot = this.settings.white !== "human" || this.settings.black !== "human";
     if (this.elPause) {
       this.elPause.disabled = !anyBot;
@@ -409,35 +457,33 @@ export class ChessBotManager {
     this.setStatus(`Bot ${mode} (${sideSummary})${turnSummary} | engine:${engine} (${readiness})`);
   }
 
-  private installTapAnywhereToResume(): void {
-    if (this.tapToResumeInstalled) return;
-    this.tapToResumeInstalled = true;
+  private installBoardClickToPauseBotVsBot(): void {
+    if (typeof document === "undefined") return;
 
-    // "Tap anywhere" should resume only when it's actually a paused bot turn.
-    const onTap = (ev: Event) => {
-      if (!this.settings.paused) return;
-      if (!this.isPausedBotTurn()) return;
+    const elBoard = document.getElementById("boardWrap") as HTMLElement | null;
+    if (!elBoard) return;
 
-      const now = Date.now();
-      // On many devices, a single tap generates pointerdown then click.
-      if (ev.type === "click" && now - this.lastTapToResumeAtMs < 350) return;
+    // While bot-vs-bot is running, a board click should pause the bots (same as pressing Pause Bot).
+    // This is intentionally limited to bot-vs-bot so it doesn't interfere with normal piece selection.
+    elBoard.addEventListener(
+      "click",
+      (ev) => {
+        if (this.settings.paused) return;
+        if (this.settings.white === "human" || this.settings.black === "human") return;
+        if (this.controller.isOver()) return;
 
-      const target = ev.target as Element | null;
-      if (target) {
-        // Avoid fighting with explicit bot UI controls.
-        if (target.closest("#botPauseBtn, #botWhiteSelect, #botBlackSelect, #botResetLearningBtn, #botStatus")) {
-          return;
-        }
-      }
+        const state = this.controller.getState();
+        if (state.meta?.rulesetId !== "chess") return;
 
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.lastTapToResumeAtMs = now;
-      this.resumeBotFromPause();
-    };
+        this.setPaused(true);
+        this.refreshUI();
+        this.schedulePausedTurnToastSync();
 
-    document.addEventListener("pointerdown", onTap, { capture: true });
-    document.addEventListener("click", onTap, { capture: true });
+        ev.preventDefault();
+        ev.stopPropagation();
+      },
+      { capture: true }
+    );
   }
 
   private isPausedBotTurn(): boolean {
@@ -482,7 +528,23 @@ export class ChessBotManager {
     }, 0);
   }
 
+  private isViewingPastInHistory(): boolean {
+    try {
+      const h = this.controller.getHistory();
+      if (!Array.isArray(h) || h.length <= 1) return false;
+      const cur = h.find((e) => (e as any)?.isCurrent) as any;
+      const idx = typeof cur?.index === "number" ? cur.index : h.length - 1;
+      return idx < h.length - 1;
+    } catch {
+      return false;
+    }
+  }
+
   private syncPausedTurnToastNow(): void {
+    if (this.isViewingPastInHistory()) {
+      this.controller.clearStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY);
+      return;
+    }
     if (this.controller.isOver()) {
       this.controller.clearStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY);
       return;
@@ -501,7 +563,7 @@ export class ChessBotManager {
     if (this.settings.paused && isBotTurn) {
       this.controller.setInputEnabled(false);
       const sideLabel = toMove === "B" ? "Black" : "White";
-      const msg = `${sideLabel}'s turn. Tap anywhere to resume bot.`;
+      const msg = `${sideLabel}'s turn. Tap here to resume bot`;
       this.controller.setStickyToastAction(ChessBotManager.PAUSED_TURN_TOAST_KEY, () => this.resumeBotFromPause());
       this.controller.showStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY, msg, { force: true });
       return;
@@ -784,9 +846,28 @@ export class ChessBotManager {
       }
 
       if (pickedMove) {
+        if (this.settings.delayMs > 0) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, this.settings.delayMs));
+        }
+
+        if (this.settings.paused) {
+          this.setStatus(`Bot paused — tap to resume (${this.engineLabel()})`);
+          this.schedulePausedTurnToastSync();
+          return;
+        }
+
         await this.controller.playMove(pickedMove);
       } else {
         this.setStatus(`Bot (fallback) — ${this.engineLabel()} still loading...`);
+        if (this.settings.delayMs > 0) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, this.settings.delayMs));
+        }
+
+        if (this.settings.paused) {
+          this.setStatus(`Bot paused — tap to resume (${this.engineLabel()})`);
+          this.schedulePausedTurnToastSync();
+          return;
+        }
         await this.playFallbackMove();
       }
 
@@ -821,6 +902,15 @@ export class ChessBotManager {
 
         this.setStatus(`Bot (fallback) — ${this.engineLabel()} still loading...`);
         try {
+          if (this.settings.delayMs > 0) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, this.settings.delayMs));
+          }
+
+          if (this.settings.paused) {
+            this.setStatus(`Bot paused — tap to resume (${this.engineLabel()})`);
+            this.schedulePausedTurnToastSync();
+            return;
+          }
           await this.playFallbackMove();
         } catch {
           // If even fallback fails, unlock input.

@@ -1378,7 +1378,7 @@
 
           <div class="panelSection" data-section="ai">
             <div class="sectionHeader" data-toggle="ai">
-              <h3>AI</h3>
+              <h3>Bot</h3>
               <span class="collapseBtn">▼</span>
             </div>
             <div class="sectionContent">
@@ -1395,17 +1395,17 @@
                 <label for="aiWhiteSelect">Light</label>
                 <select id="aiWhiteSelect" class="panelSelect">
                   <option value="human" selected>Human</option>
-                  <option value="easy">Beginner AI</option>
-                  <option value="medium">Intermediate AI</option>
-                  <option value="advanced">Expert AI</option>
+                  <option value="easy">Beginner</option>
+                  <option value="medium">Intermediate</option>
+                  <option value="advanced">Strong</option>
                 </select>
 
                 <label for="aiBlackSelect">Dark</label>
                 <select id="aiBlackSelect" class="panelSelect">
                   <option value="human" selected>Human</option>
-                  <option value="easy">Beginner AI</option>
-                  <option value="medium">Intermediate AI</option>
-                  <option value="advanced">Expert AI</option>
+                  <option value="easy">Beginner</option>
+                  <option value="medium">Intermediate</option>
+                  <option value="advanced">Strong</option>
                 </select>
 
                 <label for="aiDelay">Speed</label>
@@ -1424,7 +1424,7 @@
                     class="panelBtn iconToggleBtn"
                     type="button"
                     title="Reset to default speed"
-                    aria-label="Reset AI speed to default"
+                    aria-label="Reset bot speed to default"
                   >
                     ↺
                   </button>
@@ -1448,7 +1448,7 @@
                   type="button"
                   style="flex: 1; padding: 6px 12px; font-size: 12px"
                 >
-                  Pause AI
+                  Pause bot
                 </button>
                 <button
                   id="aiStepBtn"
@@ -1464,7 +1464,7 @@
                 id="aiInfo"
                 style="margin-top: 10px; font-size: 12px; opacity: 0.85"
               >
-                Set a side to AI to auto-play that color.
+                Set a side to a bot to auto-play that color.
               </div>
             </div>
           </div>
@@ -1843,20 +1843,6 @@
                   >
                     ↺
                   </button>
-                  <input
-                    id="playbackDelayInput"
-                    class="panelSelect"
-                    type="number"
-                    min="0"
-                    step="50"
-                    value="500"
-                    aria-label="Playback speed in milliseconds"
-                    style="
-                      width: 78px;
-                      padding: 6px 9px;
-                      font-variant-numeric: tabular-nums;
-                    "
-                  />
                   <div
                     id="playbackDelayLabel"
                     style="

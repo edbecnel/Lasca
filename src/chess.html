@@ -169,6 +169,24 @@
         min-width: 0;
       }
 
+      /* Bot speed row: match AI speed slider behavior. */
+      label[for="botDelay"] + div {
+        width: 100%;
+        min-width: 0;
+      }
+
+      #botDelay {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        min-width: 0;
+        accent-color: rgba(255, 255, 255, 0.75);
+      }
+
+      #botDelayReset,
+      #botDelayLabel {
+        flex: 0 0 auto;
+      }
+
       #playbackDelay {
         flex: 1 1 0 !important;
         width: auto !important;
@@ -871,6 +889,120 @@
               </div>
             </div>
           </div>
+
+          <div class="panelSection" data-section="bot">
+            <div class="sectionHeader" data-toggle="bot">
+              <h3>Bot</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 52px minmax(0, 1fr);
+                  gap: 8px 10px;
+                  align-items: center;
+                  justify-items: start;
+                  font-size: 12px;
+                "
+              >
+                <label for="botWhiteSelect">White</label>
+                <select
+                  id="botWhiteSelect"
+                  class="panelSelect"
+                  style="width: 100%"
+                >
+                  <option value="human">Human</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="strong">Strong</option>
+                </select>
+
+                <label for="botBlackSelect">Black</label>
+                <select
+                  id="botBlackSelect"
+                  class="panelSelect"
+                  style="width: 100%"
+                >
+                  <option value="human">Human</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="strong">Strong</option>
+                </select>
+
+                <label for="botDelay">Speed</label>
+                <div style="display: flex; gap: 6px; align-items: center">
+                  <input
+                    id="botDelay"
+                    type="range"
+                    min="0"
+                    max="3000"
+                    step="100"
+                    value="500"
+                    style="flex: 0 1 105px; width: 105px"
+                  />
+                  <button
+                    id="botDelayReset"
+                    class="panelBtn iconToggleBtn"
+                    type="button"
+                    title="Reset to default speed"
+                    aria-label="Reset bot speed to default"
+                  >
+                    ↺
+                  </button>
+                  <div
+                    id="botDelayLabel"
+                    style="
+                      min-width: 52px;
+                      text-align: left;
+                      font-variant-numeric: tabular-nums;
+                      white-space: nowrap;
+                    "
+                  >
+                    500 ms
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    grid-column: 1 / -1;
+                    display: flex;
+                    gap: 8px;
+                    width: 100%;
+                  "
+                >
+                  <button
+                    id="botPauseBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px"
+                  >
+                    Pause bot
+                  </button>
+                  <button
+                    id="botResetLearningBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px"
+                    title="Reset adaptive difficulty (per label)"
+                  >
+                    Reset learning
+                  </button>
+                </div>
+
+                <div
+                  id="botStatus"
+                  style="
+                    grid-column: 1 / -1;
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.6);
+                  "
+                >
+                  Bot off
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div
@@ -1086,20 +1218,6 @@
                   >
                     ↺
                   </button>
-                  <input
-                    id="playbackDelayInput"
-                    class="panelSelect"
-                    type="number"
-                    min="0"
-                    step="50"
-                    value="500"
-                    aria-label="Playback speed in milliseconds"
-                    style="
-                      width: 78px;
-                      padding: 6px 9px;
-                      font-variant-numeric: tabular-nums;
-                    "
-                  />
                   <div
                     id="playbackDelayLabel"
                     style="
@@ -1152,87 +1270,6 @@
             >
               Standard chess: check/checkmate/stalemate, castling, en passant,
               and promotion.
-            </div>
-          </div>
-
-          <div class="panelSection" data-section="bot">
-            <div class="sectionHeader" data-toggle="bot">
-              <h3>Bot</h3>
-              <span class="collapseBtn">▼</span>
-            </div>
-            <div class="sectionContent">
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 52px minmax(0, 1fr);
-                  gap: 8px 10px;
-                  align-items: center;
-                  justify-items: start;
-                  font-size: 12px;
-                "
-              >
-                <label for="botWhiteSelect">White</label>
-                <select
-                  id="botWhiteSelect"
-                  class="panelSelect"
-                  style="width: 100%"
-                >
-                  <option value="human">Human</option>
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="strong">Strong</option>
-                </select>
-
-                <label for="botBlackSelect">Black</label>
-                <select
-                  id="botBlackSelect"
-                  class="panelSelect"
-                  style="width: 100%"
-                >
-                  <option value="human">Human</option>
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="strong">Strong</option>
-                </select>
-
-                <div
-                  style="
-                    grid-column: 1 / -1;
-                    display: flex;
-                    gap: 8px;
-                    width: 100%;
-                  "
-                >
-                  <button
-                    id="botPauseBtn"
-                    class="panelBtn"
-                    type="button"
-                    style="flex: 1; padding: 6px 12px"
-                  >
-                    Pause Bot
-                  </button>
-                  <button
-                    id="botResetLearningBtn"
-                    class="panelBtn"
-                    type="button"
-                    style="flex: 1; padding: 6px 12px"
-                    title="Reset adaptive difficulty (per label)"
-                  >
-                    Reset learning
-                  </button>
-                </div>
-
-                <div
-                  id="botStatus"
-                  style="
-                    grid-column: 1 / -1;
-                    font-size: 11px;
-                    color: rgba(255, 255, 255, 0.6);
-                  "
-                >
-                  Bot off
-                </div>
-              </div>
             </div>
           </div>
         </div>
