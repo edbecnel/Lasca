@@ -23,6 +23,7 @@ import { saveGameToFile, loadGameFromFile } from "./game/saveLoad";
 import { createSfxManager } from "./ui/sfx";
 import type { Stack } from "./types";
 import { bindPlaybackControls } from "./ui/playbackControls.ts";
+import { ChessBotManager } from "./bot/chessBotManager.ts";
 
 const ACTIVE_VARIANT_ID: VariantId = "chess_classic";
 
@@ -198,6 +199,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, orientedInspector as any, state, history, driver);
   controller.bind();
+
+  // Offline-only: Bot controls (classic chess only).
+  if (driver.mode !== "online") {
+    const bot = new ChessBotManager(controller);
+    bot.bind();
+  }
 
   // Left panel status (rules/board is static per variant)
   const elRulesBoard = document.getElementById("statusRulesBoard") as HTMLElement | null;

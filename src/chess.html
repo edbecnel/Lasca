@@ -1154,6 +1154,87 @@
               and promotion.
             </div>
           </div>
+
+          <div class="panelSection" data-section="bot">
+            <div class="sectionHeader" data-toggle="bot">
+              <h3>Bot</h3>
+              <span class="collapseBtn">▼</span>
+            </div>
+            <div class="sectionContent">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 52px minmax(0, 1fr);
+                  gap: 8px 10px;
+                  align-items: center;
+                  justify-items: start;
+                  font-size: 12px;
+                "
+              >
+                <label for="botWhiteSelect">White</label>
+                <select
+                  id="botWhiteSelect"
+                  class="panelSelect"
+                  style="width: 100%"
+                >
+                  <option value="human">Human</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="strong">Strong</option>
+                </select>
+
+                <label for="botBlackSelect">Black</label>
+                <select
+                  id="botBlackSelect"
+                  class="panelSelect"
+                  style="width: 100%"
+                >
+                  <option value="human">Human</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="strong">Strong</option>
+                </select>
+
+                <div
+                  style="
+                    grid-column: 1 / -1;
+                    display: flex;
+                    gap: 8px;
+                    width: 100%;
+                  "
+                >
+                  <button
+                    id="botPauseBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px"
+                  >
+                    Pause Bot
+                  </button>
+                  <button
+                    id="botResetLearningBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px"
+                    title="Reset adaptive difficulty (per label)"
+                  >
+                    Reset learning
+                  </button>
+                </div>
+
+                <div
+                  id="botStatus"
+                  style="
+                    grid-column: 1 / -1;
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.6);
+                  "
+                >
+                  Bot off
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div

@@ -5,15 +5,22 @@
   "type": "module",
   "scripts": {
     "bootstrap": "npm ci && npm --prefix server ci",
+    "postinstall": "node scripts/copy-stockfish.mjs",
     "audit:all": "npm audit && npm --prefix server audit",
     "verify": "npm run -s audit:all && npm test && npm run build",
     "dev": "vite",
     "start": "vite",
+    "stockfish:server": "npm --prefix stockfish-server start",
+    "bot:client": "cross-env VITE_STOCKFISH_SERVER_URL=http://127.0.0.1:8799 vite",
+    "bot:dev": "concurrently -k -n stockfish,client \"npm run stockfish:server\" \"npm run bot:client\"",
     "online:server": "cross-env PORT=8788 npm --prefix server run start",
     "online:client": "cross-env VITE_SERVER_URL=http://localhost:8788 VITE_NO_OPEN=1 vite",
     "online:client:lan": "cross-env VITE_NO_OPEN=1 vite --host 0.0.0.0 --port 8080 --strictPort",
+    "online:client:lan:bot": "cross-env VITE_NO_OPEN=1 vite --host 0.0.0.0 --port 8080 --strictPort",
+    "online:client:lan:bot:local": "cross-env VITE_NO_OPEN=1 VITE_STOCKFISH_SERVER_URL=http://127.0.0.1:8799 vite --host 0.0.0.0 --port 8080 --strictPort",
     "online:dev": "concurrently -k -n server,client \"npm run online:server\" \"npm run online:client\"",
     "online:dev:lan": "concurrently -k -n server,client \"npm run online:server\" \"npm run online:client:lan\"",
+    "online:dev:lan:bot": "concurrently -k -n server,stockfish,client \"npm run online:server\" \"npm run stockfish:server\" \"npm run online:client:lan:bot:local\"",
     "dev:online": "npm run online:dev",
     "dev:online:lan": "npm run online:dev:lan",
     "build": "vite build",
@@ -23,8 +30,7 @@
     "deploy": "npm run build && gh-pages -d dist",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke:offline": "vitest run src/smoke/offlineSmoke.test.ts"
-    ,
+    "smoke:offline": "vitest run src/smoke/offlineSmoke.test.ts",
     "pieces:raster3d": "node scripts/slice-raster3d.mjs"
   },
   "devDependencies": {
@@ -34,9 +40,12 @@
     "cross-env": "^7.0.3",
     "gh-pages": "^6.3.0",
     "jsdom": "^22.1.0",
+    "sharp": "^0.34.3",
     "typescript": "^5.6.0",
     "vite": "^7.3.0",
-    "vitest": "^4.0.16",
-    "sharp": "^0.34.3"
+    "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "stockfish": "^17.1.0"
   }
 }

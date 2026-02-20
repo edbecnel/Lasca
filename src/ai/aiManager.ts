@@ -135,11 +135,17 @@ export class AIManager {
     const diff = difficultyForPlayer(this.settings, toMove);
     const isAiTurn = diff !== "human";
 
+    const rulesetId = this.controller.getState().meta?.rulesetId ?? "lasca";
+    const sideLabel = (p: Player): string => {
+      // Chess nomenclature is White/Black; other variants use Light/Dark.
+      if (rulesetId === "chess" || rulesetId === "columns_chess") return p === "B" ? "Black" : "White";
+      return p === "B" ? "Dark" : "Light";
+    };
+
     if (this.settings.paused && isAiTurn) {
-      const label = toMove === "B" ? "Black" : "White";
       this.controller.showStickyToast(
         AIManager.TAP_RESUME_TOAST_KEY,
-        `${label}'s turn. Tap anywhere to resume AI`,
+        `${sideLabel(toMove)}'s turn. Tap anywhere to resume AI`,
         { force: true }
       );
     } else {
@@ -590,6 +596,11 @@ export class AIManager {
 
       // Console telemetry (DEV only): one line per AI move.
       if ((import.meta as any).env?.DEV) {
+        const rulesetId = before.meta?.rulesetId ?? "lasca";
+        const sideLabel = (p: Player): string => {
+          if (rulesetId === "chess" || rulesetId === "columns_chess") return p === "W" ? "White" : "Black";
+          return p === "W" ? "Light" : "Dark";
+        };
         const depth = info?.depth;
         const nodes = info?.nodes;
         const ms = info?.ms;
@@ -597,7 +608,7 @@ export class AIManager {
         const tag = isFallback ? "fallback" : "move";
         const parts = [
           `[ai:${tag}]`,
-          side === "W" ? "White" : "Black",
+          sideLabel(side),
           String(difficulty),
           formatMove(move),
           `eval=${formatScore(score)}`,

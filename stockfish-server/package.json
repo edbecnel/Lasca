@@ -1,0 +1,10 @@
+{
+  "name": "lasca-stockfish-server",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Local HTTP server that exposes Stockfish best-move as a JSON API for Lasca.",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

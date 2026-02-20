@@ -20,10 +20,11 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: "raster2d",
-    label: "Classic 2D",
+    label: "2D",
     piecesDefs: new URL("../assets/themes/raster2d/pieces_defs.svg", import.meta.url),
     boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
+    hidden: true,
   },
   {
     id: "columns_classic",

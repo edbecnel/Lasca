@@ -242,6 +242,23 @@
         <li><b>Save/Load</b> lets you export or restore a game state.</li>
       </ul>
 
+      <h3>Bot (Optional)</h3>
+      <p>
+        Classic Chess supports optional bot opponents. Open
+        <b>Game Panel → Bot</b> and set <b>White</b> and/or <b>Black</b> to a
+        tier (Beginner / Intermediate / Strong).
+      </p>
+      <div class="highlight">
+        <b>Warmup note:</b> The first time Stockfish loads, it may take a while
+        (WASM compile/download). The UI will show a warmup message while it
+        initializes.
+      </div>
+      <div class="warning">
+        <b>Local engine option:</b> If in-browser Stockfish doesn’t work well on
+        your device, you can run the local Stockfish HTTP server and configure
+        the web app with <code>VITE_STOCKFISH_SERVER_URL</code>.
+      </div>
+
       <h2 id="notation">Notation</h2>
       <p>
         The move list uses a simple square-to-square notation, using

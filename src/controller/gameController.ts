@@ -2315,11 +2315,23 @@ export class GameController {
     const winnerName = this.sideLabel(winner);
     const loserName = this.sideLabel(this.state.toMove);
 
+    // Record as a forced game over so other subsystems can query the result.
+    this.state = {
+      ...this.state,
+      forcedGameOver: {
+        winner,
+        reasonCode: "RESIGN",
+        message: `${loserName} resigned — ${winnerName} wins!`,
+      },
+    };
+
     this.isGameOver = true;
     this.clearSelection();
-    const msg = `${loserName} resigned — ${winnerName} wins!`;
+    const msg = this.state.forcedGameOver.message;
     this.showBanner(msg, 0);
     this.showGameOverToast(msg);
+    this.updatePanel();
+    this.fireHistoryChange("gameOver");
   }
 
   newGame(initialState: GameState): void {

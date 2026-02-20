@@ -52,6 +52,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 📝 Move notation display (r0c0 → r1c1 format)
 - 💾 Export move history to JSON format
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
+- ♟️ Classic Chess mode with optional bot opponents (Stockfish-backed; offline)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
 - 🌐 Online multiplayer (2 players) via Start Page (Create/Join/Rejoin)
@@ -150,7 +151,11 @@ If you want help using the Start Page itself (launcher UI), see [Start Page Help
 
 ### AI and Evaluation
 
-- **AI (Game Panel → AI):** Set Light and/or Dark to an AI difficulty. If both sides are AI, the game can auto-play.
+- **AI (Game Panel → AI):** For Lasca/Dama/Damasca, set Light and/or Dark to an AI difficulty. If both sides are AI, the game can auto-play.
+- **Chess Bot (Game Panel → Bot):** For Classic Chess, set White and/or Black to a bot tier (Beginner / Intermediate / Strong). The bot warms up on first load.
+- **Local Stockfish server (optional):** If in-browser Stockfish is flaky on your device, you can run a local HTTP Stockfish service and point the client at it with `VITE_STOCKFISH_SERVER_URL`.
+  - Same machine: `http://127.0.0.1:8799`
+  - LAN device: use your PC's LAN IP (e.g. `http://192.168.1.50:8799`) — `127.0.0.1` will not work from a phone.
 - **Speed:** Adjusts the pause between AI moves.
 - **Pause / Step:** Pause AI play, or step a single move when both sides are AI.
 - **Evaluation (Info panel → Evaluation):** Choose what to display using the icon buttons (hover for tooltips):
@@ -224,8 +229,11 @@ npm install
 ### Commands
 
 - `npm start` - Start development server with hot reload
+- `npm run bot:dev` - Start Classic Chess bot dev: local Stockfish server + client configured to use it
+- `npm run stockfish:server` - Start the local Stockfish HTTP server (see `stockfish-server/`)
 - `npm run online:dev` - Start online server + client (2-player online play)
 - `npm run online:dev:lan` - Online dev server + client, with the client bound to your LAN interface (for phone testing)
+- `npm run online:dev:lan:bot` - Online dev (LAN client) + local Stockfish server + client configured to use it
 - `npm run build` - Build for production
 - `npm test` - Run test suite
 - `npm run test:watch` - Run tests in watch mode
