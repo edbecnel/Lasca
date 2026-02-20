@@ -98,6 +98,7 @@ export class GameController {
   private lastDeadPlayWarning: string | null = null;
   private lastGameOverToast: string | null = null;
   private lastToastToMove: GameState["toMove"] | null = null;
+  private lastCheckToastSig: string | null = null;
   private toastTimer: number | null = null;
   private toastEl: HTMLDivElement | null = null;
   private stickyToastKey: string | null = null;
@@ -116,6 +117,11 @@ export class GameController {
   private isChessLikeRuleset(): boolean {
     const r = this.state.meta?.rulesetId ?? "lasca";
     return r === "columns_chess" || r === "chess";
+  }
+
+  private isKingInCheckForCurrentRuleset(side: GameState["toMove"]): boolean {
+    if (!this.isChessLikeRuleset()) return false;
+    return this.isColumnsChessRuleset() ? isKingInCheckColumnsChess(this.state, side) : isKingInCheckChess(this.state, side);
   }
 
   private recomputeMandatoryCapture(constraints?: any, precomputedMoves?: Array<{ kind: string }>): void {
@@ -1243,10 +1249,24 @@ export class GameController {
       const toMove = this.state.toMove;
       const shouldToast = this.lastToastToMove === null ? true : this.lastToastToMove !== toMove;
       this.lastToastToMove = toMove;
-      if (!shouldToast) return;
-
       const isChessLike = this.isChessLikeRuleset();
-      const checkPrefix = isChessLike && isKingInCheckColumnsChess(this.state, toMove) ? "Check! " : "";
+      const inCheck = isChessLike ? this.isKingInCheckForCurrentRuleset(toMove) : false;
+      const checkPrefix = inCheck ? "Check! " : "";
+
+      // Mandatory: always show "Check!" toasts, even when toast notifications are disabled.
+      // Also, during Move History playback the side-to-move can repeat (e.g. jumping back
+      // two plies), so dedupe on state hash, not just on toMove.
+      if (inCheck) {
+        const sig = `${hashGameState(this.state)}:${toMove}`;
+        if (sig !== this.lastCheckToastSig) {
+          this.lastCheckToastSig = sig;
+          this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500, { force: true });
+        }
+        return;
+      }
+      this.lastCheckToastSig = null;
+
+      if (!shouldToast) return;
       const legal = isChessLike ? [] : this.getLegalMovesForTurn();
       const hasCapture = isChessLike ? false : legal.some((m) => m.kind === "capture");
 
@@ -1279,10 +1299,21 @@ export class GameController {
     const shouldToast = this.lastToastToMove === null ? true : this.lastToastToMove !== toMove;
     this.lastToastToMove = toMove;
 
+    // Mandatory: always show "Check!" toasts, even when toast notifications are disabled.
+    // During Move History playback, side-to-move can repeat across jumps.
+    if (this.isChessLikeRuleset() && this.isKingInCheckForCurrentRuleset(toMove)) {
+      const sig = `${hashGameState(this.state)}:${toMove}`;
+      if (sig !== this.lastCheckToastSig) {
+        this.lastCheckToastSig = sig;
+        this.showToast(`Check! ${this.sideLabel(toMove)} to Play`, 1500, { force: true });
+      }
+      return;
+    }
+    this.lastCheckToastSig = null;
+
     if (shouldToast) {
       if (this.isChessLikeRuleset()) {
-        const checkPrefix = isKingInCheckColumnsChess(this.state, toMove) ? "Check! " : "";
-        this.showToast(`${checkPrefix}${this.sideLabel(toMove)} to Play`, 1500);
+        this.showToast(`${this.sideLabel(toMove)} to Play`, 1500);
       } else {
         const legal = this.getLegalMovesForTurn();
         const hasCapture = legal.some((m) => m.kind === "capture");

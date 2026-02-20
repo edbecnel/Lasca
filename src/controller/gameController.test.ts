@@ -317,6 +317,114 @@ describe("GameController forced game-over toasts", () => {
   });
 });
 
+describe("GameController forced check toasts", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+  });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem("lasca.opt.toasts");
+    } catch {
+      // ignore
+    }
+  });
+
+  it("shows check toast even when toast notifications are disabled", () => {
+    localStorage.setItem("lasca.opt.toasts", "0");
+
+    const history = new HistoryManager();
+    const s: GameState = {
+      board: new Map([
+        ["r7c4", [{ owner: "W", rank: "K" }]], // e1 white king
+        ["r0c4", [{ owner: "B", rank: "R" }]], // e8 black rook giving check
+        ["r0c0", [{ owner: "B", rank: "K" }]], // a8 black king
+      ]),
+      toMove: "W",
+      phase: "idle",
+      meta: { variantId: "chess_classic", rulesetId: "chess", boardSize: 8 },
+      chess: {
+        castling: {
+          W: { kingSide: false, queenSide: false },
+          B: { kingSide: false, queenSide: false },
+        },
+      },
+    };
+    history.push(s);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s, history);
+    (controller as any).maybeToastTurnChange();
+
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Check! White to Play");
+  });
+
+  it("shows check toast during Move History playback even when side-to-move does not change", () => {
+    localStorage.setItem("lasca.opt.toasts", "0");
+
+    // Start on a non-check position with White to move.
+    const sCurrent: GameState = {
+      board: new Map([
+        ["r7c4", [{ owner: "W", rank: "K" }]],
+        ["r0c5", [{ owner: "B", rank: "R" }]], // rook not giving check
+        ["r0c0", [{ owner: "B", rank: "K" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+      meta: { variantId: "chess_classic", rulesetId: "chess", boardSize: 8 },
+      chess: {
+        castling: {
+          W: { kingSide: false, queenSide: false },
+          B: { kingSide: false, queenSide: false },
+        },
+      },
+    };
+
+    // Earlier history position: still White to move, but now in check.
+    const sPastInCheck: GameState = {
+      board: new Map([
+        ["r7c4", [{ owner: "W", rank: "K" }]],
+        ["r0c4", [{ owner: "B", rank: "R" }]], // rook gives check
+        ["r0c0", [{ owner: "B", rank: "K" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+      meta: { variantId: "chess_classic", rulesetId: "chess", boardSize: 8 },
+      chess: {
+        castling: {
+          W: { kingSide: false, queenSide: false },
+          B: { kingSide: false, queenSide: false },
+        },
+      },
+    };
+
+    const history = new HistoryManager();
+    history.push(sPastInCheck);
+    history.push(sCurrent);
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, sCurrent, history);
+
+    // Establish lastToastToMove = "W" (this would normally suppress turn-change toasts).
+    (controller as any).maybeToastTurnChange();
+
+    // Jump back to a different position where White is in check.
+    controller.jumpToHistory(0);
+
+    const toast = document.querySelector(".lascaToast") as HTMLElement | null;
+    expect(toast?.textContent).toBe("Check! White to Play");
+  });
+});
+
 describe("GameController loadGame reconstructs last-move hints", () => {
   let mockSvg: SVGSVGElement;
   let mockPiecesLayer: SVGGElement;
