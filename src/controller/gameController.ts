@@ -753,6 +753,17 @@ export class GameController {
     const snap = this.replaySnapshots[this.replayIndex];
     this.state = snap.state;
     this.renderAuthoritative();
+    this.updatePanel();
+
+    // If this snapshot is a forced terminal (e.g. resign), show a toast so the
+    // reason is obvious while scrubbing the replay.
+    const forcedMsg = (this.state as any)?.forcedGameOver?.message;
+    if (typeof forcedMsg === "string" && forcedMsg.trim()) {
+      this.showGameOverToast(forcedMsg);
+    } else {
+      // Allow terminal toasts to re-appear when stepping back/forward.
+      this.resetGameOverToastDedupe();
+    }
     this.renderReplayUi();
   }
 
@@ -810,6 +821,15 @@ export class GameController {
       const cur = this.replaySnapshots[this.replayIndex];
       this.state = cur.state;
       this.renderAuthoritative();
+      this.updatePanel();
+
+      // When opening the replay viewer, re-surface the terminal toast if the
+      // game ended via a forced reason like resign.
+      const forcedMsg = (this.state as any)?.forcedGameOver?.message;
+      if (typeof forcedMsg === "string" && forcedMsg.trim()) {
+        this.resetGameOverToastDedupe();
+        this.showGameOverToast(forcedMsg);
+      }
     }
 
     this.renderReplayUi();
@@ -1223,8 +1243,12 @@ export class GameController {
     if (msg === this.lastGameOverToast) return;
     this.lastGameOverToast = msg;
     this.playSfx("gameOver");
-    // Always show Checkmate, even when toast notifications are disabled.
-    this.showToast(msg, 3200, { force: this.isCheckmateMessage(msg) });
+    // Always show certain terminal reasons even when toast notifications are disabled.
+    // - Checkmate is important feedback for chess variants.
+    // - Resign is important context during move history playback/replay.
+    const forcedCode = String((this.state as any)?.forcedGameOver?.reasonCode ?? "").toUpperCase();
+    const force = this.isCheckmateMessage(msg) || forcedCode === "RESIGN";
+    this.showToast(msg, 3200, { force });
   }
 
   private resetGameOverToastDedupe(): void {
@@ -2387,6 +2411,19 @@ export class GameController {
       },
     };
 
+    // Record resignation into history so Move History playback can surface the
+    // game-over reason (toast + status message) when stepping to the final slide.
+    try {
+      this.driver.pushHistory(this.state, "resign");
+    } catch {
+      // Best-effort: if history can't be updated, still end the game.
+      try {
+        this.driver.setState(this.state);
+      } catch {
+        // ignore
+      }
+    }
+
     this.isGameOver = true;
     this.clearSelection();
     const msg = this.state.forcedGameOver.message;
@@ -2542,6 +2579,16 @@ export class GameController {
 
     if (elTurn) elTurn.textContent = this.sideLabel(this.state.toMove);
     if (elPhase) elPhase.textContent = this.isGameOver ? "Game Over" : (this.selected ? "Select" : "Idle");
+
+    // Always reflect the terminal reason in the Status Message row.
+    // (This matters for both live play and when replaying/stepping through history.)
+    if (elMsg && this.isGameOver) {
+      const forcedMsg = (this.state as any)?.forcedGameOver?.message;
+      const msg = typeof forcedMsg === "string" && forcedMsg.trim()
+        ? forcedMsg.trim()
+        : (getWinner(this.state).reason || "Game Over");
+      elMsg.textContent = msg;
+    }
 
     // Board HUD: show whose turn it is as a small icon in the board's upper-left.
     const isChessLike = this.isChessLikeRuleset();
