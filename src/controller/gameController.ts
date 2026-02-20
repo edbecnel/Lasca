@@ -2060,6 +2060,19 @@ export class GameController {
         const to = inferred?.to ?? lm?.to ?? null;
 
         if (from && to && from !== to) {
+          // Show the highlight for the move we're about to animate.
+          // (Render pipeline normally draws `state.ui.lastMove`, which updates only
+          // after we render the target snapshot; during playback we want it visible
+          // just before the animation begins.)
+          try {
+            if (this.lastMoveHighlightsEnabled) {
+              clearLastMoveSquares(this.overlayLayer);
+              drawLastMoveSquares(this.overlayLayer, from, to);
+            }
+          } catch {
+            // ignore
+          }
+
           const animations: Array<Promise<void>> = [];
 
           const movingGroup = this.piecesLayer.querySelector(`g.stack[data-node="${from}"]`) as SVGGElement | null;
@@ -2392,6 +2405,11 @@ export class GameController {
       this.driver.clearHistory();
       this.driver.pushHistory(loadedState);
     }
+
+    // Save files historically did not persist UI hints like `ui.lastMove`.
+    // Reconstruct them from successive snapshots so playback can still show
+    // last-move origin/destination highlights after loading.
+    this.ensureHistoryLastMoveHints();
     
     // Reset game state to idle phase; prefer aligning to the restored history's current state.
     const currentFromHistory = this.driver.getHistoryCurrent();
@@ -2422,6 +2440,32 @@ export class GameController {
     
     // Notify history change
     this.fireHistoryChange("loadGame");
+  }
+
+  private ensureHistoryLastMoveHints(): void {
+    try {
+      const snap = this.driver.exportHistorySnapshots();
+      if (!snap.states || snap.states.length <= 1) return;
+
+      let changed = false;
+
+      for (let i = 1; i < snap.states.length; i++) {
+        const cur = snap.states[i] as GameState;
+        const existing = cur.ui?.lastMove;
+        if (existing && typeof existing.from === "string" && typeof existing.to === "string") continue;
+
+        const prev = snap.states[i - 1] as GameState;
+        const inferred = this.inferHistoryTransition(prev, cur);
+        if (!inferred) continue;
+
+        cur.ui = { ...(cur.ui ?? {}), lastMove: { from: inferred.from, to: inferred.to } };
+        changed = true;
+      }
+
+      if (changed) this.driver.replaceHistory(snap);
+    } catch {
+      // Best-effort only.
+    }
   }
 
   private updatePanel(): void {

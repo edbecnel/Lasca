@@ -317,6 +317,47 @@ describe("GameController forced game-over toasts", () => {
   });
 });
 
+describe("GameController loadGame reconstructs last-move hints", () => {
+  let mockSvg: SVGSVGElement;
+  let mockPiecesLayer: SVGGElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    document.head.innerHTML = "";
+
+    mockSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
+    mockPiecesLayer = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+    (mockSvg as any).addEventListener = () => {};
+    (mockSvg as any).querySelector = () => null;
+  });
+
+  it("populates ui.lastMove for history snapshots loaded from a save", () => {
+    const s0: GameState = {
+      board: new Map([
+        ["r1c1", [{ owner: "W", rank: "S" }]],
+        ["r8c8", [{ owner: "B", rank: "S" }]],
+      ]),
+      toMove: "W",
+      phase: "idle",
+    };
+
+    const s1: GameState = {
+      board: new Map([
+        ["r2c2", [{ owner: "W", rank: "S" }]],
+        ["r8c8", [{ owner: "B", rank: "S" }]],
+      ]),
+      toMove: "B",
+      phase: "idle",
+    };
+
+    const controller = new GameController(mockSvg, mockPiecesLayer, null, s0, new HistoryManager());
+    controller.loadGame(s1, { states: [s0, s1], notation: ["", ""], currentIndex: 1 });
+
+    controller.jumpToHistory(1);
+    expect(controller.getState().ui?.lastMove).toEqual({ from: "r1c1", to: "r2c2" });
+  });
+});
+
 describe("GameController online opponent presence toasts", () => {
   let mockSvg: SVGSVGElement;
   let mockPiecesLayer: SVGGElement;
