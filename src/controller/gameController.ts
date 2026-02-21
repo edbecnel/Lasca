@@ -221,6 +221,16 @@ export class GameController {
     }
   }
 
+  /** Public wrapper for page-level features (e.g., Copy FEN/PGN). */
+  public async copyText(text: string): Promise<boolean> {
+    return this.copyTextToClipboard(text);
+  }
+
+  /** Public wrapper for page-level features that want to respect the toast preference. */
+  public toast(text: string, durationMs: number = 1400, opts?: { force?: boolean }): void {
+    this.showToast(text, durationMs, opts);
+  }
+
   private buildOnlineInviteLink(): string | null {
     if (this.driver.mode !== "online") return null;
     const remote = this.driver as OnlineGameDriver;

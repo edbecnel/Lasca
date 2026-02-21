@@ -54,6 +54,8 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - 💾 Export move history to JSON format
 - 🤖 Optional AI opponents (Beginner / Intermediate / Expert per color)
 - ♟️ Classic Chess mode with optional bot opponents (Stockfish-backed; offline)
+  - Import/export PGN (paste/upload + export current line)
+  - Copy/share FEN from any move (right-click a Move History entry)
 - ⚖ Evaluation indicators (advantage / controlled stacks / material)
 - 🧭 Start Page launcher to configure options before playing
 - 🌐 Online multiplayer (2 players) via Start Page (Create/Join/Rejoin)

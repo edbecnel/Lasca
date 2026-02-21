@@ -46,6 +46,7 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
+    "chess.js": "^1.4.0",
     "stockfish": "^17.1.0"
   }
 }

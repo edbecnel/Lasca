@@ -887,6 +887,57 @@
                   Export Move History
                 </button>
               </div>
+
+              <div style="margin-top: 16px">
+                <div
+                  style="
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.6);
+                    margin-bottom: 8px;
+                  "
+                >
+                  PGN import/export (offline recommended)
+                </div>
+
+                <div style="display: flex; gap: 8px">
+                  <button
+                    id="importPgnPasteBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px; font-size: 12px"
+                    title="Paste PGN text"
+                  >
+                    Import PGN (Paste)
+                  </button>
+                  <button
+                    id="importPgnFileBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="flex: 1; padding: 6px 12px; font-size: 12px"
+                    title="Upload a .pgn file"
+                  >
+                    Import PGN (File)
+                  </button>
+                </div>
+                <input
+                  type="file"
+                  id="importPgnInput"
+                  accept=".pgn,.txt"
+                  style="display: none"
+                />
+
+                <div style="margin-top: 10px">
+                  <button
+                    id="exportPgnBtn"
+                    class="panelBtn"
+                    type="button"
+                    style="width: 100%; padding: 6px 12px; font-size: 12px"
+                    title="Download a PGN of the current line (up to the current history position)"
+                  >
+                    Export PGN
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -152,6 +152,8 @@
         <li><a href="#special">Special Moves</a></li>
         <li><a href="#repetition">Repetition &amp; Draws</a></li>
         <li><a href="#interface">Using the Interface</a></li>
+        <li><a href="#pgn">PGN Import &amp; Export</a></li>
+        <li><a href="#fen">FEN Copy/Share</a></li>
         <li><a href="#notation">Notation</a></li>
       </ul>
 
@@ -241,6 +243,58 @@
         <li><b>Theme</b> is always <b>3D</b> for Classic Chess.</li>
         <li><b>Save/Load</b> lets you export or restore a game state.</li>
       </ul>
+
+      <h2 id="pgn">PGN Import &amp; Export</h2>
+      <p>
+        You can import/export games using <b>PGN</b> (Portable Game Notation).
+        This is useful for sharing games with other chess tools or importing a
+        game from elsewhere.
+      </p>
+      <div class="rule-box">
+        <h3>Import (Paste or Upload)</h3>
+        <ul>
+          <li>
+            Open <b>Option Actions</b> and choose <b>Import PGN</b> (paste) or
+            upload a <code>.pgn</code>/<code>.txt</code> file.
+          </li>
+          <li>
+            Import rebuilds the game from the standard starting position and
+            populates the Move History.
+          </li>
+        </ul>
+        <div class="warning">
+          <b>Note:</b> PGN import is <b>offline-only</b> for now. In online
+          rooms, the server is authoritative and imported moves are blocked.
+        </div>
+
+        <h3>Export (Current Line)</h3>
+        <ul>
+          <li>
+            <b>Export PGN</b> exports the game up to the
+            <b>currently selected</b>
+            position in Move History.
+          </li>
+          <li>
+            If you’ve jumped back in history, exporting will export that line
+            (not necessarily the full game).
+          </li>
+        </ul>
+      </div>
+
+      <h2 id="fen">FEN Copy/Share</h2>
+      <p>
+        FEN (Forsyth–Edwards Notation) is a compact string that describes a
+        single chess position.
+      </p>
+      <div class="highlight">
+        <b>Copy FEN from any move:</b> Right-click any Move History entry and
+        choose <b>Copy FEN</b>. This copies the FEN for that exact position to
+        your clipboard.
+      </div>
+      <p>
+        You can paste the FEN into chess analysis tools, share it with a friend,
+        or use it to report/debug a position.
+      </p>
 
       <h3>Bot (Optional)</h3>
       <p>
