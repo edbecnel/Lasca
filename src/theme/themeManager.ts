@@ -2,6 +2,7 @@ import { loadSvgDefsInto } from "../render/loadSvgDefs";
 import { waitForSvgImagesLoaded } from "../render/waitForSvgImages";
 import { DEFAULT_THEME_ID, THEMES, getThemeById } from "./themes";
 import { createThemeDropdown } from "../ui/components/themeDropdown";
+import { nextPaint } from "../ui/nextPaint";
 
 const LS_KEY = "lasca.theme";
 const GLASS_BG_LS_KEY = "lasca.theme.glassBg";
@@ -401,6 +402,8 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     if (currentId === theme.id) return theme;
 
     svgRoot.dispatchEvent(new CustomEvent(THEME_WILL_CHANGE_EVENT, { detail: { themeId: theme.id } }));
+    // Give the UI a chance to paint the loading overlay before we hide the SVG.
+    await nextPaint(1);
 
     const prevVis = svgRoot.style.visibility;
     svgRoot.style.visibility = "hidden";
@@ -436,6 +439,8 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     currentId = theme.id;
     saveThemeId(currentId);
     svgRoot.style.visibility = prevVis || "visible";
+    // Ensure the newly-applied theme has a chance to paint before consumers hide overlays.
+    await nextPaint(1);
     svgRoot.dispatchEvent(new CustomEvent(THEME_DID_CHANGE_EVENT, { detail: { themeId: theme.id } }));
     return theme;
   }

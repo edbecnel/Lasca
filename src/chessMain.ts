@@ -2,7 +2,6 @@ import { loadSvgFileInto } from "./render/loadSvgFile";
 import { createThemeManager, THEME_DID_CHANGE_EVENT, THEME_WILL_CHANGE_EVENT } from "./theme/themeManager";
 import columnsChessBoardSvgUrl from "./assets/columns_chess_board.svg?url";
 import { renderGameState } from "./render/renderGameState";
-import { createStackInspector } from "./ui/stackInspector";
 import { initSplitLayout } from "./ui/layout/splitLayout";
 import { initCollapsibleSections } from "./ui/layout/collapsibleSections";
 import { createInitialGameStateForVariant } from "./game/state";
@@ -156,33 +155,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
 
-  const zoomTitle = document.getElementById("zoomTitle") as HTMLElement | null;
-  const zoomHint = document.getElementById("zoomHint") as HTMLElement | null;
-  const zoomBody = document.getElementById("zoomBody") as HTMLElement | null;
-  if (!zoomTitle || !zoomHint || !zoomBody) throw new Error("Missing inspector DOM nodes (zoomTitle/zoomHint/zoomBody)");
-
-  const zoomSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg") as SVGSVGElement;
-  zoomSvg.id = "zoomSvg";
-  zoomSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  zoomSvg.setAttribute("viewBox", "0 0 120 200");
-  zoomSvg.setAttribute("role", "img");
-  zoomSvg.setAttribute("aria-label", "Stack column");
-  zoomBody.replaceChildren(zoomSvg);
-
-  const inspector = createStackInspector(zoomTitle, zoomHint, zoomSvg);
-
-  // Wrap the inspector so it can display coords matching the current board orientation.
-  const orientedInspector = {
-    ...inspector,
-    show: (nodeId: string, stack: Stack, opts: { rulesetId?: string; boardSize?: number } = {}) =>
-      inspector.show(nodeId, stack, { ...opts, flipCoords: isFlipped() }),
-  };
+  // Classic Chess: the Piece Inspector panel is not used.
+  const inspector = null;
 
   const state = createInitialGameStateForVariant(ACTIVE_VARIANT_ID);
   const history = new HistoryManager();
   history.push(state);
 
-  renderGameState(svg, piecesLayer, orientedInspector as any, state);
+  renderGameState(svg, piecesLayer, inspector as any, state);
 
   // Board SVG + theme are now loaded; keep spinner until the first paint.
   await nextPaint();
@@ -201,7 +181,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     envServerUrl: import.meta.env.VITE_SERVER_URL,
   });
 
-  const controller = new GameController(svg, piecesLayer, orientedInspector as any, state, history, driver);
+  const controller = new GameController(svg, piecesLayer, inspector as any, state, history, driver);
   controller.bind();
 
   // Classic Chess: theme select (2D / 3D / Neo) + Neo PNG availability hint.
