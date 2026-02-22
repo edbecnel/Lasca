@@ -778,6 +778,32 @@ window.addEventListener("DOMContentLoaded", async () => {
   const undoBtn = document.getElementById("undoBtn") as HTMLButtonElement | null;
   const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
   const moveHistoryEl = document.getElementById("moveHistory") as HTMLElement | null;
+  const moveHistoryLayoutSel = document.getElementById("moveHistoryLayout") as HTMLSelectElement | null;
+
+  type MoveHistoryLayout = "single" | "two";
+  const MOVE_HISTORY_LAYOUT_KEY = "lasca.moveHistoryLayout";
+  const readMoveHistoryLayout = (): MoveHistoryLayout => {
+    const raw = String(window.localStorage.getItem(MOVE_HISTORY_LAYOUT_KEY) ?? "").trim();
+    return raw === "two" || raw === "single" ? (raw as MoveHistoryLayout) : "single";
+  };
+  const writeMoveHistoryLayout = (layout: MoveHistoryLayout) => {
+    try {
+      window.localStorage.setItem(MOVE_HISTORY_LAYOUT_KEY, layout);
+    } catch {
+      // ignore
+    }
+  };
+
+  let moveHistoryLayout: MoveHistoryLayout = readMoveHistoryLayout();
+  if (moveHistoryLayoutSel) {
+    moveHistoryLayoutSel.value = moveHistoryLayout;
+    moveHistoryLayoutSel.addEventListener("change", () => {
+      const v = String(moveHistoryLayoutSel.value);
+      moveHistoryLayout = v === "two" ? "two" : "single";
+      writeMoveHistoryLayout(moveHistoryLayout);
+      updateHistoryUI("jump");
+    });
+  }
 
   const inferMovedPieceSymbolId = (
     prev: import("./game/state.ts").GameState | undefined,
@@ -844,16 +870,89 @@ window.addEventListener("DOMContentLoaded", async () => {
     return `${whoMoved}_${rank}`;
   };
 
+  const pieceTooltipFromSymbolId = (symbolId: string, whoMoved: "W" | "B"): string => {
+    const color = whoMoved === "W" ? "White" : "Black";
+    const rank = symbolId.split("_")[1] ?? "";
+    const piece =
+      rank === "K" ? "King"
+      : rank === "Q" ? "Queen"
+      : rank === "R" ? "Rook"
+      : rank === "B" ? "Bishop"
+      : rank === "N" ? "Knight"
+      : rank === "P" ? "Pawn"
+      : "Piece";
+    return `${color} ${piece}`;
+  };
+
   const updateHistoryUI = (reason?: import("./controller/gameController.ts").HistoryChangeReason) => {
     if (undoBtn) undoBtn.disabled = !controller.canUndo();
     if (redoBtn) redoBtn.disabled = !controller.canRedo();
 
-    if (moveHistoryEl) {
-      const historyData = controller.getHistory();
-      if (historyData.length === 0) {
-        moveHistoryEl.textContent = "No moves yet";
+    if (!moveHistoryEl) return;
+
+    const historyData = controller.getHistory();
+    if (historyData.length === 0) {
+      moveHistoryEl.textContent = "No moves yet";
+    } else {
+      const snap = driver.exportHistorySnapshots();
+
+      const pawnSvg = (who: "W" | "B") =>
+        `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin-right: 6px;"><use href="#${who}_P"></use></svg>`;
+
+      const renderMoveCell = (entry: (typeof historyData)[number], idx: number) => {
+        const whoMoved = entry.toMove === "B" ? "W" : "B";
+        const prev = snap.states[idx - 1];
+        const next = snap.states[idx];
+        const symId = inferMovedPieceSymbolId(prev, next, whoMoved, entry.notation);
+        const tooltip = symId
+          ? pieceTooltipFromSymbolId(symId, whoMoved)
+          : (whoMoved === "W" ? "White" : "Black");
+        const pieceSvg = symId
+          ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><use href="#${symId}"></use></svg>`
+          : (whoMoved === "B" ? "⚫" : "⚪");
+        const pieceIcon = `<span title="${tooltip}" style="display: inline-flex; align-items: center;">${pieceSvg}</span>`;
+        let label = `${pieceIcon}`;
+        if (entry.notation) label += ` ${entry.notation}`;
+        const cls = `cell clickable${entry.isCurrent ? " current" : ""}`;
+        const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+        return `<div class="${cls}" data-history-index="${entry.index}"${currentAttr}>${label}</div>`;
+      };
+
+      const renderStartCell = (entry: (typeof historyData)[number]) => {
+        const cls = `cell clickable start${entry.isCurrent ? " current" : ""}`;
+        const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
+        return `<div class="${cls}" data-history-index="${entry.index}"${currentAttr}>Start</div>`;
+      };
+
+      if (moveHistoryLayout === "two") {
+        const totalMoves = Math.ceil((historyData.length - 1) / 2);
+        const parts: string[] = [];
+        parts.push('<div class="historyGrid">');
+        parts.push('<div class="cell hdr">#</div>');
+        parts.push(`<div class="cell hdr">${pawnSvg("W")}White</div>`);
+        parts.push(`<div class="cell hdr">${pawnSvg("B")}Black</div>`);
+
+        // Render Start under the header.
+        parts.push(renderStartCell(historyData[0]!));
+
+        for (let m = 1; m <= totalMoves; m++) {
+          const whiteIdx = 2 * m - 1;
+          const blackIdx = 2 * m;
+          parts.push(`<div class="cell num">${m}.</div>`);
+
+          const whiteEntry = historyData[whiteIdx];
+          const blackEntry = historyData[blackIdx];
+
+          if (whiteEntry) parts.push(renderMoveCell(whiteEntry, whiteIdx));
+          else parts.push('<div class="cell"></div>');
+
+          if (blackEntry) parts.push(renderMoveCell(blackEntry, blackIdx));
+          else parts.push('<div class="cell"></div>');
+        }
+
+        parts.push("</div>");
+        moveHistoryEl.innerHTML = parts.join("");
       } else {
-        const snap = driver.exportHistorySnapshots();
         moveHistoryEl.innerHTML = historyData
           .map((entry, idx) => {
             if (idx === 0) {
@@ -867,21 +966,22 @@ window.addEventListener("DOMContentLoaded", async () => {
 
             // For moves: toMove indicates who's about to move, so invert to get who just moved.
             const whoMoved = entry.toMove === "B" ? "W" : "B";
-
             const moveNum =
               whoMoved === "B" ? Math.ceil(idx / 2) : Math.floor((idx + 1) / 2);
 
             const prev = snap.states[idx - 1];
             const next = snap.states[idx];
             const symId = inferMovedPieceSymbolId(prev, next, whoMoved, entry.notation);
-            const pieceIcon = symId
+            const tooltip = symId
+              ? pieceTooltipFromSymbolId(symId, whoMoved)
+              : (whoMoved === "W" ? "White" : "Black");
+            const pieceSvg = symId
               ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><use href="#${symId}"></use></svg>`
               : (whoMoved === "B" ? "⚫" : "⚪");
+            const pieceIcon = `<span title=\"${tooltip}\" style=\"display: inline-flex; align-items: center;\">${pieceSvg}</span>`;
 
             let label = `${moveNum}. ${pieceIcon}`;
-            if (entry.notation) {
-              label += ` ${entry.notation}`;
-            }
+            if (entry.notation) label += ` ${entry.notation}`;
 
             const baseStyle = entry.isCurrent
               ? "font-weight: bold; color: rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.1); padding: 2px 6px; border-radius: 4px;"
@@ -892,18 +992,18 @@ window.addEventListener("DOMContentLoaded", async () => {
           })
           .join("");
       }
-
-      // Keep the latest move visible.
-      // Use rAF so layout reflects the updated HTML before scrolling.
-      requestAnimationFrame(() => {
-        if (reason === "jump" || reason === "undo" || reason === "redo") {
-          const currentEl = moveHistoryEl.querySelector('[data-is-current="1"]') as HTMLElement | null;
-          if (currentEl) currentEl.scrollIntoView({ block: "nearest" });
-          return;
-        }
-        moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
-      });
     }
+
+    // Keep the latest move visible.
+    // Use rAF so layout reflects the updated HTML before scrolling.
+    requestAnimationFrame(() => {
+      if (reason === "jump" || reason === "undo" || reason === "redo") {
+        const currentEl = moveHistoryEl.querySelector('[data-is-current="1"]') as HTMLElement | null;
+        if (currentEl) currentEl.scrollIntoView({ block: "nearest" });
+        return;
+      }
+      moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
+    });
   };
 
   if (moveHistoryEl) {
