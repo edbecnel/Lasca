@@ -11,6 +11,7 @@ import { uciToLegalMove } from "./chessMoveMap.ts";
 import type { UciEngine } from "./uciEngine.ts";
 import { StockfishUciEngine } from "./stockfishEngine.ts";
 import { HttpUciEngine } from "./httpEngine.ts";
+import { pickFallbackMoveChess } from "./chessFallback.ts";
 
 export type BotSideSetting = "human" | BotTier;
 
@@ -440,63 +441,15 @@ export class ChessBotManager {
     const legal = this.controller.getLegalMovesForTurn();
     if (!legal.length) return;
 
-    // Heuristic fallback for chess:
-    // 1) prefer captures (highest-value captured piece)
-    // 2) prefer promotions
-    // 3) otherwise random
     if (state.meta?.rulesetId === "chess") {
-      const pieceValue = (rank: string | undefined): number => {
-        switch (rank) {
-          case "Q":
-            return 9;
-          case "R":
-            return 5;
-          case "B":
-          case "N":
-            return 3;
-          case "P":
-            return 1;
-          case "K":
-            return 100;
-          default:
-            return 0;
-        }
-      };
-
-      const captureMoves = legal.filter((m) => m.kind === "capture") as Array<Move & { kind: "capture" }>;
-      if (captureMoves.length) {
-        let best: (Move & { kind: "capture" }) | null = null;
-        let bestScore = -Infinity;
-        for (const m of captureMoves) {
-          const stack = state.board.get(m.over);
-          const top = stack && stack.length ? stack[stack.length - 1] : null;
-          const score = pieceValue((top as any)?.rank);
-          if (score > bestScore) {
-            bestScore = score;
-            best = m;
-          }
-        }
-        if (best) {
-          await this.controller.playMove(best);
-          return;
-        }
-      }
-
-      // Prefer promotions (we auto-queen in applyMoveChess).
-      const promoRow = state.toMove === "W" ? 0 : 7;
-      const promotionMoves = legal.filter((m) => {
-        if (m.kind !== "move" && m.kind !== "capture") return false;
-        const moving = state.board.get((m as any).from);
-        const top = moving && moving.length ? moving[moving.length - 1] : null;
-        if (!top || (top as any).rank !== "P") return false;
-        const to = String((m as any).to);
-        const match = /^r(\d+)c(\d+)$/.exec(to);
-        const r = match ? Number(match[1]) : NaN;
-        return Number.isFinite(r) && r === promoRow;
+      const tier = tierForPlayer(this.settings, state.toMove) ?? "beginner";
+      const smart = pickFallbackMoveChess(state, {
+        tier,
+        seed: `chessbot_fallback_smart_${Date.now()}_${state.toMove}`,
+        legalMoves: legal,
       });
-      if (promotionMoves.length) {
-        const rng = createPrng("chessbot_fallback_promo_" + String(Date.now()));
-        await this.controller.playMove(promotionMoves[rng.int(0, promotionMoves.length)]);
+      if (smart) {
+        await this.controller.playMove(smart);
         return;
       }
     }
