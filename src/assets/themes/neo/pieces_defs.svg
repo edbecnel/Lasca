@@ -34,11 +34,30 @@
       .neoInnerRingW { stroke: #000; stroke-opacity: 0.16; stroke-width: 3; fill: none; }
       .neoInnerRingB { stroke: #fff; stroke-opacity: 0.14; stroke-width: 3; fill: none; }
 
-      .neoPieceW { fill: #141418; }
-      .neoPieceB { fill: #f3f3f6; }
+      /*
+        Important UX: in the rest of the app, owner "W" should look like the
+        light side and owner "B" should look like the dark side.
+      */
+      .neoPieceW {
+        fill: #f3f3f6;
+        stroke: #16161a;
+        stroke-width: 3;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
+        color: #16161a; /* used by currentColor strokes (bishop slash) */
+      }
+      .neoPieceB {
+        fill: #141418;
+        stroke: #f3f3f6;
+        stroke-width: 3;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
+        color: #f3f3f6;
+      }
 
-      .neoCutW { fill: #f3f3f6; }
-      .neoCutB { fill: #19191c; }
+      .neoCut { stroke: none; }
+      .neoPieceW .neoCut { fill: #141418; }
+      .neoPieceB .neoCut { fill: #f3f3f6; }
 
       .rasterPiece {
         image-rendering: auto;
@@ -78,7 +97,7 @@
 
     <symbol id="neoKnight" viewBox="0 0 100 100">
       <path d="M34 74 C34 62 38 52 45 44 C41 40 40 34 44 30 C50 24 64 26 70 34 C64 36 60 40 58 44 C64 48 66 56 66 74 H34 Z" />
-      <circle cx="58" cy="38" r="3" class="neoCutW" />
+      <circle cx="58" cy="38" r="3" class="neoCut" />
       <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
@@ -100,14 +119,14 @@
     <!-- ===== SVG fallbacks (used when PNGs are absent) ===== -->
     <symbol id="fallbackW_P" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoPawn" /></g></symbol>
     <symbol id="fallbackW_N" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoKnight" /></g></symbol>
-    <symbol id="fallbackW_B" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW" style="color:#141418"><use href="#neoBishop" /></g></symbol>
+    <symbol id="fallbackW_B" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoBishop" /></g></symbol>
     <symbol id="fallbackW_R" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoRook" /></g></symbol>
     <symbol id="fallbackW_Q" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoQueen" /></g></symbol>
     <symbol id="fallbackW_K" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoKing" /></g></symbol>
 
     <symbol id="fallbackB_P" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoPawn" /></g></symbol>
     <symbol id="fallbackB_N" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoKnight" /></g></symbol>
-    <symbol id="fallbackB_B" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB" style="color:#f3f3f6"><use href="#neoBishop" /></g></symbol>
+    <symbol id="fallbackB_B" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoBishop" /></g></symbol>
     <symbol id="fallbackB_R" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoRook" /></g></symbol>
     <symbol id="fallbackB_Q" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoQueen" /></g></symbol>
     <symbol id="fallbackB_K" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoKing" /></g></symbol>

@@ -162,7 +162,9 @@ export class ChessBotManager {
 
       // Warm up the engine immediately so the first bot move doesn't pay the full
       // WASM fetch/compile cost on-demand.
-      this.prewarmEngine();
+      // Important: do this silently. We only show the Stockfish toast when/if a bot
+      // is actually trying to move and the engine isn't ready yet.
+      this.prewarmEngine({ showToast: false });
     }
 
     this.installBoardClickToPauseBotVsBot();
@@ -251,14 +253,26 @@ export class ChessBotManager {
     this.engineReady = false;
   }
 
-  private prewarmEngine(): void {
-    if (this.prewarmStarted) return;
+  private prewarmEngine(opts?: { showToast?: boolean }): void {
+    const showToast = opts?.showToast ?? true;
+
+    // If we've already started warming the engine, we may still want to surface
+    // the toast later when the engine is actually needed.
+    if (this.prewarmStarted) {
+      if (showToast && !this.engineReady) this.showWarmupToast(false);
+      return;
+    }
+
     this.prewarmStarted = true;
 
-    // Show a warmup toast immediately.
+    // Track warmup start time even if we don't show the toast yet.
+    // This ensures we still escalate after 5s once we *do* show it.
+    if (this.warmupToastStartMs === null) this.warmupToastStartMs = Date.now();
+
+    // Optionally show the toast now.
     // For server-backed Stockfish, give the server a short window to respond before
     // switching to the actionable "server not available" toast.
-    this.showWarmupToast(false);
+    if (showToast) this.showWarmupToast(false);
 
     const serverWarmupBudgetMs = 5000;
     const warmupStartMs = Date.now();
@@ -320,7 +334,7 @@ export class ChessBotManager {
     const anyBot = this.settings.white !== "human" || this.settings.black !== "human";
     if (!anyBot) return;
 
-    // Never let the non-error "Warming up…" toast stick around indefinitely.
+    // Never let the non-error Stockfish toast stick around indefinitely.
     // After a short budget, escalate to the actionable error toast.
     const now = Date.now();
     if (this.warmupToastStartMs === null) this.warmupToastStartMs = now;
@@ -356,7 +370,8 @@ export class ChessBotManager {
       if (isError) {
         return `${engineLabel} failed to start (yet)${lanHint}. Tap to allow fallback moves.`;
       }
-      return `Warming up ${engineWarmupLabel}… first load can take a while${lanHint}. Tap to allow fallback moves.`;
+      // Avoid the old "Warming up Stockfish" wording entirely.
+      return `${engineWarmupLabel} is starting… first load can take a while${lanHint}. Tap to allow fallback moves.`;
     })();
 
     this.controller.setStickyToastAction(ChessBotManager.WARMUP_TOAST_KEY, () => {
