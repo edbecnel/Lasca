@@ -364,6 +364,12 @@ export class AIManager {
     // Undo/Redo/Jump are explicit user navigation: immediately pause AI.
     // This prevents AI from instantly replaying a navigated position.
     if (reason === "undo" || reason === "redo" || reason === "jump") {
+      // If an AI computation is currently in flight, cancel it so a later Resume
+      // can act immediately. Otherwise, `busy` can remain true until the worker
+      // responds (or times out), making it feel like the bot never resumes.
+      if (this.busy || this.activeRequestId !== null) {
+        this.onWorkerFailed();
+      }
       this.forcePausedUI();
       return;
     }

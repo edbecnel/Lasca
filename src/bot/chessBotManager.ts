@@ -673,6 +673,15 @@ export class ChessBotManager {
   }
 
   private onUndoRedoJump(reason: HistoryChangeReason): void {
+    // Cancel any in-flight bot computation so we don't apply a stale move after
+    // navigation, and so Resume can kick immediately.
+    // We can't reliably abort an engine.bestMove() call, but we can invalidate
+    // its result and clear the busy flag.
+    if (this.busy) {
+      this.requestId++;
+      this.busy = false;
+    }
+
     const anyBot = this.settings.white !== "human" || this.settings.black !== "human";
     if (!anyBot) {
       this.refreshUI();

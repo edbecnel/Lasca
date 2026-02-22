@@ -61,6 +61,228 @@ export function normalizeCheckerboardThemeId(raw: string | null | undefined): Ch
   return "classic";
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+const XLINK_NS = "http://www.w3.org/1999/xlink";
+
+function parseViewBox(svg: SVGSVGElement): { x: number; y: number; w: number; h: number } {
+  const raw = svg.getAttribute("viewBox") ?? "";
+  const parts = raw
+    .trim()
+    .split(/\s+/)
+    .map((p) => Number(p));
+  if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+    const [x, y, w, h] = parts;
+    return { x, y, w, h };
+  }
+  // Default for bundled board assets.
+  return { x: 0, y: 0, w: 1000, h: 1000 };
+}
+
+function stripHiddenPresentation(root: Element): void {
+  // Ensure cloning for rasterization still paints even if the live DOM has
+  // been hidden (we hide original groups after rasterization).
+  const walk = (el: Element) => {
+    try {
+      if (el.hasAttribute("display")) el.removeAttribute("display");
+      const style = el.getAttribute("style");
+      if (style && /display\s*:\s*none/i.test(style)) {
+        // Remove display:none while preserving other inline styles.
+        const cleaned = style
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) => s && !/^display\s*:/i.test(s))
+          .join("; ");
+        if (cleaned) el.setAttribute("style", cleaned);
+        else el.removeAttribute("style");
+      }
+    } catch {
+      // ignore
+    }
+    for (const child of Array.from(el.children)) walk(child);
+  };
+  walk(root);
+}
+
+function ensureRasterLayer(svgRoot: SVGSVGElement): SVGGElement {
+  const view = (svgRoot.querySelector("#boardView") as SVGGElement | null) ?? (svgRoot as any);
+  const existing = svgRoot.querySelector("#checkerboardRasterLayer") as SVGGElement | null;
+  if (existing) return existing;
+
+  const g = document.createElementNS(SVG_NS, "g") as SVGGElement;
+  g.id = "checkerboardRasterLayer";
+  g.setAttribute("pointer-events", "none");
+
+  // Insert as early as possible inside the view group so it stays behind
+  // nodes/pieces/overlays.
+  try {
+    const bgFill = svgRoot.querySelector("#bgFill");
+    if (bgFill && bgFill.parentNode) {
+      bgFill.parentNode.insertBefore(g, bgFill);
+    } else {
+      view.insertBefore(g, view.firstChild);
+    }
+  } catch {
+    view.appendChild(g);
+  }
+
+  return g;
+}
+
+function removeRasterizedBackground(svgRoot: SVGSVGElement): void {
+  const raster = svgRoot.querySelector("#checkerboardRasterLayer") as SVGGElement | null;
+  if (raster) {
+    const img = raster.querySelector("image") as SVGImageElement | null;
+    const oldUrl = img?.getAttribute("data-raster-url") ?? null;
+    if (oldUrl) {
+      try {
+        URL.revokeObjectURL(oldUrl);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      raster.remove();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Restore hidden groups (if we hid them after rasterization).
+  for (const id of ["bgFill", "squares", "frame"]) {
+    const g = svgRoot.querySelector(`#${id}`) as SVGGElement | null;
+    if (!g) continue;
+    if ((g as any).dataset?.rasterHidden === "1") {
+      try {
+        g.style.removeProperty("display");
+        delete (g as any).dataset.rasterHidden;
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+async function rasterizeBoardBackgroundOnce(svgRoot: SVGSVGElement): Promise<{ url: string; w: number; h: number } | null> {
+  if (typeof document === "undefined") return null;
+
+  const vb = parseViewBox(svgRoot);
+
+  // Determine raster target size based on the on-screen size.
+  let targetW = Math.max(1, Math.round(vb.w));
+  let targetH = Math.max(1, Math.round(vb.h));
+  try {
+    const rect = svgRoot.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(4, window.devicePixelRatio || 1));
+    if (rect.width > 10 && rect.height > 10) {
+      targetW = Math.max(1, Math.round(rect.width * dpr));
+      targetH = Math.max(1, Math.round(rect.height * dpr));
+    }
+  } catch {
+    // ignore; fall back to viewBox size
+  }
+
+  // Build a minimal SVG that contains only the background layers and defs.
+  const tempSvg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
+  tempSvg.setAttribute("xmlns", SVG_NS);
+  tempSvg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  tempSvg.setAttribute("width", String(vb.w));
+  tempSvg.setAttribute("height", String(vb.h));
+
+  const defs = svgRoot.querySelector("defs") as SVGDefsElement | null;
+  if (defs) {
+    const defsClone = defs.cloneNode(true) as SVGDefsElement;
+    stripHiddenPresentation(defsClone);
+    tempSvg.appendChild(defsClone);
+  }
+
+  for (const id of ["bgFill", "squares", "frame"]) {
+    const g = svgRoot.querySelector(`#${id}`) as SVGGElement | null;
+    if (!g) continue;
+    const clone = g.cloneNode(true) as SVGGElement;
+    stripHiddenPresentation(clone);
+    tempSvg.appendChild(clone);
+  }
+
+  // Serialize and paint to canvas.
+  const xml = new XMLSerializer().serializeToString(tempSvg);
+  const svgBlob = new Blob([xml], { type: "image/svg+xml" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  const img = new Image();
+  (img as any).decoding = "async";
+
+  const pngUrl = await new Promise<string | null>((resolve) => {
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(null);
+              return;
+            }
+            resolve(URL.createObjectURL(blob));
+          },
+          "image/png",
+          0.92
+        );
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = svgUrl;
+  });
+
+  try {
+    URL.revokeObjectURL(svgUrl);
+  } catch {
+    // ignore
+  }
+
+  if (!pngUrl) return null;
+  return { url: pngUrl, w: targetW, h: targetH };
+}
+
+function ensureRasterResizeObserver(svgRoot: SVGSVGElement): void {
+  // Keep a single observer per SVG.
+  const anyRoot = svgRoot as any;
+  if (anyRoot.__checkerboardRasterObserver) return;
+  if (typeof ResizeObserver === "undefined") return;
+
+  let timer: number | null = null;
+  const obs = new ResizeObserver(() => {
+    if (timer !== null) window.clearTimeout(timer);
+    // Debounce resize; rasterization is expensive.
+    timer = window.setTimeout(() => {
+      timer = null;
+      const curTheme = (svgRoot as any).__checkerboardThemeId as CheckerboardThemeId | undefined;
+      if (curTheme !== "stone" && curTheme !== "burled") return;
+      // Re-apply current theme, which will re-rasterize at the new size.
+      try {
+        applyCheckerboardTheme(svgRoot, curTheme);
+      } catch {
+        // ignore
+      }
+    }, 150);
+  });
+
+  try {
+    obs.observe(svgRoot);
+    anyRoot.__checkerboardRasterObserver = obs;
+  } catch {
+    // ignore
+  }
+}
+
 function ensureSvgDefs(svgRoot: SVGSVGElement): SVGDefsElement {
   const existing = svgRoot.querySelector("defs") as SVGDefsElement | null;
   if (existing) return existing;
@@ -268,6 +490,12 @@ function parseNum(value: string | null): number | null {
 export function applyCheckerboardTheme(svgRoot: SVGSVGElement, themeId: CheckerboardThemeId): void {
   if (!svgRoot) return;
 
+  // Remember current theme for resize observer.
+  (svgRoot as any).__checkerboardThemeId = themeId;
+
+  // If we previously rasterized the background, restore vector groups first.
+  removeRasterizedBackground(svgRoot);
+
   const theme = getCheckerboardThemeById(themeId);
 
   // Optional: tint the background fill to match.
@@ -341,5 +569,55 @@ export function applyCheckerboardTheme(svgRoot: SVGSVGElement, themeId: Checkerb
       rect.setAttribute("fill", fill);
       rect.style.setProperty("fill", fill, "important");
     }
+  }
+
+  // Patterned boards are expensive to repaint every animation frame. Rasterize the
+  // static background once, then animate pieces on top of an <image>.
+  if (themeId === "stone" || themeId === "burled") {
+    ensureRasterResizeObserver(svgRoot);
+    const jobId = (((svgRoot as any).__checkerboardRasterJobId as number | undefined) ?? 0) + 1;
+    (svgRoot as any).__checkerboardRasterJobId = jobId;
+
+    void (async () => {
+      const raster = await rasterizeBoardBackgroundOnce(svgRoot);
+      if (!raster) return;
+      if ((svgRoot as any).__checkerboardRasterJobId !== jobId) {
+        // Outdated job.
+        try {
+          URL.revokeObjectURL(raster.url);
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      const layer = ensureRasterLayer(svgRoot);
+      // Replace any prior image.
+      while (layer.firstChild) layer.removeChild(layer.firstChild);
+
+      const vb = parseViewBox(svgRoot);
+      const img = document.createElementNS(SVG_NS, "image") as SVGImageElement;
+      img.setAttribute("x", String(vb.x));
+      img.setAttribute("y", String(vb.y));
+      img.setAttribute("width", String(vb.w));
+      img.setAttribute("height", String(vb.h));
+      img.setAttribute("preserveAspectRatio", "none");
+      img.setAttribute("href", raster.url);
+      img.setAttributeNS(XLINK_NS, "xlink:href", raster.url);
+      img.setAttribute("data-raster-url", raster.url);
+      layer.appendChild(img);
+
+      // Hide vector background layers to avoid triggering expensive repaints.
+      for (const id of ["bgFill", "squares", "frame"]) {
+        const g = svgRoot.querySelector(`#${id}`) as SVGGElement | null;
+        if (!g) continue;
+        try {
+          (g as any).dataset.rasterHidden = "1";
+          g.style.display = "none";
+        } catch {
+          // ignore
+        }
+      }
+    })();
   }
 }
