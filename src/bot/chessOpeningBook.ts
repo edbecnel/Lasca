@@ -53,6 +53,36 @@ function buildBookMap(): Map<string, string[]> {
 
     { line: ["g1f3", "d7d5"], replies: ["d2d4", "g2g3", "c2c4"] },
     { line: ["g1f3", "g8f6"], replies: ["d2d4", "g2g3", "c2c4"] },
+
+    // Italian / Two Knights / Ruy-ish setups
+    { line: ["e2e4", "e7e5", "g1f3"], replies: ["b8c6", "g8f6", "d7d6", "f8c5"] },
+    { line: ["e2e4", "e7e5", "g1f3", "b8c6"], replies: ["f1c4", "f1b5", "d2d4"] },
+    { line: ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4"], replies: ["f8c5", "g8f6", "d7d6"] },
+
+    // Scotch / open games
+    { line: ["e2e4", "e7e5", "g1f3", "b8c6", "d2d4"], replies: ["e5d4", "g8f6", "d7d6"] },
+
+    // Sicilian (basic)
+    { line: ["e2e4", "c7c5", "g1f3"], replies: ["d7d6", "b8c6", "e7e6"] },
+    { line: ["e2e4", "c7c5", "g1f3", "d7d6"], replies: ["d2d4", "c2c3", "b1c3"] },
+
+    // French Defence (basic)
+    { line: ["e2e4", "e7e6", "d2d4"], replies: ["d7d5"] },
+    { line: ["e2e4", "e7e6", "d2d4", "d7d5"], replies: ["b1c3", "e4e5", "e4d5", "g1f3"] },
+
+    // Caro-Kann (basic)
+    { line: ["e2e4", "c7c6", "d2d4"], replies: ["d7d5"] },
+    { line: ["e2e4", "c7c6", "d2d4", "d7d5"], replies: ["b1c3", "e4e5", "e4d5", "g1f3"] },
+
+    // Queen's Gambit / Slav / QGD / QGA
+    { line: ["d2d4", "d7d5", "c2c4"], replies: ["e7e6", "c7c6", "d5c4"] },
+    { line: ["d2d4", "d7d5", "c2c4", "e7e6"], replies: ["b1c3", "g1f3", "c4d5"] },
+
+    // Indian defences: KID / QID / Nimzo-ish structure
+    { line: ["d2d4", "g8f6", "c2c4"], replies: ["e7e6", "g7g6", "c7c5"] },
+    { line: ["d2d4", "g8f6", "c2c4", "e7e6"], replies: ["b1c3", "g1f3", "g2g3"] },
+    { line: ["d2d4", "g8f6", "c2c4", "e7e6", "b1c3"], replies: ["f8b4"] },
+    { line: ["d2d4", "g8f6", "c2c4", "e7e6", "g1f3"], replies: ["b7b6", "d7d5", "c7c5"] },
   ];
 
   const start = createInitialGameStateForVariant("chess_classic" as any);

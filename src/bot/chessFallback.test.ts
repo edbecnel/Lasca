@@ -56,6 +56,53 @@ describe("chess fallback", () => {
     ]).toContain(uci);
   });
 
+  it("uses book after 1.e4 e5 2.Nf3", () => {
+    let s = createInitialGameStateForVariant("chess_classic" as any);
+    const e4 = uciToLegalMove(s, "e2e4");
+    expect(e4).toBeTruthy();
+    s = applyMove(s, e4!);
+    const e5 = uciToLegalMove(s, "e7e5");
+    expect(e5).toBeTruthy();
+    s = applyMove(s, e5!);
+    const nf3 = uciToLegalMove(s, "g1f3");
+    expect(nf3).toBeTruthy();
+    s = applyMove(s, nf3!);
+
+    const m = pickFallbackMoveChess(s, { tier: "beginner", seed: "book-open-game" });
+    expect(m).toBeTruthy();
+    const uci = `${(m as any).from}->${(m as any).to}`;
+    // One of: ...Nc6, ...Nf6, ...d6, ...Bc5
+    expect([
+      "r0c1->r2c2", // b8 -> c6
+      "r0c6->r2c5", // g8 -> f6
+      "r1c3->r2c3", // d7 -> d6
+      "r0c5->r3c2", // f8 -> c5
+    ]).toContain(uci);
+  });
+
+  it("uses book after 1.d4 d5 2.c4", () => {
+    let s = createInitialGameStateForVariant("chess_classic" as any);
+    const d4 = uciToLegalMove(s, "d2d4");
+    expect(d4).toBeTruthy();
+    s = applyMove(s, d4!);
+    const d5 = uciToLegalMove(s, "d7d5");
+    expect(d5).toBeTruthy();
+    s = applyMove(s, d5!);
+    const c4 = uciToLegalMove(s, "c2c4");
+    expect(c4).toBeTruthy();
+    s = applyMove(s, c4!);
+
+    const m = pickFallbackMoveChess(s, { tier: "beginner", seed: "book-qg" });
+    expect(m).toBeTruthy();
+    const uci = `${(m as any).from}->${(m as any).to}`;
+    // One of: ...e6, ...c6, ...dxc4
+    expect([
+      "r1c4->r2c4", // e7 -> e6
+      "r1c2->r2c2", // c7 -> c6
+      "r1c3->r3c2", // d5 -> c4
+    ]).toContain(uci);
+  });
+
   it("prefers winning a queen when available", () => {
     const s = mkEmptyChessState("W");
 
