@@ -423,6 +423,68 @@ window.addEventListener("DOMContentLoaded", async () => {
   const redoBtn = document.getElementById("redoBtn") as HTMLButtonElement | null;
   const moveHistoryEl = document.getElementById("moveHistory") as HTMLElement | null;
 
+  const inferMovedPieceSymbolId = (
+    prev: import("./game/state.ts").GameState | undefined,
+    next: import("./game/state.ts").GameState | undefined,
+    whoMoved: "W" | "B",
+    notation: string
+  ): string | null => {
+    const promo = /\=([QRBN])/.exec(String(notation ?? ""));
+    if (promo?.[1]) return `${whoMoved}_${promo[1]}`;
+    if (/^O-O(-O)?/.test(String(notation ?? ""))) return `${whoMoved}_K`;
+
+    const topAt = (s: import("./game/state.ts").GameState | undefined, nodeId: string) => {
+      try {
+        const stack = s?.board.get(nodeId);
+        return stack && stack.length ? stack[stack.length - 1] : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const lm = next?.ui?.lastMove as any;
+    const fromHint = lm?.from as string | undefined;
+    const toHint = lm?.to as string | undefined;
+    if (prev && next && fromHint && toHint) {
+      const p = topAt(prev, fromHint) as any;
+      if (p && p.owner === whoMoved && p.rank) return `${whoMoved}_${p.rank}`;
+      const q = topAt(next, toHint) as any;
+      if (q && q.owner === whoMoved && q.rank) return `${whoMoved}_${q.rank}`;
+    }
+
+    if (!prev || !next) return null;
+    const keys = new Set<string>();
+    for (const k of prev.board.keys()) keys.add(k);
+    for (const k of next.board.keys()) keys.add(k);
+
+    const fromCandidates: string[] = [];
+    const toCandidates: string[] = [];
+
+    for (const k of keys) {
+      const a = topAt(prev, k) as any;
+      const b = topAt(next, k) as any;
+      const aSig = a ? `${a.owner}:${a.rank}` : "";
+      const bSig = b ? `${b.owner}:${b.rank}` : "";
+      if (aSig === bSig) continue;
+
+      if (a && a.owner === whoMoved) fromCandidates.push(k);
+      if (b && b.owner === whoMoved) toCandidates.push(k);
+    }
+
+    if (fromCandidates.length === 1) {
+      const p = topAt(prev, fromCandidates[0]!) as any;
+      if (p?.rank) return `${whoMoved}_${p.rank}`;
+    }
+    if (toCandidates.length === 1) {
+      const p = topAt(next, toCandidates[0]!) as any;
+      if (p?.rank) return `${whoMoved}_${p.rank}`;
+    }
+
+    const first = String(notation ?? "").trim()[0];
+    const rank = first && /[KQRBN]/.test(first) ? first : "P";
+    return `${whoMoved}_${rank}`;
+  };
+
   const updateHistoryUI = (reason?: import("./controller/gameController.ts").HistoryChangeReason) => {
     if (undoBtn) undoBtn.disabled = !controller.canUndo();
     if (redoBtn) redoBtn.disabled = !controller.canRedo();
@@ -432,6 +494,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (historyData.length === 0) {
         moveHistoryEl.textContent = "No moves yet";
       } else {
+        const snap = driver.exportHistorySnapshots();
         moveHistoryEl.innerHTML = historyData
           .map((entry, idx) => {
             if (idx === 0) {
@@ -444,15 +507,19 @@ window.addEventListener("DOMContentLoaded", async () => {
             }
 
             // For moves: toMove indicates who's about to move, so invert to get who just moved.
-            const playerWhoMoved = entry.toMove === "B" ? "Light" : "Dark";
-            const playerIcon = playerWhoMoved === "Dark" ? "⚫" : "⚪";
+            const whoMoved = entry.toMove === "B" ? "W" : "B";
 
             const moveNum =
-              playerWhoMoved === "Dark"
-                ? Math.ceil(idx / 2)
-                : Math.floor((idx + 1) / 2);
+              whoMoved === "B" ? Math.ceil(idx / 2) : Math.floor((idx + 1) / 2);
 
-            let label = `${moveNum}. ${playerIcon}`;
+            const prev = snap.states[idx - 1];
+            const next = snap.states[idx];
+            const symId = inferMovedPieceSymbolId(prev, next, whoMoved, entry.notation);
+            const pieceIcon = symId
+              ? `<svg aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 100 100\" style=\"width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;\"><use href=\"#${symId}\"></use></svg>`
+              : (whoMoved === "B" ? "⚫" : "⚪");
+
+            let label = `${moveNum}. ${pieceIcon}`;
             if (entry.notation) {
               label += ` ${entry.notation}`;
             }
