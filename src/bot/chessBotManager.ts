@@ -253,7 +253,10 @@ export class ChessBotManager {
     if (this.prewarmStarted) return;
     this.prewarmStarted = true;
 
-    this.showWarmupToast();
+    // For server-backed Stockfish, the main failure mode is "server not reachable".
+    // Show the actionable fallback toast immediately; if the server is reachable,
+    // the prewarm will clear it quickly.
+    this.showWarmupToast(Boolean(this.serverEngineUrl));
 
     // Fire and forget.
     (async () => {
@@ -802,7 +805,7 @@ export class ChessBotManager {
     if (!this.engineReady && !this.allowFallbackDuringWarmup) {
       this.controller.setInputEnabled(false);
       this.setStatus(`Bot warming up… (${this.engineLabel()})`);
-      this.showWarmupToast();
+      this.showWarmupToast(Boolean(this.serverEngineUrl));
       // We'll retry when warmup completes (prewarmEngine kicks), but also poll lightly.
       window.setTimeout(() => void this.maybeMove(), 1000);
       return;
