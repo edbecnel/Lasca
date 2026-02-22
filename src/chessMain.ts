@@ -36,6 +36,7 @@ const LS_OPT_KEYS = {
   showResizeIcon: "lasca.opt.showResizeIcon",
   boardCoords: "lasca.opt.boardCoords",
   flipBoard: "lasca.opt.chess.flipBoard",
+  highlightSquares: "lasca.opt.chess.highlightSquares",
   toasts: "lasca.opt.toasts",
   sfx: "lasca.opt.sfx",
   checkerboardTheme: "lasca.opt.checkerboardTheme",
@@ -263,6 +264,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     moveHintsToggle.addEventListener("change", () => {
       writeBoolPref(LS_OPT_KEYS.moveHints, moveHintsToggle.checked);
       controller.setMoveHints(moveHintsToggle.checked);
+    });
+  }
+
+  // Options: highlight squares (Chess-only subtle selection/hints)
+  const highlightSquaresToggle = document.getElementById("highlightSquaresToggle") as HTMLInputElement | null;
+  const savedHighlightSquares = readOptionalBoolPref(LS_OPT_KEYS.highlightSquares);
+  const initialHighlightSquares = savedHighlightSquares ?? false;
+  if (highlightSquaresToggle) highlightSquaresToggle.checked = initialHighlightSquares;
+  controller.setHighlightSquaresEnabled(highlightSquaresToggle?.checked ?? initialHighlightSquares);
+  if (highlightSquaresToggle) {
+    highlightSquaresToggle.addEventListener("change", () => {
+      writeBoolPref(LS_OPT_KEYS.highlightSquares, highlightSquaresToggle.checked);
+      controller.setHighlightSquaresEnabled(highlightSquaresToggle.checked);
     });
   }
 
@@ -884,6 +898,83 @@ window.addEventListener("DOMContentLoaded", async () => {
     return `${color} ${piece}`;
   };
 
+  const escapeHtmlAttr = (raw: string): string =>
+    String(raw)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const isTakeMoveNotation = (notation: string | undefined): boolean => {
+    const n = String(notation ?? "");
+    // SAN captures use "x" (occasionally "×" in some UIs).
+    return /x|×/.test(n);
+  };
+
+  const inferCapturedPieceSymbolId = (
+    prev: import("./game/state.ts").GameState | undefined,
+    next: import("./game/state.ts").GameState | undefined,
+    whoMoved: "W" | "B"
+  ): string | null => {
+    if (!prev || !next) return null;
+    const opp: "W" | "B" = whoMoved === "W" ? "B" : "W";
+
+    const topAt = (s: import("./game/state.ts").GameState | undefined, nodeId: string) => {
+      try {
+        const stack = s?.board.get(nodeId);
+        return stack && stack.length ? stack[stack.length - 1] : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const keys = new Set<string>();
+    for (const k of prev.board.keys()) keys.add(k);
+    for (const k of next.board.keys()) keys.add(k);
+
+    let bestRank: string | null = null;
+    let fallbackRank: string | null = null;
+
+    for (const k of keys) {
+      const a = topAt(prev, k) as any;
+      const b = topAt(next, k) as any;
+      if (!a || a.owner !== opp || !a.rank) continue;
+
+      const changed = !b || b.owner !== a.owner || b.rank !== a.rank;
+      if (!changed) continue;
+
+      // Prefer "replaced" captures: opponent on a square becomes mover on that square.
+      if (b && b.owner === whoMoved) {
+        bestRank = String(a.rank);
+        break;
+      }
+      // Otherwise (e.g. en passant), opponent piece just disappears.
+      fallbackRank = String(a.rank);
+    }
+
+    const rank = bestRank ?? fallbackRank;
+    if (!rank) return null;
+    return `${opp}_${rank}`;
+  };
+
+  const inferCaptureTooltip = (
+    prev: import("./game/state.ts").GameState | undefined,
+    next: import("./game/state.ts").GameState | undefined,
+    whoMoved: "W" | "B",
+    moverSymbolId: string | null,
+    notation: string | undefined
+  ): string | null => {
+    if (!moverSymbolId) return null;
+    if (!isTakeMoveNotation(notation)) return null;
+
+    const capturer = pieceTooltipFromSymbolId(moverSymbolId, whoMoved);
+    const capturedSym = inferCapturedPieceSymbolId(prev, next, whoMoved);
+    if (!capturedSym) return null;
+    const opp: "W" | "B" = whoMoved === "W" ? "B" : "W";
+    const captured = pieceTooltipFromSymbolId(capturedSym, opp);
+    return `${capturer} takes ${captured}`;
+  };
+
   const updateHistoryUI = (reason?: import("./controller/gameController.ts").HistoryChangeReason) => {
     if (undoBtn) undoBtn.disabled = !controller.canUndo();
     if (redoBtn) redoBtn.disabled = !controller.canRedo();
@@ -904,18 +995,21 @@ window.addEventListener("DOMContentLoaded", async () => {
         const prev = snap.states[idx - 1];
         const next = snap.states[idx];
         const symId = inferMovedPieceSymbolId(prev, next, whoMoved, entry.notation);
-        const tooltip = symId
+        const captureTooltip = inferCaptureTooltip(prev, next, whoMoved, symId, entry.notation);
+        const pieceTooltip = symId
           ? pieceTooltipFromSymbolId(symId, whoMoved)
           : (whoMoved === "W" ? "White" : "Black");
+        const pieceTooltipEsc = escapeHtmlAttr(pieceTooltip);
         const pieceSvg = symId
-          ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><use href="#${symId}"></use></svg>`
+          ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><title>${pieceTooltipEsc}</title><use href="#${symId}"></use></svg>`
           : (whoMoved === "B" ? "⚫" : "⚪");
-        const pieceIcon = `<span title="${tooltip}" style="display: inline-flex; align-items: center;">${pieceSvg}</span>`;
+        const pieceIcon = `<span title="${pieceTooltipEsc}" style="display: inline-flex; align-items: center;">${pieceSvg}</span>`;
         let label = `${pieceIcon}`;
         if (entry.notation) label += ` ${entry.notation}`;
         const cls = `cell clickable${entry.isCurrent ? " current" : ""}`;
         const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
-        return `<div class="${cls}" data-history-index="${entry.index}"${currentAttr}>${label}</div>`;
+        const titleAttr = captureTooltip ? ` title="${escapeHtmlAttr(captureTooltip)}"` : "";
+        return `<div class="${cls}" data-history-index="${entry.index}"${currentAttr}${titleAttr}>${label}</div>`;
       };
 
       const renderStartCell = (entry: (typeof historyData)[number]) => {
@@ -972,13 +1066,15 @@ window.addEventListener("DOMContentLoaded", async () => {
             const prev = snap.states[idx - 1];
             const next = snap.states[idx];
             const symId = inferMovedPieceSymbolId(prev, next, whoMoved, entry.notation);
-            const tooltip = symId
+            const captureTooltip = inferCaptureTooltip(prev, next, whoMoved, symId, entry.notation);
+            const pieceTooltip = symId
               ? pieceTooltipFromSymbolId(symId, whoMoved)
               : (whoMoved === "W" ? "White" : "Black");
+            const pieceTooltipEsc = escapeHtmlAttr(pieceTooltip);
             const pieceSvg = symId
-              ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><use href="#${symId}"></use></svg>`
+              ? `<svg aria-hidden="true" focusable="false" viewBox="0 0 100 100" style="width: 1.05em; height: 1.05em; vertical-align: -0.18em; margin: 0 4px 0 2px;"><title>${pieceTooltipEsc}</title><use href="#${symId}"></use></svg>`
               : (whoMoved === "B" ? "⚫" : "⚪");
-            const pieceIcon = `<span title=\"${tooltip}\" style=\"display: inline-flex; align-items: center;\">${pieceSvg}</span>`;
+            const pieceIcon = `<span title=\"${pieceTooltipEsc}\" style=\"display: inline-flex; align-items: center;\">${pieceSvg}</span>`;
 
             let label = `${moveNum}. ${pieceIcon}`;
             if (entry.notation) label += ` ${entry.notation}`;
@@ -988,7 +1084,8 @@ window.addEventListener("DOMContentLoaded", async () => {
               : "";
             const style = `${baseStyle}${baseStyle ? " " : ""}cursor: pointer;`;
             const currentAttr = entry.isCurrent ? ' data-is-current="1"' : "";
-            return `<div data-history-index=\"${entry.index}\"${currentAttr} style=\"${style}\">${label}</div>`;
+            const titleAttr = captureTooltip ? ` title=\"${escapeHtmlAttr(captureTooltip)}\"` : "";
+            return `<div data-history-index=\"${entry.index}\"${currentAttr}${titleAttr} style=\"${style}\">${label}</div>`;
           })
           .join("");
       }

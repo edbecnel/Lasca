@@ -5,8 +5,11 @@ import {
   ensureOverlayLayer,
   clearOverlays,
   drawSelection,
+  drawSelectionSquare,
   drawTargets,
+  drawTargetsSquares,
   drawHighlightRing,
+  drawHighlightSquare,
   drawLastMoveSquares,
   clearLastMoveSquares,
 } from "../render/overlays.ts";
@@ -65,6 +68,7 @@ export class GameController {
   private lastOpponentDisconnectedBlockToastAt: number = 0;
 
   private lastMoveHighlightsEnabled: boolean = true;
+  private highlightSquaresEnabled: boolean = false;
 
   private didBindOpponentStatusClicks: boolean = false;
   private state: GameState;
@@ -1490,6 +1494,12 @@ export class GameController {
   public setLastMoveHighlightsEnabled(enabled: boolean): void {
     this.lastMoveHighlightsEnabled = enabled;
     this.refreshView();
+  }
+
+  public setHighlightSquaresEnabled(enabled: boolean): void {
+    this.highlightSquaresEnabled = enabled;
+    // If we have a selection, re-render it so the hint style updates immediately.
+    if (this.selected) this.showSelection(this.selected);
   }
 
   private maybeShowReportIssueStickyToast(): void {
@@ -3197,7 +3207,10 @@ export class GameController {
 
   private showSelection(nodeId: string): void {
     clearOverlays(this.overlayLayer);
-    drawSelection(this.overlayLayer, nodeId);
+
+    const useSquares = this.highlightSquaresEnabled && this.isChessLikeRuleset();
+    if (useSquares) drawSelectionSquare(this.overlayLayer, nodeId);
+    else drawSelection(this.overlayLayer, nodeId);
     let allLegal = generateLegalMoves(
       this.state,
       this.lockedCaptureFrom
@@ -3215,7 +3228,8 @@ export class GameController {
     this.currentMoves = movesForNode;
     this.currentTargets = this.currentMoves.map(m => m.to);
     if (this.moveHintsEnabled) {
-      drawTargets(this.overlayLayer, this.currentTargets);
+      if (useSquares) drawTargetsSquares(this.overlayLayer, this.currentTargets);
+      else drawTargets(this.overlayLayer, this.currentTargets);
     }
 
     // Dama International (end-of-sequence capture removal): visually mark already-captured pieces
@@ -3227,9 +3241,11 @@ export class GameController {
       for (const move of this.currentMoves) {
         if (move.kind === "capture") {
           // Red circle for the piece being jumped over
-          drawHighlightRing(this.overlayLayer, move.over, "#ff6b6b", 3);
+          if (useSquares) drawHighlightSquare(this.overlayLayer, move.over, "#ff6b6b", 3);
+          else drawHighlightRing(this.overlayLayer, move.over, "#ff6b6b", 3);
           // Orange circle for the landing square (target)
-          drawHighlightRing(this.overlayLayer, move.to, "#ff9f40", 4);
+          if (useSquares) drawHighlightSquare(this.overlayLayer, move.to, "#ff9f40", 4);
+          else drawHighlightRing(this.overlayLayer, move.to, "#ff9f40", 4);
         }
       }
     }

@@ -117,8 +117,6 @@ export class ChessBotManager {
   private engineBackoffUntilMs = 0;
   private engineFailureCount = 0;
 
-  private undoTakebackInProgress = false;
-
   private engineLabel(): string {
     return this.serverEngineUrl ? "Stockfish server" : "Stockfish";
   }
@@ -126,6 +124,18 @@ export class ChessBotManager {
   private static readonly PAUSED_TURN_TOAST_KEY = "chessbot_paused_turn";
   private static readonly WARMUP_TOAST_KEY = "chessbot_warmup";
   private toastSyncTimer: number | null = null;
+
+  // When we auto-pause on initial load/new-game (to prevent surprise bot moves),
+  // and the human makes the first move, the subsequent bot-to-move position does
+  // not need a sticky "tap to resume" hint.
+  private autoPausedAtStart = false;
+  // When we pause due to explicit history navigation (Undo/Redo/Jump), we also
+  // want to avoid sticky resume prompts once the human resumes live play.
+  private autoPausedFromHistoryNav = false;
+  private autoResumeAfterHistoryNav = false;
+  private lastAutoPausedHumanFirstTurnToastSig: string | null = null;
+  private autoResumeAfterTurnToastTimer: number | null = null;
+  private autoResumeAfterTurnToastSig: string | null = null;
 
   constructor(controller: GameController, opts?: { engineFactory?: () => UciEngine }) {
     this.controller = controller;
@@ -158,6 +168,7 @@ export class ChessBotManager {
     // This prevents surprise moves immediately on load/launch.
     if (this.settings.white !== "human" || this.settings.black !== "human") {
       this.settings.paused = true;
+      this.autoPausedAtStart = true;
       try {
         localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
       } catch {
@@ -229,10 +240,15 @@ export class ChessBotManager {
 
     if (this.elPause) {
       this.elPause.addEventListener("click", () => {
-        this.settings.paused = !this.settings.paused;
-        localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
+        // User-initiated pause/resume: clear auto-start behavior.
+        this.autoPausedAtStart = false;
+        this.autoPausedFromHistoryNav = false;
+        this.lastAutoPausedHumanFirstTurnToastSig = null;
+
+        this.setPaused(!this.settings.paused);
         this.refreshUI();
         if (!this.settings.paused) this.kick();
+        this.schedulePausedTurnToastSync();
       });
     }
 
@@ -559,6 +575,15 @@ export class ChessBotManager {
 
   private resumeBotFromPause(): void {
     this.settings.paused = false;
+    this.autoPausedAtStart = false;
+    this.autoPausedFromHistoryNav = false;
+    this.autoResumeAfterHistoryNav = false;
+    this.lastAutoPausedHumanFirstTurnToastSig = null;
+    if (this.autoResumeAfterTurnToastTimer) {
+      window.clearTimeout(this.autoResumeAfterTurnToastTimer);
+      this.autoResumeAfterTurnToastTimer = null;
+    }
+    this.autoResumeAfterTurnToastSig = null;
     try {
       localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
     } catch {
@@ -622,9 +647,118 @@ export class ChessBotManager {
     const isBotTurn = tier !== null;
 
     if (this.settings.paused && isBotTurn) {
+      try {
+        const ply = plyCountFromController(this.controller);
+        const otherIsHuman = isHumanForPlayer(this.settings, other(toMove));
+
+        // Case A: auto-paused at start, human moved first.
+        // Don't nag with a sticky resume hint; show a normal toast and auto-resume.
+        const shouldAutoResumeFromStart = this.autoPausedAtStart && ply > 0 && otherIsHuman;
+        if (shouldAutoResumeFromStart) {
+          this.controller.setInputEnabled(false);
+          this.controller.setStickyToastAction(ChessBotManager.PAUSED_TURN_TOAST_KEY, null);
+          this.controller.clearStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY);
+
+          const sideLabel = toMove === "B" ? "Black" : "White";
+          const sig = `${ply}:${toMove}`;
+          if (sig !== this.lastAutoPausedHumanFirstTurnToastSig) {
+            this.lastAutoPausedHumanFirstTurnToastSig = sig;
+            this.controller.toast(`${sideLabel} to Play`, 1400);
+          }
+
+          // After the toast disappears, automatically resume the bot.
+          // Guard against stale timers if the user navigates history or changes settings.
+          if (!this.autoResumeAfterTurnToastTimer || this.autoResumeAfterTurnToastSig !== sig) {
+            if (this.autoResumeAfterTurnToastTimer) {
+              window.clearTimeout(this.autoResumeAfterTurnToastTimer);
+              this.autoResumeAfterTurnToastTimer = null;
+            }
+            this.autoResumeAfterTurnToastSig = sig;
+            this.autoResumeAfterTurnToastTimer = window.setTimeout(() => {
+              this.autoResumeAfterTurnToastTimer = null;
+
+              if (!this.settings.paused) return;
+              if (!this.autoPausedAtStart) return;
+              if (this.controller.isOver()) return;
+
+              try {
+                const stateNow = this.controller.getState();
+                if (stateNow.meta?.rulesetId !== "chess") return;
+                const toMoveNow: Player = stateNow.toMove;
+                const tierNow = tierForPlayer(this.settings, toMoveNow);
+                if (tierNow === null) return;
+
+                const plyNow = plyCountFromController(this.controller);
+                const sigNow = `${plyNow}:${toMoveNow}`;
+                if (sigNow !== this.autoResumeAfterTurnToastSig) return;
+              } catch {
+                return;
+              }
+
+              this.resumeBotFromPause();
+            }, 1400);
+          }
+          return;
+        }
+
+        // Case B: paused due to history navigation.
+        // Never show the sticky resume bot toast while in this mode.
+        // Only auto-resume after the user makes a move (armed via onHistoryChanged("move")).
+        if (this.autoPausedFromHistoryNav) {
+          this.controller.setInputEnabled(false);
+          this.controller.setStickyToastAction(ChessBotManager.PAUSED_TURN_TOAST_KEY, null);
+          this.controller.clearStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY);
+
+          const sideLabel = toMove === "B" ? "Black" : "White";
+          const sig = `${ply}:${toMove}`;
+          if (sig !== this.lastAutoPausedHumanFirstTurnToastSig) {
+            this.lastAutoPausedHumanFirstTurnToastSig = sig;
+            this.controller.toast(`${sideLabel} to Play`, 1400);
+          }
+
+          if (this.autoResumeAfterHistoryNav && otherIsHuman) {
+            if (!this.autoResumeAfterTurnToastTimer || this.autoResumeAfterTurnToastSig !== sig) {
+              if (this.autoResumeAfterTurnToastTimer) {
+                window.clearTimeout(this.autoResumeAfterTurnToastTimer);
+                this.autoResumeAfterTurnToastTimer = null;
+              }
+              this.autoResumeAfterTurnToastSig = sig;
+              this.autoResumeAfterTurnToastTimer = window.setTimeout(() => {
+                this.autoResumeAfterTurnToastTimer = null;
+
+                if (!this.settings.paused) return;
+                if (!this.autoPausedFromHistoryNav) return;
+                if (!this.autoResumeAfterHistoryNav) return;
+                if (this.controller.isOver()) return;
+
+                try {
+                  const stateNow = this.controller.getState();
+                  if (stateNow.meta?.rulesetId !== "chess") return;
+                  const toMoveNow: Player = stateNow.toMove;
+                  const tierNow = tierForPlayer(this.settings, toMoveNow);
+                  if (tierNow === null) return;
+
+                  const plyNow = plyCountFromController(this.controller);
+                  const sigNow = `${plyNow}:${toMoveNow}`;
+                  if (sigNow !== this.autoResumeAfterTurnToastSig) return;
+                } catch {
+                  return;
+                }
+
+                this.resumeBotFromPause();
+              }, 1400);
+            }
+          }
+
+          return;
+        }
+      } catch {
+        // ignore
+      }
+
       this.controller.setInputEnabled(false);
       const sideLabel = toMove === "B" ? "Black" : "White";
-      const msg = `${sideLabel}'s turn. Tap here to resume bot`;
+      const msg = `${sideLabel} to Play. Tap here to resume bot`;
       this.controller.setStickyToastAction(ChessBotManager.PAUSED_TURN_TOAST_KEY, () => this.resumeBotFromPause());
       this.controller.showStickyToast(ChessBotManager.PAUSED_TURN_TOAST_KEY, msg, { force: true });
       return;
@@ -642,6 +776,20 @@ export class ChessBotManager {
   private setPaused(paused: boolean): void {
     if (this.settings.paused === paused) return;
     this.settings.paused = paused;
+    if (!paused) {
+      this.autoPausedAtStart = false;
+      this.autoPausedFromHistoryNav = false;
+      this.autoResumeAfterHistoryNav = false;
+      this.lastAutoPausedHumanFirstTurnToastSig = null;
+    }
+    if (paused) {
+      this.lastAutoPausedHumanFirstTurnToastSig = null;
+    }
+    if (this.autoResumeAfterTurnToastTimer) {
+      window.clearTimeout(this.autoResumeAfterTurnToastTimer);
+      this.autoResumeAfterTurnToastTimer = null;
+    }
+    this.autoResumeAfterTurnToastSig = null;
     try {
       localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
     } catch {
@@ -689,45 +837,6 @@ export class ChessBotManager {
       return;
     }
 
-    // In human-vs-bot, treat Undo as "takeback":
-    // if the user just undid a bot move (which makes it bot-to-move again),
-    // automatically undo one more ply so it's the human's turn.
-    if (reason === "undo" && !this.undoTakebackInProgress) {
-      try {
-        const state = this.controller.getState();
-        if (state.meta?.rulesetId === "chess") {
-          const tier = tierForPlayer(this.settings, state.toMove);
-          const isBotTurn = tier !== null;
-          const otherTier = tierForPlayer(this.settings, other(state.toMove));
-          const otherIsHuman = otherTier === null;
-
-          if (isBotTurn && otherIsHuman && this.controller.canUndo()) {
-            this.undoTakebackInProgress = true;
-            window.setTimeout(() => {
-              try {
-                if (this.controller.canUndo()) this.controller.undo();
-              } finally {
-                this.undoTakebackInProgress = false;
-                // After the second undo, do not auto-kick a bot move.
-                this.refreshUI();
-                this.updateInputForCurrentTurn();
-                this.schedulePausedTurnToastSync();
-              }
-            }, 0);
-
-            // While we wait for the second undo, make sure the bot doesn't instantly replay.
-            this.setPaused(true);
-            this.refreshUI();
-            this.updateInputForCurrentTurn();
-            this.schedulePausedTurnToastSync();
-            return;
-          }
-        }
-      } catch {
-        // ignore; fall through to generic navigation handling
-      }
-    }
-
     // Undo/Redo/Jump are explicit user navigation: pause any bot turn so it
     // doesn't immediately replay moves from the navigated position.
     try {
@@ -735,7 +844,11 @@ export class ChessBotManager {
       if (state.meta?.rulesetId === "chess") {
         const tier = tierForPlayer(this.settings, state.toMove);
         const isBotTurn = tier !== null;
-        if (isBotTurn) this.setPaused(true);
+        if (isBotTurn) {
+          this.setPaused(true);
+          this.autoPausedFromHistoryNav = true;
+          this.autoResumeAfterHistoryNav = false;
+        }
       }
     } catch {
       // ignore
@@ -757,11 +870,39 @@ export class ChessBotManager {
       return;
     }
 
+    // Any other history change invalidates pending auto-resume timers.
+    if (this.autoResumeAfterTurnToastTimer) {
+      window.clearTimeout(this.autoResumeAfterTurnToastTimer);
+      this.autoResumeAfterTurnToastTimer = null;
+    }
+    this.autoResumeAfterTurnToastSig = null;
+
+    // After the user resumes live play by making a move, if we were paused due
+    // to history navigation and the resulting position is bot-to-move, show a
+    // normal turn toast and auto-resume.
+    if (reason === "move" && this.autoPausedFromHistoryNav && this.settings.paused) {
+      try {
+        const state = this.controller.getState();
+        if (state.meta?.rulesetId === "chess") {
+          const tier = tierForPlayer(this.settings, state.toMove);
+          const isBotTurn = tier !== null;
+          if (isBotTurn) {
+            this.autoResumeAfterHistoryNav = true;
+            this.schedulePausedTurnToastSync();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     // Auto-pause whenever a new game starts and a bot is enabled.
     // This covers first load, restart, and undo-back-to-start.
     if (this.isAtNewGame() && (this.settings.white !== "human" || this.settings.black !== "human")) {
       if (!this.settings.paused) {
         this.settings.paused = true;
+        this.autoPausedAtStart = true;
+        this.lastAutoPausedHumanFirstTurnToastSig = null;
         try {
           localStorage.setItem(LS_KEYS.paused, String(this.settings.paused));
         } catch {

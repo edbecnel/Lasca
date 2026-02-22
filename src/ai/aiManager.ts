@@ -78,7 +78,7 @@ export class AIManager {
     this.controller = controller;
     this.settings = this.loadSettings();
 
-    // Clicking the sticky "Tap here to resume bot" toast should resume bot play.
+    // Default action; may be overridden dynamically when syncing the toast.
     this.controller.setStickyToastAction(AIManager.TAP_RESUME_TOAST_KEY, () => {
       if (this.shouldOfferTapToResume()) this.resumeAI();
     });
@@ -138,10 +138,6 @@ export class AIManager {
   }
 
   private syncPausedTurnToastNow(): void {
-    if (this.isViewingPastInHistory()) {
-      this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
-      return;
-    }
     if (this.controller.isOver()) {
       this.controller.clearStickyToast(AIManager.TAP_RESUME_TOAST_KEY);
       return;
@@ -159,9 +155,32 @@ export class AIManager {
     };
 
     if (this.settings.paused && isAiTurn) {
+      const canRedo = typeof (this.controller as any).canRedo === "function" ? (this.controller as any).canRedo() : false;
+      const isPast = this.isViewingPastInHistory();
+
+      // When viewing a past position, resuming the bot would fork the line and
+      // truncate redo history. Prefer replaying the recorded next move (Redo)
+      // if available.
+      this.controller.setStickyToastAction(AIManager.TAP_RESUME_TOAST_KEY, () => {
+        if (!this.shouldOfferTapToResume()) return;
+        try {
+          const stillPast = this.isViewingPastInHistory();
+          const stillCanRedo = typeof (this.controller as any).canRedo === "function" ? (this.controller as any).canRedo() : false;
+          if (stillPast && stillCanRedo && typeof (this.controller as any).redo === "function") {
+            (this.controller as any).redo();
+            return;
+          }
+        } catch {
+          // ignore
+        }
+        this.resumeAI();
+      });
+
       this.controller.showStickyToast(
         AIManager.TAP_RESUME_TOAST_KEY,
-        `${sideLabel(toMove)}'s turn. Tap here to resume bot`,
+        isPast && canRedo
+          ? `${sideLabel(toMove)}'s turn. Tap here to redo bot move`
+          : `${sideLabel(toMove)}'s turn. Tap here to resume bot`,
         { force: true }
       );
     } else {

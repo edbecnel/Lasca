@@ -140,6 +140,44 @@ function circleForNode(id: string): SVGCircleElement | null {
   return document.getElementById(id) as SVGCircleElement | null;
 }
 
+function svgFromLayer(layer: SVGGElement): SVGSVGElement | null {
+  const root = resolveOverlayRoot(layer);
+  const svg = (root.ownerSVGElement ?? root.closest?.("svg")) as SVGSVGElement | null;
+  return svg ?? null;
+}
+
+function drawSquareOverlay(
+  layer: SVGGElement,
+  nodeId: string,
+  args: { stroke: string; fill: string; strokeWidth: number; inset?: number; className: string }
+): void {
+  layer = fxLayerFromAny(layer);
+  const svg = svgFromLayer(layer);
+  if (!svg) return;
+
+  const rect = computeSquareRect(svg, nodeId);
+  if (!rect) return;
+
+  const inset = Math.max(0, args.inset ?? 2);
+  const x = rect.x + inset;
+  const y = rect.y + inset;
+  const w = Math.max(0, rect.w - inset * 2);
+  const h = Math.max(0, rect.h - inset * 2);
+  if (w <= 0 || h <= 0) return;
+
+  const el = document.createElementNS(SVG_NS, "rect") as SVGRectElement;
+  el.setAttribute("class", args.className);
+  el.setAttribute("x", String(x));
+  el.setAttribute("y", String(y));
+  el.setAttribute("width", String(w));
+  el.setAttribute("height", String(h));
+  el.setAttribute("fill", args.fill);
+  el.setAttribute("stroke", args.stroke);
+  el.setAttribute("stroke-width", String(args.strokeWidth));
+  applyRectDefaults(el);
+  layer.appendChild(el);
+}
+
 export function drawSelection(layer: SVGGElement, nodeId: string): void {
   layer = fxLayerFromAny(layer);
   const node = circleForNode(nodeId);
@@ -149,6 +187,16 @@ export function drawSelection(layer: SVGGElement, nodeId: string): void {
   const r = parseFloat(node.getAttribute("r") || "0");
 
   makeHalo(layer, { cx, cy, r: r + 8, kind: "selection" });
+}
+
+export function drawSelectionSquare(layer: SVGGElement, nodeId: string): void {
+  drawSquareOverlay(layer, nodeId, {
+    className: "squareHighlight squareHighlight--selection",
+    stroke: "rgba(102, 204, 255, 0.92)",
+    fill: "rgba(102, 204, 255, 0.10)",
+    strokeWidth: 3,
+    inset: 2,
+  });
 }
 
 export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
@@ -161,6 +209,18 @@ export function drawTargets(layer: SVGGElement, nodeIds: string[]): void {
     const r = parseFloat(node.getAttribute("r") || "0");
 
     makeHalo(layer, { cx, cy, r: r + 12, kind: "target" });
+  }
+}
+
+export function drawTargetsSquares(layer: SVGGElement, nodeIds: string[]): void {
+  for (const id of nodeIds) {
+    drawSquareOverlay(layer, id, {
+      className: "squareHighlight squareHighlight--target",
+      stroke: "rgba(0, 230, 118, 0.92)",
+      fill: "rgba(0, 230, 118, 0.10)",
+      strokeWidth: 3,
+      inset: 3,
+    });
   }
 }
 
@@ -183,6 +243,16 @@ export function drawHighlightRing(layer: SVGGElement, nodeId: string, color = "#
   } catch {
     // ignore
   }
+}
+
+export function drawHighlightSquare(layer: SVGGElement, nodeId: string, color = "#ff9f40", width = 4): void {
+  drawSquareOverlay(layer, nodeId, {
+    className: "squareHighlight squareHighlight--highlight",
+    stroke: color,
+    fill: "rgba(255, 159, 64, 0.08)",
+    strokeWidth: Math.max(width, 3),
+    inset: 2,
+  });
 }
 
 function parseNodeIdFast(id: string): { r: number; c: number } | null {
