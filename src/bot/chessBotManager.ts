@@ -164,7 +164,9 @@ export class ChessBotManager {
       // WASM fetch/compile cost on-demand.
       // Important: do this silently. We only show the Stockfish toast when/if a bot
       // is actually trying to move and the engine isn't ready yet.
-      this.prewarmEngine({ showToast: false });
+      // Exception: if a Stockfish *server* is configured and unreachable, we still
+      // want immediate feedback (otherwise it looks like a silent failure).
+      this.prewarmEngine({ showToast: false, serverFastFailToast: true });
     }
 
     this.installBoardClickToPauseBotVsBot();
@@ -253,8 +255,9 @@ export class ChessBotManager {
     this.engineReady = false;
   }
 
-  private prewarmEngine(opts?: { showToast?: boolean }): void {
+  private prewarmEngine(opts?: { showToast?: boolean; serverFastFailToast?: boolean }): void {
     const showToast = opts?.showToast ?? true;
+    const serverFastFailToast = opts?.serverFastFailToast ?? false;
 
     // If we've already started warming the engine, we may still want to surface
     // the toast later when the engine is actually needed.
@@ -268,6 +271,23 @@ export class ChessBotManager {
     // Track warmup start time even if we don't show the toast yet.
     // This ensures we still escalate after 5s once we *do* show it.
     if (this.warmupToastStartMs === null) this.warmupToastStartMs = Date.now();
+
+    // For a configured Stockfish server, if it's down/unreachable we want an immediate
+    // sticky toast (otherwise the bot looks like it just silently doesn't work).
+    // We do a fast /health probe first; if it fails, show the server error toast.
+    if (this.serverEngineUrl && serverFastFailToast) {
+      const fastProbeTimeoutMs = 900;
+      (async () => {
+        try {
+          const engine = this.ensureEngine();
+          await engine.init({ timeoutMs: fastProbeTimeoutMs });
+          // Don't set engineReady here; the main warmup below will do it.
+        } catch {
+          // Immediate, actionable message.
+          if (!this.engineReady) this.showWarmupToast(true);
+        }
+      })();
+    }
 
     // Optionally show the toast now.
     // For server-backed Stockfish, give the server a short window to respond before
