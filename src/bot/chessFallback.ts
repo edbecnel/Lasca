@@ -153,22 +153,23 @@ function negamax(
 function maxDepthForTier(tier: BotTier): number {
   switch (tier) {
     case "beginner":
-      return 1;
-    case "intermediate":
+      // Depth 1 is too blunder-prone (e.g. hanging a queen for a pawn).
       return 2;
-    case "strong":
+    case "intermediate":
       return 3;
+    case "strong":
+      return 4;
   }
 }
 
 function timeBudgetForTierMs(tier: BotTier): number {
   switch (tier) {
     case "beginner":
-      return 18;
+      return 45;
     case "intermediate":
-      return 35;
+      return 90;
     case "strong":
-      return 70;
+      return 160;
   }
 }
 
@@ -196,7 +197,7 @@ export function pickFallbackMoveChess(
   const maxDepth = maxDepthForTier(opts.tier);
 
   // Node budget prevents pathological branching from freezing the UI.
-  const nodeBudgetBase = opts.tier === "strong" ? 25_000 : opts.tier === "intermediate" ? 12_000 : 6_000;
+  const nodeBudgetBase = opts.tier === "strong" ? 140_000 : opts.tier === "intermediate" ? 55_000 : 25_000;
 
   let bestMove: Move | null = null;
   let bestScore = -Infinity;
