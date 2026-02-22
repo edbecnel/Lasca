@@ -31,6 +31,7 @@ import {
   normalizeCheckerboardThemeId,
   type CheckerboardThemeId,
 } from "./render/checkerboardTheme";
+import { createBoardLoadingOverlay } from "./ui/boardLoadingOverlay";
 
 const FALLBACK_VARIANT_ID: VariantId = "damasca_8";
 
@@ -105,6 +106,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
+
+  const boardLoading = createBoardLoadingOverlay(boardWrap);
+  boardLoading.show();
 
   const useCheckered8x8 = readOptionalBoolPref(LS_OPT_KEYS.board8x8Checkered) ?? false;
   const svgAsset =
@@ -217,6 +221,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (elMsg) elMsg.textContent = "—";
 
   renderGameState(svg, piecesLayer, inspector, state);
+
+  // Board SVG + theme are now loaded and first frame rendered.
+  boardLoading.hide();
 
   // In dev, force a full reload when modules (like state) change
   if (import.meta.hot) {

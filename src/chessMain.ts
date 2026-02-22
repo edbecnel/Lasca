@@ -28,6 +28,7 @@ import { Chess } from "chess.js";
 import { gameStateToFen, uciSquareToNodeId } from "./bot/fen.ts";
 import { applyMove } from "./game/applyMove.ts";
 import { nodeIdToA1 } from "./game/coordFormat.ts";
+import { createBoardLoadingOverlay } from "./ui/boardLoadingOverlay";
 
 const ACTIVE_VARIANT_ID: VariantId = "chess_classic";
 
@@ -79,6 +80,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
+
+  const boardLoading = createBoardLoadingOverlay(boardWrap);
+  boardLoading.show();
 
   const svg = await loadSvgFileInto(boardWrap, columnsChessBoardSvgUrl);
 
@@ -178,6 +182,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   history.push(state);
 
   renderGameState(svg, piecesLayer, orientedInspector as any, state);
+
+  // Board SVG + theme are now loaded and first frame rendered.
+  boardLoading.hide();
 
   ensureOverlayLayer(svg);
   const driver = await createDriverAsync({

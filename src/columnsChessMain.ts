@@ -23,6 +23,7 @@ import { saveGameToFile, loadGameFromFile } from "./game/saveLoad";
 import { createSfxManager } from "./ui/sfx";
 import type { Stack } from "./types";
 import { bindPlaybackControls } from "./ui/playbackControls.ts";
+import { createBoardLoadingOverlay } from "./ui/boardLoadingOverlay";
 
 const ACTIVE_VARIANT_ID: VariantId = "columns_chess";
 
@@ -74,6 +75,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const boardWrap = document.getElementById("boardWrap") as HTMLElement | null;
   if (!boardWrap) throw new Error("Missing board container: #boardWrap");
+
+  const boardLoading = createBoardLoadingOverlay(boardWrap);
+  boardLoading.show();
 
   const svg = await loadSvgFileInto(boardWrap, columnsChessBoardSvgUrl);
 
@@ -174,6 +178,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   history.push(state);
 
   renderGameState(svg, piecesLayer, orientedInspector as any, state);
+
+  // Board SVG + theme are now loaded and first frame rendered.
+  boardLoading.hide();
 
   ensureOverlayLayer(svg);
   const driver = await createDriverAsync({
