@@ -1,5 +1,5 @@
 import { loadSvgFileInto } from "./render/loadSvgFile";
-import { createThemeManager } from "./theme/themeManager";
+import { createThemeManager, THEME_DID_CHANGE_EVENT, THEME_WILL_CHANGE_EVENT } from "./theme/themeManager";
 import columnsChessBoardSvgUrl from "./assets/columns_chess_board.svg?url";
 import { renderGameState } from "./render/renderGameState";
 import { createStackInspector } from "./ui/stackInspector";
@@ -24,6 +24,7 @@ import { createSfxManager } from "./ui/sfx";
 import type { Stack } from "./types";
 import { bindPlaybackControls } from "./ui/playbackControls.ts";
 import { createBoardLoadingOverlay } from "./ui/boardLoadingOverlay";
+import { nextPaint } from "./ui/nextPaint";
 
 const ACTIVE_VARIANT_ID: VariantId = "columns_chess";
 
@@ -179,8 +180,13 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   renderGameState(svg, piecesLayer, orientedInspector as any, state);
 
-  // Board SVG + theme are now loaded and first frame rendered.
+  // Board SVG + theme are now loaded; keep spinner until the first paint.
+  await nextPaint();
   boardLoading.hide();
+
+  // Theme switching can involve slow raster PNG loads; show spinner while themes apply.
+  svg.addEventListener(THEME_WILL_CHANGE_EVENT, () => boardLoading.show());
+  svg.addEventListener(THEME_DID_CHANGE_EVENT, () => boardLoading.hide());
 
   ensureOverlayLayer(svg);
   const driver = await createDriverAsync({

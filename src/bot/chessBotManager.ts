@@ -104,6 +104,9 @@ export class ChessBotManager {
   private prewarmStarted = false;
   private warmupToastStartMs: number | null = null;
   private readonly warmupToastEscalateMs = 5000;
+  private warmupEscalationTimer: number | null = null;
+  private warmupToastShown = false;
+  private warmupToastShownError = false;
   // On some mobile devices, first-time WASM compile can exceed 2 minutes.
   // We warm up in the background with a long timeout, but we keep per-move
   // engine attempts short so the bot still plays (with a fallback) immediately.
@@ -272,6 +275,15 @@ export class ChessBotManager {
     // This ensures we still escalate after 5s once we *do* show it.
     if (this.warmupToastStartMs === null) this.warmupToastStartMs = Date.now();
 
+    // If warmup is silent (common on initial load), we still want a single
+    // escalation to the actionable error toast after a short budget.
+    if (this.warmupEscalationTimer === null) {
+      this.warmupEscalationTimer = window.setTimeout(() => {
+        this.warmupEscalationTimer = null;
+        if (!this.engineReady) this.showWarmupToast(true);
+      }, this.warmupToastEscalateMs);
+    }
+
     // For a configured Stockfish server, if it's down/unreachable we want an immediate
     // sticky toast (otherwise the bot looks like it just silently doesn't work).
     // We do a fast /health probe first; if it fails, show the server error toast.
@@ -316,6 +328,11 @@ export class ChessBotManager {
         this.engineFailureCount = 0;
         this.engineReady = true;
 
+        if (this.warmupEscalationTimer !== null) {
+          window.clearTimeout(this.warmupEscalationTimer);
+          this.warmupEscalationTimer = null;
+        }
+
         if (serverErrorToastTimer) {
           window.clearTimeout(serverErrorToastTimer);
           serverErrorToastTimer = null;
@@ -353,6 +370,13 @@ export class ChessBotManager {
   private showWarmupToast(isError = false): void {
     const anyBot = this.settings.white !== "human" || this.settings.black !== "human";
     if (!anyBot) return;
+
+    // Avoid re-showing the same toast on every bot turn. We show it once,
+    // and only allow a non-error -> error escalation.
+    if (this.warmupToastShown) {
+      if (this.warmupToastShownError) return;
+      if (!isError) return;
+    }
 
     // Never let the non-error Stockfish toast stick around indefinitely.
     // After a short budget, escalate to the actionable error toast.
@@ -400,6 +424,9 @@ export class ChessBotManager {
       this.kick();
     });
     this.controller.showStickyToast(ChessBotManager.WARMUP_TOAST_KEY, msg, { force: true });
+
+    this.warmupToastShown = true;
+    if (isError) this.warmupToastShownError = true;
   }
 
   private clearWarmupToast(): void {

@@ -4,7 +4,7 @@ import { renderGameState } from "./render/renderGameState.ts";
 import { initSplitLayout } from "./ui/layout/splitLayout";
 import { initCollapsibleSections } from "./ui/layout/collapsibleSections";
 import { loadSvgFileInto } from "./render/loadSvgFile";
-import { createThemeManager, THEME_CHANGE_EVENT } from "./theme/themeManager";
+import { createThemeManager, THEME_CHANGE_EVENT, THEME_DID_CHANGE_EVENT, THEME_WILL_CHANGE_EVENT } from "./theme/themeManager";
 import chessBoardSvgUrl from "./assets/chess_board.svg?url";
 import graphBoard8x8SvgUrl from "./assets/graph_board_8x8.svg?url";
 import type { Player } from "./types";
@@ -31,6 +31,7 @@ import {
   type CheckerboardThemeId,
 } from "./render/checkerboardTheme";
 import { createBoardLoadingOverlay } from "./ui/boardLoadingOverlay";
+import { nextPaint } from "./ui/nextPaint";
 
 const FALLBACK_VARIANT_ID: VariantId = "dama_8_classic_standard";
 
@@ -208,8 +209,13 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   renderGameState(svg, piecesLayer, inspector, state);
 
-  // Board SVG + theme are now loaded and first frame rendered.
+  // Board SVG + theme are now loaded; keep spinner until the first paint.
+  await nextPaint();
   boardLoading.hide();
+
+  // Theme switching can involve slow raster PNG loads; show spinner while themes apply.
+  svg.addEventListener(THEME_WILL_CHANGE_EVENT, () => boardLoading.show());
+  svg.addEventListener(THEME_DID_CHANGE_EVENT, () => boardLoading.hide());
 
   // In dev, force a full reload when modules (like state) change
   if (import.meta.hot) {

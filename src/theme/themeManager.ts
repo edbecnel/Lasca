@@ -1,4 +1,5 @@
 import { loadSvgDefsInto } from "../render/loadSvgDefs";
+import { waitForSvgImagesLoaded } from "../render/waitForSvgImages";
 import { DEFAULT_THEME_ID, THEMES, getThemeById } from "./themes";
 import { createThemeDropdown } from "../ui/components/themeDropdown";
 
@@ -9,6 +10,8 @@ const LINK_ID = "lascaThemeCss";
 const OVERLAY_FX_STYLE_ID = "lascaOverlayFxCss";
 
 export const THEME_CHANGE_EVENT = "lasca:themechange" as const;
+export const THEME_WILL_CHANGE_EVENT = "lasca:themeloadstart" as const;
+export const THEME_DID_CHANGE_EVENT = "lasca:themeloadend" as const;
 
 type GlassBgMode = "original" | "felt" | "walnut";
 
@@ -397,12 +400,19 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     if (!theme) throw new Error("No themes available.");
     if (currentId === theme.id) return theme;
 
+    svgRoot.dispatchEvent(new CustomEvent(THEME_WILL_CHANGE_EVENT, { detail: { themeId: theme.id } }));
+
     const prevVis = svgRoot.style.visibility;
     svgRoot.style.visibility = "hidden";
 
     themeDefs.replaceChildren();
     await loadSvgDefsInto(themeDefs, [theme.piecesDefs, theme.boardDefs]);
     await applyThemeCss(theme.css);
+
+    // Preload any raster <image> assets referenced by theme defs (PNG pieces).
+    // The board can render vector fallbacks, but we keep the loading overlay up
+    // until these are ready so switching themes doesn't show blank placeholders.
+    await waitForSvgImagesLoaded(svgRoot, { selector: "image", timeoutMs: 30_000 });
 
     // Luminous theme relies on outer glow; ensure nothing in the board template
     // (notably node outline strokes) visually sits above the piece glyphs.
@@ -426,6 +436,7 @@ export function createThemeManager(svgRoot: SVGSVGElement) {
     currentId = theme.id;
     saveThemeId(currentId);
     svgRoot.style.visibility = prevVis || "visible";
+    svgRoot.dispatchEvent(new CustomEvent(THEME_DID_CHANGE_EVENT, { detail: { themeId: theme.id } }));
     return theme;
   }
 

@@ -65,6 +65,8 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
   const Ctor = getAudioContextCtor();
   let ctx: AudioContextLike | null = null;
   let master: GainNode | null = null;
+  let unlocked = false;
+  let unlockArmed = false;
 
   function ensure(): { ctx: AudioContextLike; master: GainNode } | null {
     if (!Ctor) return null;
@@ -78,10 +80,36 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
     return { ctx, master };
   }
 
+  function armUnlockListeners(): void {
+    if (unlockArmed) return;
+    if (typeof window === "undefined") return;
+    unlockArmed = true;
+
+    const unlock = () => {
+      if (unlocked) return;
+      unlocked = true;
+      try {
+        ensure();
+        safeResume();
+      } catch {
+        // ignore
+      }
+    };
+
+    // Use a broad set of gestures to maximize compatibility.
+    // The listeners are `once`, so they remove themselves.
+    window.addEventListener("pointerdown", unlock, { once: true, capture: true });
+    window.addEventListener("keydown", unlock, { once: true, capture: true });
+    window.addEventListener("touchstart", unlock, { once: true, capture: true });
+    window.addEventListener("mousedown", unlock, { once: true, capture: true });
+  }
+
   function safeResume(): void {
     try {
       if (ctx && ctx.state === "suspended") {
-        void ctx.resume();
+        void ctx.resume().catch(() => {
+          // ignore
+        });
       }
     } catch {
       // ignore
@@ -89,6 +117,11 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
   }
 
   function tone(args: { freq: number; dur: number; type?: OscillatorType; gain?: number; detune?: number }) {
+    if (!enabled) return;
+    if (!unlocked) {
+      armUnlockListeners();
+      return;
+    }
     const g = ensure();
     if (!g) return;
     safeResume();
@@ -122,6 +155,11 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
   }
 
   function noise(args: { dur: number; gain?: number; hp?: number; lp?: number }) {
+    if (!enabled) return;
+    if (!unlocked) {
+      armUnlockListeners();
+      return;
+    }
     const g = ensure();
     if (!g) return;
     safeResume();
@@ -233,9 +271,8 @@ export function createSfxManager(opts: { volume?: number } = {}): SfxManager {
     setEnabled: (v: boolean) => {
       enabled = Boolean(v);
       if (!enabled) return;
-      // Pre-warm context on enable (still requires a user gesture to actually play on most browsers).
-      ensure();
-      safeResume();
+      // Don't create/resume AudioContext until after a user gesture.
+      armUnlockListeners();
     },
     play: (name: SfxName) => {
       try {
