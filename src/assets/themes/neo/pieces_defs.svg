@@ -44,7 +44,7 @@
         stroke-width: 3;
         stroke-linejoin: round;
         paint-order: stroke fill;
-        color: #16161a; /* used by currentColor strokes (bishop slash) */
+        color: #16161a; /* used by currentColor strokes (if any) */
       }
       .neoPieceB {
         fill: #141418;
@@ -88,11 +88,19 @@
       <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
+    <!-- Bishop notch is a real cutout (mask), not a stroked slash. -->
+    <mask id="neoBishopNotchMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+      <rect x="0" y="0" width="100" height="100" fill="white" />
+      <!-- Diagonal notch with squared ends (a rotated rectangle). -->
+      <path d="M41 44 L52 33 L66 47 L55 58 Z" fill="black" />
+    </mask>
+
     <symbol id="neoBishop" viewBox="0 0 100 100">
-      <path d="M50 24 C42 28 40 34 40 38 C40 45 45 49 50 54 C55 49 60 45 60 38 C60 34 58 28 50 24 Z" />
-      <path d="M50 56 C41 62 34 67 34 76 H66 C66 67 59 62 50 56 Z" />
-      <rect x="30" y="76" width="40" height="8" rx="4" />
-      <path d="M46 38 L60 52" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" />
+      <g mask="url(#neoBishopNotchMask)">
+        <path d="M50 24 C42 28 40 34 40 38 C40 45 45 49 50 54 C55 49 60 45 60 38 C60 34 58 28 50 24 Z" />
+        <path d="M50 56 C41 62 34 67 34 76 H66 C66 67 59 62 50 56 Z" />
+        <rect x="30" y="76" width="40" height="8" rx="4" />
+      </g>
     </symbol>
 
     <symbol id="neoKnight" viewBox="0 0 100 100">
