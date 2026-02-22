@@ -9,6 +9,7 @@ import { normalizeCheckerboardThemeId } from "./render/checkerboardTheme";
 
 const LS_KEYS = {
   theme: "lasca.theme",
+  chessTheme: "lasca.chess.theme",
   columnsChessTheme: "lasca.columnsChess.theme",
   glassBg: "lasca.theme.glassBg",
   glassPalette: "lasca.theme.glassPalette",
@@ -772,8 +773,11 @@ window.addEventListener("DOMContentLoaded", () => {
     const isClassicChess = vId === "chess_classic";
 
     if (isColumnsChess) {
-      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d") ? elTheme.value : "columns_classic";
+      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d" || elTheme.value === "neo") ? elTheme.value : "columns_classic";
       localStorage.setItem(LS_KEYS.columnsChessTheme, next);
+    } else if (isClassicChess) {
+      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d" || elTheme.value === "neo") ? elTheme.value : "raster3d";
+      localStorage.setItem(LS_KEYS.chessTheme, next);
     } else {
       localStorage.setItem(LS_KEYS.theme, elTheme.value);
     }
@@ -1186,6 +1190,31 @@ window.addEventListener("DOMContentLoaded", () => {
     opt3d.value = "raster3d";
     opt3d.textContent = "3D";
     elTheme.appendChild(opt3d);
+
+    const optNeo = document.createElement("option");
+    optNeo.value = "neo";
+    optNeo.textContent = "Neo";
+    elTheme.appendChild(optNeo);
+  };
+
+  const populateClassicChessThemeSelect = (): void => {
+    // Classic Chess intentionally exposes only a small subset of themes.
+    elTheme.textContent = "";
+
+    const opt2d = document.createElement("option");
+    opt2d.value = "raster2d";
+    opt2d.textContent = "2D";
+    elTheme.appendChild(opt2d);
+
+    const opt3d = document.createElement("option");
+    opt3d.value = "raster3d";
+    opt3d.textContent = "3D";
+    elTheme.appendChild(opt3d);
+
+    const optNeo = document.createElement("option");
+    optNeo.value = "neo";
+    optNeo.textContent = "Neo";
+    elTheme.appendChild(optNeo);
   };
 
   const visibleThemeIds = (): string[] => THEMES.filter((t) => !t.hidden).map((t) => t.id);
@@ -1202,12 +1231,21 @@ window.addEventListener("DOMContentLoaded", () => {
   let savedThemeBeforeColumnsChess: string = initialTheme;
   let savedThemeBeforeChess: string = initialTheme;
 
-  const normalizeColumnsChessTheme = (raw: string | null | undefined): "columns_classic" | "raster2d" | "raster3d" => {
+  const normalizeColumnsChessTheme = (raw: string | null | undefined): "columns_classic" | "raster2d" | "raster3d" | "neo" => {
     const v = String(raw ?? "").trim().toLowerCase();
+    if (v === "neo") return "neo";
     if (v === "raster3d" || v === "3d") return "raster3d";
     if (v === "raster2d" || v === "2d") return "raster2d";
     if (v === "columns_classic" || v === "classic" || v === "discs" || v === "disc") return "columns_classic";
     return "columns_classic";
+  };
+
+  const normalizeClassicChessTheme = (raw: string | null | undefined): "raster2d" | "raster3d" | "neo" => {
+    const v = String(raw ?? "").trim().toLowerCase();
+    if (v === "neo") return "neo";
+    if (v === "raster2d" || v === "2d") return "raster2d";
+    if (v === "raster3d" || v === "3d") return "raster3d";
+    return "raster3d";
   };
 
   const syncThemeConstraintsForVariant = (variantId: VariantId): void => {
@@ -1225,7 +1263,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (isColumnsChess) {
       if (themeSelectMode !== "columns_chess_only") {
-        if (elTheme.value && elTheme.value !== "columns_classic") savedThemeBeforeColumnsChess = elTheme.value;
+        if (themeSelectMode === "all") savedThemeBeforeColumnsChess = elTheme.value;
         themeSelectMode = "columns_chess_only";
         populateColumnsChessThemeSelect();
       }
@@ -1235,12 +1273,12 @@ window.addEventListener("DOMContentLoaded", () => {
       syncGlassThemeOptions();
     } else if (isClassicChess) {
       if (themeSelectMode !== "chess_only") {
-        if (elTheme.value && elTheme.value !== "raster3d") savedThemeBeforeChess = elTheme.value;
+        if (themeSelectMode === "all") savedThemeBeforeChess = elTheme.value;
         themeSelectMode = "chess_only";
-        populateThemeSelect(["raster2d", "raster3d"]);
+        populateClassicChessThemeSelect();
       }
-      // Allow either raster2d or raster3d; default to raster3d if something else was selected.
-      if (elTheme.value !== "raster2d" && elTheme.value !== "raster3d") elTheme.value = "raster3d";
+      const savedChessTheme = localStorage.getItem(LS_KEYS.chessTheme) ?? localStorage.getItem(LS_KEYS.theme);
+      elTheme.value = normalizeClassicChessTheme(savedChessTheme);
       elTheme.disabled = false;
       syncGlassThemeOptions();
     } else {
@@ -1249,10 +1287,11 @@ window.addEventListener("DOMContentLoaded", () => {
         populateThemeSelect(visibleThemeIds());
       }
       elTheme.disabled = false;
-      const restore = savedThemeBeforeColumnsChess || savedThemeBeforeChess;
-      if (restore && getThemeById(restore)) {
-        elTheme.value = restore;
-      }
+      const savedThemeNow = localStorage.getItem(LS_KEYS.theme);
+      const restore = (savedThemeNow && getThemeById(savedThemeNow) && !getThemeById(savedThemeNow)?.hidden)
+        ? savedThemeNow
+        : (savedThemeBeforeColumnsChess || savedThemeBeforeChess);
+      if (restore && getThemeById(restore) && !getThemeById(restore)?.hidden) elTheme.value = restore;
       syncGlassThemeOptions();
     }
   };
@@ -1279,18 +1318,21 @@ window.addEventListener("DOMContentLoaded", () => {
     syncGlassThemeOptions();
 
     if (themeSelectMode === "columns_chess_only") {
-      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d") ? elTheme.value : "columns_classic";
+      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d" || elTheme.value === "neo") ? elTheme.value : "columns_classic";
       elTheme.value = next;
       localStorage.setItem(LS_KEYS.columnsChessTheme, next);
       return;
     }
 
     if (themeSelectMode === "chess_only") {
-      if (elTheme.value !== "raster2d" && elTheme.value !== "raster3d") elTheme.value = "raster3d";
+      const next = (elTheme.value === "raster3d" || elTheme.value === "raster2d" || elTheme.value === "neo") ? elTheme.value : "raster3d";
+      elTheme.value = next;
+      localStorage.setItem(LS_KEYS.chessTheme, next);
       return;
     }
 
     savedThemeBeforeColumnsChess = elTheme.value;
+    savedThemeBeforeChess = elTheme.value;
   });
 
   elGlassColors?.addEventListener("change", () => {

@@ -1,9 +1,22 @@
 import type { UciBestMoveArgs, UciEngine } from "./uciEngine.ts";
 
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+function withAbortTimeout<T>(args: {
+  p: Promise<T>;
+  ms: number;
+  label: string;
+  ctrl: AbortController;
+}): Promise<T> {
+  const { p, ms, label, ctrl } = args;
   if (!ms || !Number.isFinite(ms) || ms <= 0) return p;
   return new Promise<T>((resolve, reject) => {
-    const tid = window.setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms);
+    const tid = window.setTimeout(() => {
+      try {
+        ctrl.abort();
+      } catch {
+        // ignore
+      }
+      reject(new Error(`Timeout: ${label}`));
+    }, ms);
     p.then(
       (v) => {
         window.clearTimeout(tid);
@@ -39,9 +52,16 @@ export class HttpUciEngine implements UciEngine {
         const json = (await r.json()) as any;
         if (!json || json.ok !== true) throw new Error("health check failed");
       })
-      .finally(() => ctrl.abort());
+      .finally(() => {
+        // Ensure we never keep sockets alive longer than needed.
+        try {
+          ctrl.abort();
+        } catch {
+          // ignore
+        }
+      });
 
-    await withTimeout(p, timeoutMs, "health");
+    await withAbortTimeout({ p, ms: timeoutMs, label: "health", ctrl });
   }
 
   async setSkillLevel(skill: number): Promise<void> {
@@ -75,8 +95,14 @@ export class HttpUciEngine implements UciEngine {
         }
         return json.uci as string;
       })
-      .finally(() => ctrl.abort());
+      .finally(() => {
+        try {
+          ctrl.abort();
+        } catch {
+          // ignore
+        }
+      });
 
-    return withTimeout(p, timeoutMs + 500, "bestmove");
+    return withAbortTimeout({ p, ms: timeoutMs + 500, label: "bestmove", ctrl });
   }
 }

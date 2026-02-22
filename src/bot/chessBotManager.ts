@@ -259,7 +259,9 @@ export class ChessBotManager {
     (async () => {
       try {
         const engine = this.ensureEngine();
-        await engine.init({ timeoutMs: this.initTimeoutMs });
+        // Server health checks should fail fast so we can show an immediate UI hint.
+        const timeoutMs = this.serverEngineUrl ? 1200 : this.initTimeoutMs;
+        await engine.init({ timeoutMs });
         this.engineBackoffUntilMs = 0;
         this.engineFailureCount = 0;
         this.engineReady = true;
@@ -272,13 +274,6 @@ export class ChessBotManager {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[chessbot] engine prewarm failed", err);
-
-        // If we're using a local server engine and it can't be reached, don't hard-stall.
-        // Switch to built-in heuristic fallback moves automatically.
-        if (this.serverEngineUrl) {
-          this.allowFallbackDuringWarmup = true;
-          this.setStatus("Stockfish server unavailable — using built-in bot moves");
-        }
 
         // Keep the warmup toast visible; allow the user to tap to enable fallback/retry.
         this.showWarmupToast(true);
@@ -310,9 +305,15 @@ export class ChessBotManager {
       return "";
     })();
 
-    const msg = isError
-      ? `${engineLabel} failed to start (yet)${lanHint}. Tap to allow fallback moves.`
-      : `Warming up ${engineLabel}… first load can take a while${lanHint}. Tap to allow fallback moves.`;
+    const msg = (() => {
+      if (isError && this.serverEngineUrl) {
+        return "Stockfish bot srever not available. Tap to allow fallbabck moves";
+      }
+      if (isError) {
+        return `${engineLabel} failed to start (yet)${lanHint}. Tap to allow fallback moves.`;
+      }
+      return `Warming up ${engineLabel}… first load can take a while${lanHint}. Tap to allow fallback moves.`;
+    })();
 
     this.controller.setStickyToastAction(ChessBotManager.WARMUP_TOAST_KEY, () => {
       this.allowFallbackDuringWarmup = true;

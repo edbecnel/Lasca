@@ -104,8 +104,6 @@
     <line x1="850" y1="750" x2="750" y2="850" />
   </g>
 
-  <g id="pieces"></g>
-
   <g id="nodes" fill="transparent" stroke="#404040" stroke-width="7" pointer-events="all">
     <!-- playable nodes where (r+c)%2==1 (8×8 so A1 is playable) -->
     <circle id="r0c1" cx="250" cy="150" r="40" />
@@ -148,4 +146,6 @@
     <circle id="r7c4" cx="550" cy="850" r="40" />
     <circle id="r7c6" cx="750" cy="850" r="40" />
   </g>
+
+  <g id="pieces"></g>
 </svg>

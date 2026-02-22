@@ -3,3 +3,6 @@ dist/
 
 # Server persistence data (local-only)
 server/data/
+
+# Local-only Neo piece PNGs (not bundled/committed)
+public/pieces/neo/*.png

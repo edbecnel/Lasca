@@ -19,6 +19,15 @@ export const THEMES: ThemeDef[] = [
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
   },
   {
+    id: "neo",
+    label: "Neo (PNG)",
+    piecesDefs: new URL("../assets/themes/neo/pieces_defs.svg", import.meta.url),
+    boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
+    css: new URL("../assets/themes/classic/theme.css", import.meta.url),
+    // Note: the PNG files themselves are not bundled; see pieces_defs.svg for expected /public paths.
+    hidden: true,
+  },
+  {
     id: "raster2d",
     label: "2D",
     piecesDefs: new URL("../assets/themes/raster2d/pieces_defs.svg", import.meta.url),

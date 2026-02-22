@@ -87,8 +87,6 @@
               <line x1="740" y1="740" x2="860" y2="860" />
             </g>
 
-            <g id="pieces"></g>
-
             <g id="nodes" fill="transparent" stroke="#404040" stroke-width="8" pointer-events="all">
               <circle id="r0c0" cx="140" cy="140" r="46" />
               <circle id="r0c2" cx="380" cy="140" r="46" />
@@ -122,4 +120,6 @@
               <circle id="r6c4" cx="620" cy="860" r="46" />
               <circle id="r6c6" cx="860" cy="860" r="46" />
             </g>
+
+            <g id="pieces"></g>
           </svg>

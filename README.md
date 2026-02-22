@@ -40,6 +40,7 @@ Damasca combines Dama-style movement with Lasca-style stacking captures:
 - ⏮️ Full undo/redo with move history tracking
 - 💾 Save and load games (JSON format)
   - Piece themes (Classic, Wooden, Glass, and others)
+  - **Neo (PNG)** chess theme (expects local images in `public/pieces/neo/`; see below)
   - Optional 8×8 checkerboard board colors (Classic/Green/Blue) when “Use checkered board (8×8)” is enabled
 - 🌈 Bright animated halos for selection/targets/highlights (theme-colored)
 - 🔊 Sound effects toggle (Start Page + in-game)
@@ -132,6 +133,15 @@ Alternative: use the Start Page **Lobby** section to see open rooms and click **
 - **Opponent’s moves don’t show up**: refresh the page and confirm both players are pointing at the same **Server URL** on the Start Page. Some networks/extensions can interfere with Server-Sent Events (SSE).
 
 Alternatively, you can open `src/lasca.html` directly to jump straight into the game.
+
+## Neo (PNG) Chess Pieces
+
+This repo includes a **Neo (PNG)** theme that loads chess piece images from your local `public/` folder.
+
+- Put these files in `public/pieces/neo/`:
+  - `wp.png`, `wn.png`, `wb.png`, `wr.png`, `wq.png`, `wk.png`
+  - `bp.png`, `bn.png`, `bb.png`, `br.png`, `bq.png`, `bk.png`
+- If a file is missing, the theme falls back to disc + Unicode glyphs.
 
 ### Basic Rules
 
