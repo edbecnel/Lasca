@@ -102,6 +102,8 @@ export class ChessBotManager {
   private requestId = 1;
 
   private prewarmStarted = false;
+  private warmupToastStartMs: number | null = null;
+  private readonly warmupToastEscalateMs = 5000;
   // On some mobile devices, first-time WASM compile can exceed 2 minutes.
   // We warm up in the background with a long timeout, but we keep per-move
   // engine attempts short so the bot still plays (with a fallback) immediately.
@@ -318,6 +320,14 @@ export class ChessBotManager {
     const anyBot = this.settings.white !== "human" || this.settings.black !== "human";
     if (!anyBot) return;
 
+    // Never let the non-error "Warming up…" toast stick around indefinitely.
+    // After a short budget, escalate to the actionable error toast.
+    const now = Date.now();
+    if (this.warmupToastStartMs === null) this.warmupToastStartMs = now;
+    if (!isError && now - this.warmupToastStartMs >= this.warmupToastEscalateMs) {
+      isError = true;
+    }
+
     const engineLabel = this.engineLabel();
     const engineWarmupLabel = this.serverEngineUrl ? engineLabel : `${engineLabel} (in-browser)`;
 
@@ -358,6 +368,7 @@ export class ChessBotManager {
   }
 
   private clearWarmupToast(): void {
+    this.warmupToastStartMs = null;
     this.controller.setStickyToastAction(ChessBotManager.WARMUP_TOAST_KEY, null);
     this.controller.clearStickyToast(ChessBotManager.WARMUP_TOAST_KEY);
   }
@@ -836,7 +847,7 @@ export class ChessBotManager {
     if (!this.engineReady && !this.allowFallbackDuringWarmup) {
       this.controller.setInputEnabled(false);
       this.setStatus(`Bot warming up… (${this.engineLabel()})`);
-      this.showWarmupToast(Boolean(this.serverEngineUrl));
+      this.showWarmupToast(false);
       // We'll retry when warmup completes (prewarmEngine kicks), but also poll lightly.
       window.setTimeout(() => void this.maybeMove(), 1000);
       return;
