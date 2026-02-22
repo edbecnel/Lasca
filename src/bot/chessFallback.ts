@@ -7,6 +7,7 @@ import { generateLegalMoves } from "../game/movegen.ts";
 import { checkCurrentPlayerLost } from "../game/gameOver.ts";
 import { isKingInCheckChess } from "../game/movegenChess.ts";
 import { createPrng } from "../shared/prng.ts";
+import { pickBookMoveChess } from "./chessOpeningBook.ts";
 
 function other(p: Player): Player {
   return p === "W" ? "B" : "W";
@@ -105,6 +106,40 @@ function moveOrderingKey(state: GameState, move: Move): number {
   return 0;
 }
 
+function moveId(m: Move): string {
+  if (m.kind === "capture") return `c:${m.from}:${m.to}:${m.over}`;
+  return `m:${m.from}:${m.to}`;
+}
+
+function isBadHangingCapture(state: GameState, move: Move): boolean {
+  if (move.kind !== "capture") return false;
+
+  const fromStack = state.board.get(move.from);
+  const moving = fromStack && fromStack.length ? fromStack[fromStack.length - 1] : null;
+  const movingValue = pieceValue((moving as any)?.rank);
+
+  const overStack = state.board.get(move.over);
+  const captured = overStack && overStack.length ? overStack[overStack.length - 1] : null;
+  const capturedValue = pieceValue((captured as any)?.rank);
+
+  // Only guard against the most common low-skill blunder:
+  // capturing a small piece with a much more valuable one that can be
+  // immediately recaptured.
+  if (movingValue <= 0) return false;
+  if (movingValue - capturedValue < 250) return false;
+
+  let next: GameState;
+  try {
+    next = applyMove(state, move);
+  } catch {
+    return false;
+  }
+
+  const target = move.to;
+  const replies = generateLegalMoves(next);
+  return replies.some((r) => r.kind === "capture" && r.over === target);
+}
+
 function negamax(
   state: GameState,
   depth: number,
@@ -184,6 +219,11 @@ export function pickFallbackMoveChess(
 ): Move | null {
   if (state.meta?.rulesetId !== "chess") return null;
 
+  // Opening book (small, curated) to avoid random-looking first moves.
+  // Only triggers on exact/known early positions; otherwise falls through.
+  const book = pickBookMoveChess(state, { seed: opts.seed + ":book" });
+  if (book) return book;
+
   const rootMoves = (opts.legalMoves && opts.legalMoves.length ? opts.legalMoves : generateLegalMoves(state)).slice();
   if (rootMoves.length === 0) return null;
 
@@ -201,6 +241,7 @@ export function pickFallbackMoveChess(
 
   let bestMove: Move | null = null;
   let bestScore = -Infinity;
+  let bestScoredMoves: Array<{ move: Move; score: number }> | null = null;
 
   // Iterative deepening: always have a move even if we time out.
   for (let depth = 1; depth <= maxDepth; depth++) {
@@ -209,6 +250,7 @@ export function pickFallbackMoveChess(
     const nodeBudget = { remaining: nodeBudgetBase };
     let depthBestMove: Move | null = null;
     let depthBestScore = -Infinity;
+    const scoredThisDepth: Array<{ move: Move; score: number }> = [];
 
     for (const m of rootMoves) {
       if (nowMs() >= deadline) break;
@@ -222,6 +264,8 @@ export function pickFallbackMoveChess(
 
       const v = -negamax(next, depth - 1, -Infinity, Infinity, deadline, nodeBudget);
 
+      scoredThisDepth.push({ move: m, score: v });
+
       if (v > depthBestScore) {
         depthBestScore = v;
         depthBestMove = m;
@@ -234,6 +278,7 @@ export function pickFallbackMoveChess(
     if (depthBestMove) {
       bestMove = depthBestMove;
       bestScore = depthBestScore;
+      if (scoredThisDepth.length) bestScoredMoves = scoredThisDepth;
     }
   }
 
@@ -241,6 +286,18 @@ export function pickFallbackMoveChess(
     // Guaranteed fallback: prefer any capture, else random legal.
     const captures = rootMoves.filter((m) => m.kind === "capture");
     return captures.length ? rng.pick(captures) : rng.pick(rootMoves);
+  }
+
+  // Final sanity: avoid hanging a major piece for a pawn/minor if the opponent
+  // can recapture immediately. This stabilizes play under tight time budgets.
+  if (bestScoredMoves && bestScoredMoves.length) {
+    const ordered = bestScoredMoves
+      .slice()
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : moveId(a.move).localeCompare(moveId(b.move))));
+
+    for (const cand of ordered) {
+      if (!isBadHangingCapture(state, cand.move)) return cand.move;
+    }
   }
 
   // If we found a move but it looks catastrophically losing, still play it.

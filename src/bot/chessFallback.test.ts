@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../game/state.ts";
 import { pickFallbackMoveChess } from "./chessFallback.ts";
+import { createInitialGameStateForVariant } from "../game/state.ts";
+import { applyMove } from "../game/applyMove.ts";
+import { uciToLegalMove } from "./chessMoveMap.ts";
 
 function mkEmptyChessState(toMove: "W" | "B"): GameState {
   return {
@@ -22,6 +25,37 @@ function mkEmptyChessState(toMove: "W" | "B"): GameState {
 }
 
 describe("chess fallback", () => {
+  it("uses opening book for the first move", () => {
+    const s = createInitialGameStateForVariant("chess_classic" as any);
+    const m = pickFallbackMoveChess(s, { tier: "beginner", seed: "book" });
+    expect(m).toBeTruthy();
+    const uci = `${(m as any).from}->${(m as any).to}`;
+    // Should be one of: e2e4, d2d4, c2c4, g1f3
+    expect([
+      "r6c4->r4c4", // e2 -> e4
+      "r6c3->r4c3", // d2 -> d4
+      "r6c2->r4c2", // c2 -> c4
+      "r7c6->r5c5", // g1 -> f3
+    ]).toContain(uci);
+  });
+
+  it("responds sensibly after 1.e4", () => {
+    let s = createInitialGameStateForVariant("chess_classic" as any);
+    const e4 = uciToLegalMove(s, "e2e4");
+    expect(e4).toBeTruthy();
+    s = applyMove(s, e4!);
+    const m = pickFallbackMoveChess(s, { tier: "beginner", seed: "book-e4" });
+    expect(m).toBeTruthy();
+    const uci = `${(m as any).from}->${(m as any).to}`;
+    // One of: e7e5, c7c5, e7e6, c7c6
+    expect([
+      "r1c4->r3c4", // e7 -> e5
+      "r1c2->r3c2", // c7 -> c5
+      "r1c4->r2c4", // e7 -> e6
+      "r1c2->r2c2", // c7 -> c6
+    ]).toContain(uci);
+  });
+
   it("prefers winning a queen when available", () => {
     const s = mkEmptyChessState("W");
 
