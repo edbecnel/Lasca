@@ -148,21 +148,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   const initialThemeId = normalizeChessTheme(themeFromQuery ?? savedTheme);
   await themeManager.setTheme(initialThemeId);
 
-  const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
-  if (themeSelect) {
-    themeSelect.value = initialThemeId === "neo" ? "neo" : (initialThemeId === "raster2d" ? "2d" : "3d");
-    themeSelect.disabled = false;
-    themeSelect.addEventListener("change", async () => {
-      const picked = themeSelect.value === "neo" ? "neo" : (themeSelect.value === "2d" ? "raster2d" : "raster3d");
-      await themeManager.setTheme(picked);
-      try {
-        localStorage.setItem(THEME_KEY, picked);
-      } catch {
-        // ignore
-      }
-    });
-  }
-
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
 
@@ -205,6 +190,27 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, orientedInspector as any, state, history, driver);
   controller.bind();
+
+  // Classic Chess: theme select (2D / 3D / Neo) + Neo PNG availability hint.
+  // Note: Neo is SVG-only and does not require external assets.
+  {
+    const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
+
+    if (themeSelect) {
+      themeSelect.value = initialThemeId === "neo" ? "neo" : (initialThemeId === "raster2d" ? "2d" : "3d");
+      themeSelect.disabled = false;
+
+      themeSelect.addEventListener("change", async () => {
+        const picked = themeSelect.value === "neo" ? "neo" : (themeSelect.value === "2d" ? "raster2d" : "raster3d");
+        await themeManager.setTheme(picked);
+        try {
+          localStorage.setItem(THEME_KEY, picked);
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }
 
   // Offline-only: Bot controls (classic chess only).
   if (driver.mode !== "online") {

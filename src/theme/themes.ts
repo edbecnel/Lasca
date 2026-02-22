@@ -20,11 +20,11 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: "neo",
-    label: "Neo (PNG)",
+    label: "Neo",
     piecesDefs: new URL("../assets/themes/neo/pieces_defs.svg", import.meta.url),
     boardDefs: new URL("../assets/themes/classic/board_defs.svg", import.meta.url),
     css: new URL("../assets/themes/classic/theme.css", import.meta.url),
-    // Note: the PNG files themselves are not bundled; see pieces_defs.svg for expected /public paths.
+    // Variant-specific theme; SVG-only so it can be deployed safely.
     hidden: true,
   },
   {

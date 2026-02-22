@@ -2,144 +2,135 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1" aria-hidden="true">
   <defs>
     <!--
-      Neo (PNG) theme: chess pieces provided as external raster images.
+      Neo theme: a permissive SVG piece set, with OPTIONAL local PNG overrides.
 
-      IMPORTANT:
-      - This repo does not ship the Neo PNG files.
-      - Put your own images under /public so they are served by Vite.
+      How it works:
+      - The base pieces are SVG-only and safe to commit/deploy (GitHub Pages, etc).
+      - If you ALSO place PNGs under /public/pieces/neo/*.png, they will render on top.
+      - If a PNG is missing (common in online deployments), it is removed at runtime
+        and the SVG fallback stays visible.
 
-      Expected file paths (relative to site root):
-        public/pieces/neo/wp.png
-        public/pieces/neo/wn.png
-        public/pieces/neo/wb.png
-        public/pieces/neo/wr.png
-        public/pieces/neo/wq.png
-        public/pieces/neo/wk.png
-        public/pieces/neo/bp.png
-        public/pieces/neo/bn.png
-        public/pieces/neo/bb.png
-        public/pieces/neo/br.png
-        public/pieces/neo/bq.png
-        public/pieces/neo/bk.png
-
-      If any PNG is missing, a disc + Unicode glyph fallback will show.
+      Optional local PNG filenames (relative to site root):
+        pieces/neo/wp.png pieces/neo/wn.png pieces/neo/wb.png pieces/neo/wr.png pieces/neo/wq.png pieces/neo/wk.png
+        pieces/neo/bp.png pieces/neo/bn.png pieces/neo/bb.png pieces/neo/br.png pieces/neo/bq.png pieces/neo/bk.png
     -->
 
-    <radialGradient id="gradWhite" cx="35%" cy="30%" r="70%">
+    <radialGradient id="neoDiscW" cx="35%" cy="30%" r="70%">
       <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="55%" stop-color="#f1f1f1" />
-      <stop offset="100%" stop-color="#d6d6d6" />
+      <stop offset="55%" stop-color="#f3f3f6" />
+      <stop offset="100%" stop-color="#d9d9e2" />
     </radialGradient>
 
-    <radialGradient id="gradBlack" cx="35%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#444444" />
-      <stop offset="55%" stop-color="#1c1c1c" />
-      <stop offset="100%" stop-color="#050505" />
+    <radialGradient id="neoDiscB" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#434347" />
+      <stop offset="55%" stop-color="#19191c" />
+      <stop offset="100%" stop-color="#060607" />
     </radialGradient>
 
     <style>
-      .fallbackGlyph {
-        font-family: system-ui, -apple-system, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
-        font-weight: 800;
-        paint-order: stroke fill;
-      }
+      .neoDiscStrokeW { stroke: #16161a; stroke-width: 6; }
+      .neoDiscStrokeB { stroke: #f3f3f6; stroke-width: 6; }
+
+      .neoInnerRingW { stroke: #000; stroke-opacity: 0.16; stroke-width: 3; fill: none; }
+      .neoInnerRingB { stroke: #fff; stroke-opacity: 0.14; stroke-width: 3; fill: none; }
+
+      .neoPieceW { fill: #141418; }
+      .neoPieceB { fill: #f3f3f6; }
+
+      .neoCutW { fill: #f3f3f6; }
+      .neoCutB { fill: #19191c; }
 
       .rasterPiece {
         image-rendering: auto;
       }
     </style>
 
-    <symbol id="fallbackWhiteDisc" viewBox="0 0 100 100">
-      <circle cx="50" cy="50" r="43" fill="url(#gradWhite)" stroke="#111" stroke-width="6" />
-      <circle cx="50" cy="50" r="33" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3" />
+    <symbol id="neoDiscW" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="url(#neoDiscW)" class="neoDiscStrokeW" />
+      <circle cx="50" cy="50" r="33" class="neoInnerRingW" />
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.28" />
     </symbol>
 
-    <symbol id="fallbackBlackDisc" viewBox="0 0 100 100">
-      <circle cx="50" cy="50" r="43" fill="url(#gradBlack)" stroke="#f5f5f5" stroke-width="6" />
-      <circle cx="50" cy="50" r="33" fill="none" stroke="#fff" stroke-opacity="0.16" stroke-width="3" />
+    <symbol id="neoDiscB" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="url(#neoDiscB)" class="neoDiscStrokeB" />
+      <circle cx="50" cy="50" r="33" class="neoInnerRingB" />
       <ellipse cx="40" cy="36" rx="18" ry="12" fill="#fff" opacity="0.10" />
     </symbol>
 
-    <symbol id="fallbackW_P" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♙</text></symbol>
-    <symbol id="fallbackB_P" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♟</text></symbol>
-    <symbol id="fallbackW_N" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♘</text></symbol>
-    <symbol id="fallbackB_N" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♞</text></symbol>
-    <symbol id="fallbackW_B" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♗</text></symbol>
-    <symbol id="fallbackB_B" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♝</text></symbol>
-    <symbol id="fallbackW_R" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♖</text></symbol>
-    <symbol id="fallbackB_R" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♜</text></symbol>
-    <symbol id="fallbackW_Q" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♕</text></symbol>
-    <symbol id="fallbackB_Q" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♛</text></symbol>
-    <symbol id="fallbackW_K" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#111" stroke="#ffffff" stroke-opacity="0.30" stroke-width="2">♔</text></symbol>
-    <symbol id="fallbackB_K" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /><text class="fallbackGlyph" x="50" y="56" text-anchor="middle" dominant-baseline="middle" font-size="60" fill="#f5f5f5" stroke="#000000" stroke-opacity="0.30" stroke-width="2">♚</text></symbol>
-
-    <!-- Soldier/Officer are unused in chess rulesets but required for engine completeness. -->
-    <symbol id="fallbackW_S" viewBox="0 0 100 100"><use href="#fallbackWhiteDisc" /></symbol>
-    <symbol id="fallbackB_S" viewBox="0 0 100 100"><use href="#fallbackBlackDisc" /></symbol>
-    <symbol id="fallbackW_O" viewBox="0 0 100 100"><use href="#fallbackW_N" /></symbol>
-    <symbol id="fallbackB_O" viewBox="0 0 100 100"><use href="#fallbackB_N" /></symbol>
-
-    <!-- ===== Actual piece symbols (PNG on top of fallback) ===== -->
-    <symbol id="W_P" viewBox="0 0 100 100">
-      <use href="#fallbackW_P" />
-      <image class="rasterPiece" href="pieces/neo/wp.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <!-- Simple, modern silhouettes. These are intentionally original (not traced). -->
+    <symbol id="neoPawn" viewBox="0 0 100 100">
+      <circle cx="50" cy="33" r="10" />
+      <path d="M38 46 C38 41 42 38 50 38 C58 38 62 41 62 46 L62 50 C62 55 59 60 56 63 C64 65 70 70 70 76 L30 76 C30 70 36 65 44 63 C41 60 38 55 38 50 Z" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
-    <symbol id="W_N" viewBox="0 0 100 100">
-      <use href="#fallbackW_N" />
-      <image class="rasterPiece" href="pieces/neo/wn.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <symbol id="neoRook" viewBox="0 0 100 100">
+      <path d="M32 30 H40 V38 H46 V30 H54 V38 H60 V30 H68 V46 H64 V76 H36 V46 H32 Z" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
-    <symbol id="W_B" viewBox="0 0 100 100">
-      <use href="#fallbackW_B" />
-      <image class="rasterPiece" href="pieces/neo/wb.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <symbol id="neoBishop" viewBox="0 0 100 100">
+      <path d="M50 24 C42 28 40 34 40 38 C40 45 45 49 50 54 C55 49 60 45 60 38 C60 34 58 28 50 24 Z" />
+      <path d="M50 56 C41 62 34 67 34 76 H66 C66 67 59 62 50 56 Z" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
+      <path d="M46 38 L60 52" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" />
     </symbol>
 
-    <symbol id="W_R" viewBox="0 0 100 100">
-      <use href="#fallbackW_R" />
-      <image class="rasterPiece" href="pieces/neo/wr.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <symbol id="neoKnight" viewBox="0 0 100 100">
+      <path d="M34 74 C34 62 38 52 45 44 C41 40 40 34 44 30 C50 24 64 26 70 34 C64 36 60 40 58 44 C64 48 66 56 66 74 H34 Z" />
+      <circle cx="58" cy="38" r="3" class="neoCutW" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
-    <symbol id="W_Q" viewBox="0 0 100 100">
-      <use href="#fallbackW_Q" />
-      <image class="rasterPiece" href="pieces/neo/wq.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <symbol id="neoQueen" viewBox="0 0 100 100">
+      <path d="M32 40 L40 30 L50 42 L60 30 L68 40 L62 74 H38 Z" />
+      <circle cx="40" cy="28" r="4" />
+      <circle cx="50" cy="26" r="4" />
+      <circle cx="60" cy="28" r="4" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
-    <symbol id="W_K" viewBox="0 0 100 100">
-      <use href="#fallbackW_K" />
-      <image class="rasterPiece" href="pieces/neo/wk.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
+    <symbol id="neoKing" viewBox="0 0 100 100">
+      <rect x="47" y="22" width="6" height="14" rx="3" />
+      <rect x="43" y="26" width="14" height="6" rx="3" />
+      <path d="M38 40 C38 34 43 30 50 30 C57 30 62 34 62 40 L62 52 C62 58 59 62 56 65 C64 67 70 70 70 76 L30 76 C30 70 36 67 44 65 C41 62 38 58 38 52 Z" />
+      <rect x="30" y="76" width="40" height="8" rx="4" />
     </symbol>
 
-    <symbol id="B_P" viewBox="0 0 100 100">
-      <use href="#fallbackB_P" />
-      <image class="rasterPiece" href="pieces/neo/bp.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
+    <!-- ===== SVG fallbacks (used when PNGs are absent) ===== -->
+    <symbol id="fallbackW_P" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoPawn" /></g></symbol>
+    <symbol id="fallbackW_N" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoKnight" /></g></symbol>
+    <symbol id="fallbackW_B" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW" style="color:#141418"><use href="#neoBishop" /></g></symbol>
+    <symbol id="fallbackW_R" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoRook" /></g></symbol>
+    <symbol id="fallbackW_Q" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoQueen" /></g></symbol>
+    <symbol id="fallbackW_K" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoKing" /></g></symbol>
 
-    <symbol id="B_N" viewBox="0 0 100 100">
-      <use href="#fallbackB_N" />
-      <image class="rasterPiece" href="pieces/neo/bn.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
+    <symbol id="fallbackB_P" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoPawn" /></g></symbol>
+    <symbol id="fallbackB_N" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoKnight" /></g></symbol>
+    <symbol id="fallbackB_B" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB" style="color:#f3f3f6"><use href="#neoBishop" /></g></symbol>
+    <symbol id="fallbackB_R" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoRook" /></g></symbol>
+    <symbol id="fallbackB_Q" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoQueen" /></g></symbol>
+    <symbol id="fallbackB_K" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoKing" /></g></symbol>
 
-    <symbol id="B_B" viewBox="0 0 100 100">
-      <use href="#fallbackB_B" />
-      <image class="rasterPiece" href="pieces/neo/bb.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
+    <symbol id="fallbackW_S" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoPawn" /></g></symbol>
+    <symbol id="fallbackB_S" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoPawn" /></g></symbol>
+    <symbol id="fallbackW_O" viewBox="0 0 100 100"><use href="#neoDiscW" /><g class="neoPieceW"><use href="#neoKnight" /></g></symbol>
+    <symbol id="fallbackB_O" viewBox="0 0 100 100"><use href="#neoDiscB" /><g class="neoPieceB"><use href="#neoKnight" /></g></symbol>
 
-    <symbol id="B_R" viewBox="0 0 100 100">
-      <use href="#fallbackB_R" />
-      <image class="rasterPiece" href="pieces/neo/br.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
+    <!-- ===== Final symbols (PNG over fallback when available) ===== -->
+    <symbol id="W_P" viewBox="0 0 100 100"><use href="#fallbackW_P" /><image class="rasterPiece" href="pieces/neo/wp.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="W_N" viewBox="0 0 100 100"><use href="#fallbackW_N" /><image class="rasterPiece" href="pieces/neo/wn.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="W_B" viewBox="0 0 100 100"><use href="#fallbackW_B" /><image class="rasterPiece" href="pieces/neo/wb.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="W_R" viewBox="0 0 100 100"><use href="#fallbackW_R" /><image class="rasterPiece" href="pieces/neo/wr.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="W_Q" viewBox="0 0 100 100"><use href="#fallbackW_Q" /><image class="rasterPiece" href="pieces/neo/wq.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="W_K" viewBox="0 0 100 100"><use href="#fallbackW_K" /><image class="rasterPiece" href="pieces/neo/wk.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
 
-    <symbol id="B_Q" viewBox="0 0 100 100">
-      <use href="#fallbackB_Q" />
-      <image class="rasterPiece" href="pieces/neo/bq.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
-
-    <symbol id="B_K" viewBox="0 0 100 100">
-      <use href="#fallbackB_K" />
-      <image class="rasterPiece" href="pieces/neo/bk.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" />
-    </symbol>
+    <symbol id="B_P" viewBox="0 0 100 100"><use href="#fallbackB_P" /><image class="rasterPiece" href="pieces/neo/bp.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="B_N" viewBox="0 0 100 100"><use href="#fallbackB_N" /><image class="rasterPiece" href="pieces/neo/bn.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="B_B" viewBox="0 0 100 100"><use href="#fallbackB_B" /><image class="rasterPiece" href="pieces/neo/bb.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="B_R" viewBox="0 0 100 100"><use href="#fallbackB_R" /><image class="rasterPiece" href="pieces/neo/br.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="B_Q" viewBox="0 0 100 100"><use href="#fallbackB_Q" /><image class="rasterPiece" href="pieces/neo/bq.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
+    <symbol id="B_K" viewBox="0 0 100 100"><use href="#fallbackB_K" /><image class="rasterPiece" href="pieces/neo/bk.png" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid meet" /></symbol>
 
     <symbol id="W_S" viewBox="0 0 100 100"><use href="#fallbackW_S" /></symbol>
     <symbol id="B_S" viewBox="0 0 100 100"><use href="#fallbackB_S" /></symbol>

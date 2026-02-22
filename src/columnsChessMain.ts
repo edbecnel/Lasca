@@ -144,28 +144,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   const initialThemeId = normalizeColumnsTheme(themeFromQuery ?? savedTheme);
   await themeManager.setTheme(initialThemeId);
 
-  const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
-  const setSelectValueForThemeId = (themeId: "columns_classic" | "raster2d" | "raster3d" | "neo") => {
-    if (!themeSelect) return;
-    themeSelect.value = themeId === "neo" ? "neo" : (themeId === "raster3d" ? "3d" : themeId === "raster2d" ? "2d" : "discs");
-  };
-  setSelectValueForThemeId(initialThemeId);
-
-  if (themeSelect) {
-    themeSelect.addEventListener("change", async () => {
-      const picked =
-        themeSelect.value === "neo"
-          ? "neo"
-          : (themeSelect.value === "3d" ? "raster3d" : themeSelect.value === "2d" ? "raster2d" : "columns_classic");
-      await themeManager.setTheme(picked);
-      try {
-        localStorage.setItem(THEME_KEY, picked);
-      } catch {
-        // ignore
-      }
-    });
-  }
-
   const piecesLayer = svg.querySelector("#pieces") as SVGGElement | null;
   if (!piecesLayer) throw new Error("Missing SVG group inside board: #pieces");
 
@@ -208,6 +186,33 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   const controller = new GameController(svg, piecesLayer, orientedInspector as any, state, history, driver);
   controller.bind();
+
+  // Columns Chess: theme select (Discs / 2D / 3D / Neo) + Neo PNG availability hint.
+  {
+    const themeSelect = document.getElementById("columnsThemeSelect") as HTMLSelectElement | null;
+
+    const setSelectValueForThemeId = (themeId: "columns_classic" | "raster2d" | "raster3d" | "neo") => {
+      if (!themeSelect) return;
+      themeSelect.value = themeId === "neo" ? "neo" : (themeId === "raster3d" ? "3d" : themeId === "raster2d" ? "2d" : "discs");
+    };
+
+    setSelectValueForThemeId(initialThemeId);
+
+    if (themeSelect) {
+      themeSelect.addEventListener("change", async () => {
+        const picked =
+          themeSelect.value === "neo"
+            ? "neo"
+            : (themeSelect.value === "3d" ? "raster3d" : themeSelect.value === "2d" ? "raster2d" : "columns_classic");
+        await themeManager.setTheme(picked);
+        try {
+          localStorage.setItem(THEME_KEY, picked);
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }
 
   // Left panel status (rules/board is static per variant)
   const elRulesBoard = document.getElementById("statusRulesBoard") as HTMLElement | null;

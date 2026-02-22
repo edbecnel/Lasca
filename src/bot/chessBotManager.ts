@@ -253,21 +253,37 @@ export class ChessBotManager {
     if (this.prewarmStarted) return;
     this.prewarmStarted = true;
 
-    // For server-backed Stockfish, the main failure mode is "server not reachable".
-    // Show the actionable fallback toast immediately; if the server is reachable,
-    // the prewarm will clear it quickly.
-    this.showWarmupToast(Boolean(this.serverEngineUrl));
+    // Show a warmup toast immediately.
+    // For server-backed Stockfish, give the server a short window to respond before
+    // switching to the actionable "server not available" toast.
+    this.showWarmupToast(false);
+
+    const serverWarmupBudgetMs = 5000;
+    const warmupStartMs = Date.now();
+    let serverErrorToastTimer: number | null = null;
+
+    if (this.serverEngineUrl) {
+      serverErrorToastTimer = window.setTimeout(() => {
+        // If we're still not ready after the budget, show the server-unavailable hint.
+        if (!this.engineReady) this.showWarmupToast(true);
+      }, serverWarmupBudgetMs);
+    }
 
     // Fire and forget.
     (async () => {
       try {
         const engine = this.ensureEngine();
-        // Server health checks should fail fast so we can show an immediate UI hint.
-        const timeoutMs = this.serverEngineUrl ? 1200 : this.initTimeoutMs;
+        // Allow a short fixed budget for server response before showing the error toast.
+        const timeoutMs = this.serverEngineUrl ? serverWarmupBudgetMs : this.initTimeoutMs;
         await engine.init({ timeoutMs });
         this.engineBackoffUntilMs = 0;
         this.engineFailureCount = 0;
         this.engineReady = true;
+
+        if (serverErrorToastTimer) {
+          window.clearTimeout(serverErrorToastTimer);
+          serverErrorToastTimer = null;
+        }
         this.clearWarmupToast();
         // If we are paused, keep UX paused; just update status.
         this.refreshUI();
@@ -278,7 +294,21 @@ export class ChessBotManager {
         // eslint-disable-next-line no-console
         console.error("[chessbot] engine prewarm failed", err);
 
-        // Keep the warmup toast visible; allow the user to tap to enable fallback/retry.
+        if (serverErrorToastTimer) {
+          window.clearTimeout(serverErrorToastTimer);
+          serverErrorToastTimer = null;
+        }
+
+        // Keep the warmup toast visible during the initial server budget; then show the
+        // actionable error toast (tap-to-fallback) at most 5s after warmup started.
+        if (this.serverEngineUrl) {
+          const elapsed = Date.now() - warmupStartMs;
+          const remaining = Math.max(0, serverWarmupBudgetMs - elapsed);
+          window.setTimeout(() => this.showWarmupToast(true), remaining);
+          return;
+        }
+
+        // Non-server: show the error immediately.
         this.showWarmupToast(true);
       }
     })();
@@ -289,6 +319,7 @@ export class ChessBotManager {
     if (!anyBot) return;
 
     const engineLabel = this.engineLabel();
+    const engineWarmupLabel = this.serverEngineUrl ? engineLabel : `${engineLabel} (in-browser)`;
 
     const lanHint = (() => {
       if (!this.serverEngineUrl) return "";
@@ -315,7 +346,7 @@ export class ChessBotManager {
       if (isError) {
         return `${engineLabel} failed to start (yet)${lanHint}. Tap to allow fallback moves.`;
       }
-      return `Warming up ${engineLabel}… first load can take a while${lanHint}. Tap to allow fallback moves.`;
+      return `Warming up ${engineWarmupLabel}… first load can take a while${lanHint}. Tap to allow fallback moves.`;
     })();
 
     this.controller.setStickyToastAction(ChessBotManager.WARMUP_TOAST_KEY, () => {
